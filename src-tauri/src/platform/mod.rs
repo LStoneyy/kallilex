@@ -7,6 +7,6 @@ mod macos;
 
 #[cfg(target_os = "macos")]
 pub use macos::{
-    open_accessibility_settings, MacosClipboard, MacosKeyboard, MacosSelectionBackend,
-    MacosSpellChecker,
+    open_accessibility_settings, MacosAppActivator, MacosClipboard, MacosKeyboard,
+    MacosSelectionBackend, MacosSpellChecker,
 };

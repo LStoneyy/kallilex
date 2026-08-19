@@ -3,6 +3,7 @@
 
 pub mod capture;
 pub mod clipboard;
+pub mod replace;
 pub mod settings;
 pub mod spellcheck;
 

@@ -1,13 +1,16 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     captureSelection,
+    copyResult,
     hidePopover,
     openAccessibilitySettings,
+    replaceBack,
     spellcheck as spellcheckInvoke,
   } from "../shared/invoke";
-  import type { CaptureFailureReason, Misspelling } from "../shared/types";
+  import type { CaptureFailureReason, Misspelling, SourceApp } from "../shared/types";
 
   type Segment = {
     key: string;
@@ -23,12 +26,16 @@
 
   let text = $state("");
   let reason = $state<CaptureFailureReason | null>(null);
+  let sourceApp = $state<SourceApp | null>(null);
   let misspellings = $state<Misspelling[]>([]);
   let popup = $state<SuggestionPopup | null>(null);
   let customOpen = $state(false);
   let customValue = $state("");
+  let busy = $state(false);
+  let actionError = $state<string | null>(null);
 
   let unlisten: UnlistenFn | undefined;
+  let unlistenFocus: UnlistenFn | undefined;
   let destroyed = false;
 
   let editorEl: HTMLDivElement | undefined;
@@ -93,8 +100,11 @@
     const result = await captureSelection();
     text = result.text;
     reason = result.reason;
+    sourceApp = result.sourceApp;
     misspellings = [];
     popup = null;
+    actionError = null;
+    busy = false;
     void runSpellcheck(text);
   }
 
@@ -113,11 +123,31 @@
         unlisten = fn;
       }
     });
+
+    // A reopen that doesn't go through `capture:done` (e.g. a tray click)
+    // never runs `refreshCapture`, so a stale `actionError` — set while the
+    // popover was hidden (a replace error surfaced via dialog instead), or
+    // simply left over from a previous session — must not resurface out of
+    // context. Clearing it on every focus gain covers both cases.
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) {
+          actionError = null;
+        }
+      })
+      .then((fn) => {
+        if (destroyed) {
+          fn();
+        } else {
+          unlistenFocus = fn;
+        }
+      });
   });
 
   onDestroy(() => {
     destroyed = true;
     unlisten?.();
+    unlistenFocus?.();
   });
 
   function handleInput() {
@@ -135,6 +165,35 @@
 
   function handleCheckSpellingClick() {
     void runSpellcheck(text);
+  }
+
+  const canReplace = $derived(text.trim() !== "" && sourceApp !== null && !busy);
+  const canCopy = $derived(text.trim() !== "" && !busy);
+
+  async function handleReplaceClick() {
+    actionError = null;
+    busy = true;
+    try {
+      await replaceBack(text);
+      void hidePopover();
+    } catch (error) {
+      actionError = error instanceof Error ? error.message : String(error);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function handleCopyClick() {
+    actionError = null;
+    busy = true;
+    try {
+      await copyResult(text);
+      void hidePopover();
+    } catch (error) {
+      actionError = error instanceof Error ? error.message : String(error);
+    } finally {
+      busy = false;
+    }
   }
 
   function openSuggestionsFor(target: HTMLElement, misspelling: Misspelling) {
@@ -280,9 +339,27 @@
   {/if}
 
   <div class="result-row">
-    <button type="button" class="result-button" disabled>Replace</button>
-    <button type="button" class="result-button" disabled>Copy</button>
-    <span class="badge-placeholder"></span>
+    <button
+      type="button"
+      class="result-button"
+      disabled={!canReplace}
+      onclick={() => void handleReplaceClick()}
+    >
+      Replace
+    </button>
+    <button
+      type="button"
+      class="result-button"
+      disabled={!canCopy}
+      onclick={() => void handleCopyClick()}
+    >
+      Copy
+    </button>
+    {#if actionError}
+      <span class="action-error">{actionError}</span>
+    {:else}
+      <span class="badge-placeholder"></span>
+    {/if}
   </div>
 </main>
 
@@ -511,16 +588,41 @@
   }
 
   .result-button {
-    border: 1px solid color-mix(in srgb, var(--color-ash) 30%, transparent);
-    background-color: transparent;
-    color: var(--color-ash);
+    border: 1px solid color-mix(in srgb, var(--color-verdigris) 55%, transparent);
+    background-color: color-mix(in srgb, var(--color-verdigris) 16%, transparent);
+    color: var(--color-marble);
     border-radius: 6px;
     padding: 5px 10px;
     font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .result-button:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-verdigris) 28%, transparent);
+  }
+
+  .result-button:disabled {
+    border-color: color-mix(in srgb, var(--color-ash) 30%, transparent);
+    background-color: transparent;
+    color: var(--color-ash);
+    font-weight: 400;
     cursor: not-allowed;
   }
 
   .badge-placeholder {
     flex: 1;
+  }
+
+  .action-error {
+    flex: 1;
+    /* No dedicated "error" token in the palette; attic-clay is the closest
+       warm/red-ish accent already in use. */
+    color: var(--color-attic-clay);
+    font-size: 11px;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

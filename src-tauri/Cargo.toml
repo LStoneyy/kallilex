@@ -32,9 +32,13 @@ thiserror = "2"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"
-objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSPasteboard", "NSRunningApplication", "NSSpellChecker"] }
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSPasteboard", "NSRunningApplication", "NSSpellChecker", "libc"] }
 core-graphics = "0.25"
 core-foundation = "0.10"
 accessibility-sys = "0.2"
+# Only needed for `NSRunningApplication::runningApplicationWithProcessIdentifier`'s
+# `libc::pid_t` parameter (gated behind objc2-app-kit's "libc" feature above);
+# already present in the dependency graph transitively.
+libc = "0.2"
 
 [dev-dependencies]

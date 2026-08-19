@@ -16,19 +16,24 @@ use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{
-    NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSSpellChecker,
-    NSWorkspace,
+    NSApplicationActivationOptions, NSPasteboard, NSPasteboardItem, NSPasteboardTypeString,
+    NSPasteboardWriting, NSRunningApplication, NSSpellChecker, NSWorkspace,
 };
 use objc2_foundation::{NSArray, NSData, NSOrthography, NSRange, NSString, NSTextCheckingType};
 use tauri::AppHandle;
 
 use crate::core::capture::{SelectionBackend, SourceApp};
 use crate::core::clipboard::{Clipboard, ClipboardBackup, ClipboardItem, Keyboard};
+use crate::core::replace::AppActivator;
 use crate::core::spellcheck::{Misspelling, SpellChecker, SpellcheckError, SpellcheckResult};
 
 /// `kVK_ANSI_C`, the physical keycode for the "C" key regardless of
 /// keyboard layout — what a real ⌘C keystroke sends.
 const KEYCODE_C: u16 = 8;
+
+/// `kVK_ANSI_V`, the physical keycode for the "V" key regardless of
+/// keyboard layout — what a real ⌘V keystroke sends.
+const KEYCODE_V: u16 = 9;
 
 /// How often to poll the pasteboard's change count while waiting for the
 /// synthetic copy to land.
@@ -117,6 +122,15 @@ impl Clipboard for MacosClipboard {
         pasteboard.stringForType(string_type).map(|s| s.to_string())
     }
 
+    fn write_text(&self, text: &str) {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        // SAFETY: reading an `extern "C"` static string constant defined by
+        // AppKit; it is initialized before any Objective-C code runs.
+        let string_type = unsafe { NSPasteboardTypeString };
+        pasteboard.setString_forType(&NSString::from_str(text), string_type);
+    }
+
     fn backup(&self) -> ClipboardBackup {
         let pasteboard = NSPasteboard::generalPasteboard();
         let Some(items) = pasteboard.pasteboardItems() else {
@@ -186,25 +200,35 @@ impl Clipboard for MacosClipboard {
     }
 }
 
-/// Synthesizes ⌘C via `CGEvent`, posted to the HID event tap.
+/// Synthesizes a ⌘+`keycode` chord via `CGEvent`, posted to the HID event
+/// tap. Shared by `send_copy` (⌘C) and `send_paste` (⌘V).
+fn send_cmd_key(keycode: u16) -> Result<(), String> {
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+        .map_err(|_| "failed to create a CGEventSource".to_string())?;
+
+    let key_down = CGEvent::new_keyboard_event(source.clone(), keycode, true)
+        .map_err(|_| "failed to create the key-down event".to_string())?;
+    key_down.set_flags(CGEventFlags::CGEventFlagCommand);
+
+    let key_up = CGEvent::new_keyboard_event(source, keycode, false)
+        .map_err(|_| "failed to create the key-up event".to_string())?;
+    key_up.set_flags(CGEventFlags::CGEventFlagCommand);
+
+    key_down.post(CGEventTapLocation::HID);
+    key_up.post(CGEventTapLocation::HID);
+    Ok(())
+}
+
+/// Synthesizes ⌘C/⌘V via `CGEvent`, posted to the HID event tap.
 pub struct MacosKeyboard;
 
 impl Keyboard for MacosKeyboard {
     fn send_copy(&self) -> Result<(), String> {
-        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
-            .map_err(|_| "failed to create a CGEventSource".to_string())?;
+        send_cmd_key(KEYCODE_C)
+    }
 
-        let key_down = CGEvent::new_keyboard_event(source.clone(), KEYCODE_C, true)
-            .map_err(|_| "failed to create the key-down event".to_string())?;
-        key_down.set_flags(CGEventFlags::CGEventFlagCommand);
-
-        let key_up = CGEvent::new_keyboard_event(source, KEYCODE_C, false)
-            .map_err(|_| "failed to create the key-up event".to_string())?;
-        key_up.set_flags(CGEventFlags::CGEventFlagCommand);
-
-        key_down.post(CGEventTapLocation::HID);
-        key_up.post(CGEventTapLocation::HID);
-        Ok(())
+    fn send_paste(&self) -> Result<(), String> {
+        send_cmd_key(KEYCODE_V)
     }
 }
 
@@ -356,6 +380,69 @@ fn check_on_main_thread(text: &str) -> SpellcheckResult {
         .collect();
 
     SpellcheckResult { misspellings }
+}
+
+/// How long to wait for an app activation marshalled onto the main thread
+/// to complete before giving up. `NSRunningApplication` activation is fast
+/// (in-process AppKit call), so a real timeout here only ever fires if the
+/// main thread itself is wedged.
+const ACTIVATE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Brings another application to the foreground via `NSRunningApplication`.
+/// All AppKit calls are marshalled onto the main thread (`NSRunningApplication`
+/// is not `Send`): `activate` blocks the calling thread on a channel while
+/// `app.run_on_main_thread` does the actual work — the same pattern
+/// `MacosSpellChecker::check` uses for `NSSpellChecker`.
+pub struct MacosAppActivator {
+    app: AppHandle,
+}
+
+impl MacosAppActivator {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl AppActivator for MacosAppActivator {
+    fn activate(&self, pid: i32) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel();
+
+        self.app
+            .run_on_main_thread(move || {
+                let result = activate_on_main_thread(pid);
+                // The receiver may already be gone if `recv_timeout` below
+                // gave up first; that's fine, there's nothing left to do.
+                let _ = tx.send(result);
+            })
+            .map_err(|e| format!("failed to schedule activation on the main thread: {e}"))?;
+
+        match rx.recv_timeout(ACTIVATE_TIMEOUT) {
+            Ok(result) => result,
+            Err(_) => Err("activating the source application timed out".to_string()),
+        }
+    }
+}
+
+/// Runs the actual `NSRunningApplication` activation. Must only ever be
+/// called from the main thread — `NSRunningApplication` is main-thread-affine.
+fn activate_on_main_thread(pid: i32) -> Result<(), String> {
+    let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) else {
+        return Err("the source application is no longer running".to_string());
+    };
+
+    // `ActivateIgnoringOtherApps` is deprecated in macOS 14+ (activation
+    // options are being phased out in favor of finer-grained APIs) but
+    // remains the correct, functioning choice here: replace-back needs the
+    // source app brought forward regardless of what else is currently
+    // active.
+    #[allow(deprecated)]
+    let activated = app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+
+    if activated {
+        Ok(())
+    } else {
+        Err("failed to activate the source application".to_string())
+    }
 }
 
 /// Opens System Settings directly at Privacy & Security -> Accessibility.

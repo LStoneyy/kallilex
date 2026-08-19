@@ -33,3 +33,11 @@ export async function openAccessibilitySettings(): Promise<void> {
 export async function spellcheck(text: string): Promise<SpellcheckResult> {
   return invoke<SpellcheckResult>("spellcheck", { text });
 }
+
+export async function replaceBack(text: string): Promise<void> {
+  return invoke<void>("replace_back", { text });
+}
+
+export async function copyResult(text: string): Promise<void> {
+  return invoke<void>("copy_result", { text });
+}

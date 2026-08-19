@@ -29,6 +29,17 @@ const QUIT_MENU_ID: &str = "quit";
 #[derive(Default)]
 pub(crate) struct CaptureState(pub(crate) Mutex<Option<CaptureResult>>);
 
+/// True while a replace-back is writing into the source app. Checked by the
+/// global-shortcut trigger so a capture can never run concurrently with an
+/// in-flight replace: activating the source app during replace hides the
+/// popover, which defeats `trigger_capture`'s usual "popover already
+/// visible" guard, but a concurrent capture would still share the
+/// clipboard, keyboard, and `BackupLifecycle` with the still-running
+/// replace and could corrupt the clipboard (backing up the in-flight result
+/// text as if it were the user's original).
+#[derive(Default)]
+pub(crate) struct ReplaceInFlight(pub(crate) std::sync::atomic::AtomicBool);
+
 /// Shows the popover window under the tray icon, positions it, and gives it
 /// keyboard focus.
 fn show_popover(app: &tauri::AppHandle) {
@@ -111,6 +122,16 @@ fn trigger_capture(app: &tauri::AppHandle) {
         }
     }
 
+    // A replace-back may currently have the popover hidden (it activates the
+    // source app, stealing focus) while it's still mid-flight — see
+    // `ReplaceInFlight`'s doc comment. Treat that exactly like the
+    // popover-visible case above: do nothing.
+    if let Some(state) = app.try_state::<ReplaceInFlight>() {
+        if state.0.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+    }
+
     #[cfg(target_os = "macos")]
     {
         use crate::core::capture;
@@ -142,8 +163,9 @@ fn trigger_capture(app: &tauri::AppHandle) {
 }
 
 /// Shows a non-fatal error dialog. Used for shortcut parse/registration
-/// failures so they never fail silently.
-fn show_error_dialog(app: &tauri::AppHandle, message: impl Into<String>) {
+/// failures, and for replace-back errors that occur after the popover has
+/// already been hidden, so they never fail silently.
+pub(crate) fn show_error_dialog(app: &tauri::AppHandle, message: impl Into<String>) {
     app.dialog()
         .message(message.into())
         .title("Kallilex")
@@ -203,6 +225,8 @@ pub fn run() {
             commands::accessibility_status,
             commands::open_accessibility_settings,
             commands::spellcheck,
+            commands::replace_back,
+            commands::copy_result,
         ])
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
@@ -211,6 +235,7 @@ pub fn run() {
 
             app.manage(CaptureState::default());
             app.manage(BackupLifecycle::new());
+            app.manage(ReplaceInFlight::default());
 
             let settings_store = TauriStoreSettings::new(app.handle().clone());
             let current_settings = settings::get_settings(&settings_store).unwrap_or_default();

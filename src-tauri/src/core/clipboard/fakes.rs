@@ -19,7 +19,10 @@ impl CallLog {
         Self::default()
     }
 
-    fn record(&self, name: &'static str) {
+    /// Appends `name` to the log. `pub` so fakes defined outside this
+    /// module (e.g. `core::replace`'s `FakeActivator`/`FakeSleeper`) can
+    /// share one ordered log with a `FakeClipboard`/`FakeKeyboard` pair.
+    pub fn record(&self, name: &'static str) {
         self.0.lock().expect("call log mutex poisoned").push(name);
     }
 
@@ -71,6 +74,12 @@ impl Clipboard for FakeClipboard {
         self.text.lock().unwrap().clone()
     }
 
+    fn write_text(&self, text: &str) {
+        self.log.record("write_text");
+        *self.text.lock().unwrap() = Some(text.to_string());
+        *self.change_count.lock().unwrap() += 1;
+    }
+
     fn backup(&self) -> ClipboardBackup {
         self.log.record("backup");
         let text = self.text.lock().unwrap().clone();
@@ -113,11 +122,23 @@ enum KeyboardAction {
     },
 }
 
+/// The `send_paste` half of a `FakeKeyboard`, kept separate from
+/// `KeyboardAction` since replace-back (spec-04) only ever needs paste to
+/// fail or succeed as a no-op — never the "lands external text" variant
+/// `send_copy` needs for the capture fallback.
+enum PasteAction {
+    Fail,
+    Succeed,
+}
+
 /// In-memory `Keyboard` fake. Configurable to fail, succeed as a no-op, or
-/// succeed while "landing" a copy by mutating a paired `FakeClipboard`.
+/// succeed while "landing" a copy by mutating a paired `FakeClipboard`;
+/// `send_paste` independently succeeds unless configured to fail via
+/// [`FakeKeyboard::failing_paste`].
 pub struct FakeKeyboard {
     log: CallLog,
     action: KeyboardAction,
+    paste_action: PasteAction,
 }
 
 impl FakeKeyboard {
@@ -125,6 +146,7 @@ impl FakeKeyboard {
         Self {
             log,
             action: KeyboardAction::Fail,
+            paste_action: PasteAction::Succeed,
         }
     }
 
@@ -132,6 +154,7 @@ impl FakeKeyboard {
         Self {
             log,
             action: KeyboardAction::Succeed,
+            paste_action: PasteAction::Succeed,
         }
     }
 
@@ -148,6 +171,17 @@ impl FakeKeyboard {
                 clipboard,
                 text: text.into(),
             },
+            paste_action: PasteAction::Succeed,
+        }
+    }
+
+    /// Succeeds at `send_copy` but fails `send_paste` (replace-back's paste
+    /// failure path).
+    pub fn failing_paste(log: CallLog) -> Self {
+        Self {
+            log,
+            action: KeyboardAction::Succeed,
+            paste_action: PasteAction::Fail,
         }
     }
 }
@@ -162,6 +196,14 @@ impl Keyboard for FakeKeyboard {
                 clipboard.set_external_text(text.clone());
                 Ok(())
             }
+        }
+    }
+
+    fn send_paste(&self) -> Result<(), String> {
+        self.log.record("send_paste");
+        match self.paste_action {
+            PasteAction::Fail => Err("synthetic paste failed".to_string()),
+            PasteAction::Succeed => Ok(()),
         }
     }
 }

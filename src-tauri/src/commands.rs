@@ -7,7 +7,21 @@ use tauri::{AppHandle, Manager};
 use crate::core::capture::CaptureResult;
 use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::spellcheck::SpellcheckResult;
-use crate::CaptureState;
+use crate::{CaptureState, ReplaceInFlight};
+
+/// RAII guard clearing [`ReplaceInFlight`] on drop, so every exit path out
+/// of `replace_back` — success, error, or an unexpected panic — releases the
+/// guard the global-shortcut trigger checks. See `ReplaceInFlight`'s doc
+/// comment in `lib.rs` for why this guard exists.
+#[cfg(target_os = "macos")]
+struct InFlightGuard<'a>(&'a ReplaceInFlight);
+
+#[cfg(target_os = "macos")]
+impl Drop for InFlightGuard<'_> {
+    fn drop(&mut self) {
+        self.0 .0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
@@ -89,5 +103,98 @@ pub async fn spellcheck(app: AppHandle, text: String) -> Result<SpellcheckResult
     {
         let _ = (app, text);
         Ok(SpellcheckResult::default())
+    }
+}
+
+/// Writes `text` back into the remembered source app: clipboard backup ->
+/// write the result -> focus the source app by pid -> synthetic ⌘V -> settle
+/// -> restore the backup. See [`crate::core::replace::replace_back`] for the
+/// full orchestration and its race-guard/fallback-coordination rules.
+/// `async` for the same reason as `spellcheck` — the settle delays must not
+/// block the main thread.
+#[tauri::command]
+pub async fn replace_back(app: AppHandle, text: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use crate::core::clipboard::BackupLifecycle;
+        use crate::core::replace::{self, StdSleeper};
+        use crate::platform::{MacosAppActivator, MacosClipboard, MacosKeyboard};
+
+        let source_app = {
+            let state = app.state::<CaptureState>();
+            let captured = state
+                .0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            captured.as_ref().and_then(|result| result.source_app.clone())
+        };
+
+        let clipboard = MacosClipboard;
+        let keyboard = MacosKeyboard;
+        let activator = MacosAppActivator::new(app.clone());
+        let lifecycle = app.state::<BackupLifecycle>();
+        let sleeper = StdSleeper;
+
+        // Guard against a global-shortcut capture racing this in-flight
+        // replace (see `ReplaceInFlight`'s doc comment in lib.rs). The guard
+        // clears the flag on every exit path, including an unexpected panic.
+        let in_flight = app.state::<ReplaceInFlight>();
+        in_flight.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _guard = InFlightGuard(in_flight.inner());
+
+        let result = replace::replace_back(
+            &text,
+            source_app.as_ref(),
+            &clipboard,
+            &keyboard,
+            &activator,
+            &lifecycle,
+            &sleeper,
+        );
+
+        if let Err(ref err) = result {
+            // Activating the source app (a step that can succeed even when a
+            // later step, e.g. the synthetic paste, fails) steals focus from
+            // the popover, which blurs and hides it. The frontend's inline
+            // `actionError` would then render into an invisible, hidden
+            // webview and the user would never learn the replace failed — so
+            // when that's happened, surface the error via a dialog instead.
+            let popover_visible = app
+                .get_webview_window(crate::core::POPOVER_WINDOW_LABEL)
+                .map(|window| window.is_visible().unwrap_or(false))
+                .unwrap_or(false);
+            if !popover_visible {
+                crate::show_error_dialog(&app, format!("Replace failed: {err}"));
+            }
+        }
+
+        result
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, text);
+        Ok(())
+    }
+}
+
+/// Copies `text` to the clipboard (overwriting it, no restore) and discards
+/// any pending fallback backup so the result stays on the clipboard even
+/// after the popover's close/cancel path runs.
+#[tauri::command]
+pub fn copy_result(app: AppHandle, text: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use crate::core::clipboard::BackupLifecycle;
+        use crate::core::replace;
+        use crate::platform::MacosClipboard;
+
+        let clipboard = MacosClipboard;
+        let lifecycle = app.state::<BackupLifecycle>();
+        replace::copy_result(&text, &clipboard, &lifecycle)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, text);
+        Ok(())
     }
 }

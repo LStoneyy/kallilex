@@ -3,15 +3,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 import type { CaptureResult, Misspelling, SpellcheckResult } from "../shared/types";
 
-const { hidePopover, captureSelection, openAccessibilitySettings, spellcheck } = vi.hoisted(() => ({
+const {
+  hidePopover,
+  captureSelection,
+  openAccessibilitySettings,
+  spellcheck,
+  replaceBack,
+  copyResult,
+} = vi.hoisted(() => ({
   hidePopover: vi.fn(),
   captureSelection: vi.fn(),
   openAccessibilitySettings: vi.fn(),
   spellcheck: vi.fn(),
+  replaceBack: vi.fn(),
+  copyResult: vi.fn(),
 }));
 
 const { listen } = vi.hoisted(() => ({
   listen: vi.fn(),
+}));
+
+const { onFocusChanged } = vi.hoisted(() => ({
+  onFocusChanged: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -19,10 +32,16 @@ vi.mock("../shared/invoke", () => ({
   captureSelection,
   openAccessibilitySettings,
   spellcheck,
+  replaceBack,
+  copyResult,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen,
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ onFocusChanged }),
 }));
 
 function emptyResult(): CaptureResult {
@@ -47,10 +66,16 @@ describe("popover App", () => {
     captureSelection.mockClear();
     openAccessibilitySettings.mockClear();
     spellcheck.mockClear();
+    replaceBack.mockClear();
+    copyResult.mockClear();
     listen.mockClear();
+    onFocusChanged.mockClear();
     captureSelection.mockResolvedValue(emptyResult());
     spellcheck.mockResolvedValue(emptySpellcheck());
+    replaceBack.mockResolvedValue(undefined);
+    copyResult.mockResolvedValue(undefined);
     listen.mockResolvedValue(() => {});
+    onFocusChanged.mockResolvedValue(() => {});
   });
 
   it("renders captured text from captureSelection on mount", async () => {
@@ -370,6 +395,217 @@ describe("popover App", () => {
     resolveFollowUp?.({ misspellings: [] });
     await waitFor(() => {
       expect(container.querySelectorAll(".mark")).toHaveLength(0);
+    });
+  });
+
+  it("Replace stays disabled without a remembered source app even with text present", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+    expect(screen.getByRole("button", { name: "Replace" })).toBeDisabled();
+  });
+
+  it("Replace stays disabled with a source app but empty text", async () => {
+    captureSelection.mockResolvedValue({
+      text: "",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+    expect(screen.getByRole("button", { name: "Replace" })).toBeDisabled();
+  });
+
+  it("Replace becomes enabled once text and a source app are both present", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+  });
+
+  it("clicking Replace invokes replace_back with the current edited text and hides the popover", async () => {
+    captureSelection.mockResolvedValue({
+      text: "original text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    render(App);
+
+    const textarea = await screen.findByRole("textbox");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+
+    await fireEvent.input(textarea, { target: { value: "edited text" } });
+
+    const replaceButton = screen.getByRole("button", { name: "Replace" });
+    await fireEvent.click(replaceButton);
+
+    await waitFor(() => {
+      expect(replaceBack).toHaveBeenCalledWith("edited text");
+    });
+    expect(hidePopover).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking Copy invokes copy_result with the current text and hides the popover", async () => {
+    captureSelection.mockResolvedValue({
+      text: "result text",
+      reason: null,
+      sourceApp: null,
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled();
+    });
+
+    const copyButton = screen.getByRole("button", { name: "Copy" });
+    await fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalledWith("result text");
+    });
+    expect(hidePopover).toHaveBeenCalledTimes(1);
+  });
+
+  it("a rejected replace_back shows the error and does not hide the popover", async () => {
+    captureSelection.mockResolvedValue({
+      text: "original text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+    replaceBack.mockRejectedValueOnce(new Error("no source application remembered"));
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+
+    const replaceButton = screen.getByRole("button", { name: "Replace" });
+    await fireEvent.click(replaceButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("no source application remembered")).toBeInTheDocument();
+    });
+    expect(hidePopover).not.toHaveBeenCalled();
+    // Busy is cleared after the failure, so Replace becomes clickable again.
+    expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+  });
+
+  it("disables both Replace and Copy while a replace is in flight, and completes once it resolves", async () => {
+    captureSelection.mockResolvedValue({
+      text: "original text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    let resolveReplace: (() => void) | undefined;
+    replaceBack.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveReplace = resolve;
+        }),
+    );
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+
+    const replaceButton = screen.getByRole("button", { name: "Replace" });
+    const copyButton = screen.getByRole("button", { name: "Copy" });
+    await fireEvent.click(replaceButton);
+
+    await waitFor(() => {
+      expect(replaceButton).toBeDisabled();
+    });
+    expect(copyButton).toBeDisabled();
+
+    resolveReplace?.();
+
+    await waitFor(() => {
+      expect(hidePopover).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("a rejected copyResult shows the error inline and does not hide the popover", async () => {
+    captureSelection.mockResolvedValue({
+      text: "result text",
+      reason: null,
+      sourceApp: null,
+    });
+    copyResult.mockRejectedValueOnce(new Error("clipboard write failed"));
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled();
+    });
+
+    const copyButton = screen.getByRole("button", { name: "Copy" });
+    await fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("clipboard write failed")).toBeInTheDocument();
+    });
+    expect(hidePopover).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled();
+  });
+
+  it("clears a previously shown action error when the window regains focus", async () => {
+    captureSelection.mockResolvedValue({
+      text: "original text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+    replaceBack.mockRejectedValueOnce(new Error("no source application remembered"));
+
+    let focusHandler: ((event: { payload: boolean }) => void) | undefined;
+    onFocusChanged.mockImplementation((handler: (event: { payload: boolean }) => void) => {
+      focusHandler = handler;
+      return Promise.resolve(() => {});
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(onFocusChanged).toHaveBeenCalled();
+    });
+
+    const replaceButton = screen.getByRole("button", { name: "Replace" });
+    await fireEvent.click(replaceButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("no source application remembered")).toBeInTheDocument();
+    });
+
+    focusHandler?.({ payload: true });
+
+    await waitFor(() => {
+      expect(screen.queryByText("no source application remembered")).not.toBeInTheDocument();
     });
   });
 

@@ -26,6 +26,9 @@ pub struct ClipboardBackup(pub Vec<ClipboardItem>);
 /// Platform seam for reading/writing the system clipboard.
 pub trait Clipboard: Send + Sync {
     fn read_text(&self) -> Option<String>;
+    /// Writes `text` to the clipboard as plain text, replacing its
+    /// contents.
+    fn write_text(&self, text: &str);
     /// Best-effort snapshot of all pasteboard items/formats.
     fn backup(&self) -> ClipboardBackup;
     /// Best-effort restore of a previously captured snapshot.
@@ -36,10 +39,13 @@ pub trait Clipboard: Send + Sync {
     fn wait_for_change(&self, prev: u64, timeout: Duration) -> bool;
 }
 
-/// Platform seam for synthesizing the ⌘C fallback keystroke.
+/// Platform seam for synthesizing the ⌘C fallback keystroke and the ⌘V
+/// paste used by replace-back (spec-04).
 pub trait Keyboard: Send + Sync {
     /// Sends a synthetic Cmd+C to the frontmost app.
     fn send_copy(&self) -> Result<(), String>;
+    /// Sends a synthetic Cmd+V to the frontmost app.
+    fn send_paste(&self) -> Result<(), String>;
 }
 
 /// Single source of truth for the pending clipboard backup produced by the
@@ -81,9 +87,7 @@ impl BackupLifecycle {
     }
 
     /// Clears the pending backup without restoring it (the Copy action:
-    /// the fallback's result intentionally stays on the clipboard). Not
-    /// wired to a command yet — the Copy action lands in spec-04.
-    #[allow(dead_code)]
+    /// the fallback's result intentionally stays on the clipboard).
     pub fn discard_pending(&self) {
         let mut pending = self
             .pending
@@ -92,14 +96,31 @@ impl BackupLifecycle {
         *pending = None;
     }
 
-    /// Not read by production code yet — exposed for spec-04's Copy/Replace
-    /// wiring; exercised directly by this module's tests today.
+    /// Whether a fallback backup is currently pending. No production caller
+    /// yet — exercised directly by this module's and `core::replace`'s
+    /// tests to assert `take_pending`/`discard_pending`/`restore_pending`
+    /// leave the lifecycle in the expected state.
     #[allow(dead_code)]
     pub fn has_pending(&self) -> bool {
         self.pending
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .is_some()
+    }
+
+    /// Removes and returns the pending backup without restoring it. This is
+    /// replace-back's (spec-04) race guard: once replace-back has taken the
+    /// pending backup, the popover's focus-loss cancel path
+    /// (`cancel_capture` -> `restore_pending`) becomes a no-op and cannot
+    /// restore the clipboard mid-replace — which matters because the
+    /// popover *will* lose focus when the source app is activated as part
+    /// of replace-back, and that is expected and must be harmless.
+    pub fn take_pending(&self) -> Option<ClipboardBackup> {
+        let mut pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        pending.take()
     }
 }
 
@@ -151,6 +172,30 @@ mod tests {
 
         assert_eq!(clipboard.current_text(), Some("untouched".to_string()));
         assert!(!lifecycle.has_pending());
+    }
+
+    #[test]
+    fn take_pending_removes_the_backup_and_makes_a_later_restore_a_no_op() {
+        // The replace-back race guard (spec-04): once `take_pending` has
+        // removed the pending backup, a concurrent `restore_pending` call
+        // (the popover's focus-loss cancel path) must not touch the
+        // clipboard at all.
+        let log = CallLog::new();
+        let clipboard = FakeClipboard::with_text(log.clone(), "original");
+        let lifecycle = BackupLifecycle::new();
+
+        lifecycle.store(clipboard.backup());
+        clipboard.set_external_text("intermediate");
+
+        let taken = lifecycle.take_pending();
+
+        assert_eq!(taken.unwrap().0[0].formats[0].1, b"original".to_vec());
+        assert!(!lifecycle.has_pending());
+
+        clipboard.set_external_text("result-in-place");
+        lifecycle.restore_pending(&clipboard);
+
+        assert_eq!(clipboard.current_text(), Some("result-in-place".to_string()));
     }
 
     #[test]
