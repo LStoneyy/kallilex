@@ -20,7 +20,7 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self, profile_id: &str) -> Result<(), SecretsError>;
 }
 
-const SERVICE: &str = "com.xr-essential.kallilex";
+const SERVICE: &str = "com.webcommits.kallilex";
 
 /// [`SecretStore`] implementation backed by the macOS Keychain via the
 /// `keyring` crate.

@@ -57,10 +57,10 @@ brew path; version bumps are a documented manual step per release.
   Gatekeeper or to pass `--no-quarantine` — the supported path is the
   documented approval.
 - `zap trash:` entries for the app's data:
-  `~/Library/Application Support/com.xr-essential.kallilex`,
-  `~/Library/Caches/com.xr-essential.kallilex`,
-  `~/Library/WebKit/com.xr-essential.kallilex`, and
-  `~/Library/Preferences/com.xr-essential.kallilex.plist` (verify the exact
+  `~/Library/Application Support/com.webcommits.kallilex`,
+  `~/Library/Caches/com.webcommits.kallilex`,
+  `~/Library/WebKit/com.webcommits.kallilex`, and
+  `~/Library/Preferences/com.webcommits.kallilex.plist` (verify the exact
   set on disk before finalizing; list only paths the app actually creates).
   Keychain entries cannot be zapped by Homebrew; the caveats note that a saved
   API key stays in the Keychain until removed manually.
