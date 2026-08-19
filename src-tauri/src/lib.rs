@@ -365,11 +365,14 @@ pub fn run() {
                 Menu::with_items(app, &[&settings_item, &about_item, &separator, &quit_item])?;
 
             TrayIconBuilder::new()
-                .icon(
-                    app.default_window_icon()
-                        .cloned()
-                        .expect("default window icon"),
-                )
+                // Only the @2x raster is embedded: tray-icon builds a single
+                // NSImage scaled to a fixed 18 pt height, so the 44 px source
+                // downsamples crisply on both Retina and non-Retina displays.
+                // icons/tray.png (@1x) stays committed as an artwork artifact.
+                .icon(tauri::image::Image::from_bytes(include_bytes!(
+                    "../icons/tray@2x.png"
+                ))?)
+                .icon_as_template(true)
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
