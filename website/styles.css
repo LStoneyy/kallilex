@@ -388,10 +388,46 @@ h1 .accent {
     rgba(23, 22, 26, 0.4);
 }
 
+.demo__toggle {
+  position: absolute;
+  top: 5rem;
+  right: 1.25rem;
+  z-index: 5;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  background: rgba(23, 22, 26, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  color: var(--ash);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.demo__toggle:hover {
+  color: var(--verdigris);
+  border-color: var(--verdigris);
+}
+
+.demo__toggle .icon-play,
+.demo__toggle.is-paused .icon-pause {
+  display: none;
+}
+
+.demo__toggle.is-paused .icon-play {
+  display: block;
+}
+
 .demo__step {
   position: relative;
   min-height: 100vh;
   min-height: 100svh;
+  /* steps span the viewport above the sticky layer; let clicks through to
+     the video toggle except where the card sits */
+  pointer-events: none;
   display: grid;
   align-items: end;
   padding: 3rem 1.5rem 4rem;
@@ -411,6 +447,7 @@ h1 .accent {
 }
 
 .demo__card {
+  pointer-events: auto;
   max-width: 30rem;
   width: 100%;
   background: linear-gradient(180deg, rgba(32, 31, 36, 0.92), rgba(20, 19, 24, 0.92));

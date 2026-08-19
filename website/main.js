@@ -115,7 +115,10 @@
 
   function initDemoVideo() {
     var video = document.querySelector(".demo__sticky video");
-    if (!video || REDUCED_MOTION) return;
+    if (!video) return;
+
+    var toggle = document.querySelector("[data-video-toggle]");
+    var userPaused = false;
 
     function tryPlay() {
       video.play().catch(function () {
@@ -123,12 +126,21 @@
       });
     }
 
+    function syncToggle() {
+      if (!toggle) return;
+      toggle.classList.toggle("is-paused", video.paused);
+      toggle.setAttribute(
+        "aria-label",
+        video.paused ? "Play background video" : "Pause background video"
+      );
+    }
+
     tryPlay();
 
     // Low Power Mode and Safari's "Never Auto-Play" block play() without a
     // user gesture; the first interaction lifts that restriction.
     function onFirstGesture() {
-      if (video.paused) tryPlay();
+      if (video.paused && !userPaused) tryPlay();
       window.removeEventListener("pointerdown", onFirstGesture);
       window.removeEventListener("touchend", onFirstGesture);
       window.removeEventListener("keydown", onFirstGesture);
@@ -136,6 +148,21 @@
     window.addEventListener("pointerdown", onFirstGesture);
     window.addEventListener("touchend", onFirstGesture);
     window.addEventListener("keydown", onFirstGesture);
+
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        if (video.paused) {
+          userPaused = false;
+          tryPlay();
+        } else {
+          userPaused = true;
+          video.pause();
+        }
+      });
+      video.addEventListener("play", syncToggle);
+      video.addEventListener("pause", syncToggle);
+      syncToggle();
+    }
   }
 
   document.addEventListener("DOMContentLoaded", function () {
