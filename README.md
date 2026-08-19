@@ -177,7 +177,4 @@ The first macOS release should stay intentionally small:
 
 ## License
 
-The project is intended to be free and open source.
-
-**Recommended license:** Apache-2.0 or MIT.  
-Apache-2.0 is the stronger default if explicit patent protection is desirable.
+The project is free and open source under the Apache 2.0 licence.
