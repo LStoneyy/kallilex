@@ -117,9 +117,25 @@
     var video = document.querySelector(".demo__sticky video");
     if (!video || REDUCED_MOTION) return;
 
-    video.play().catch(function () {
-      /* autoplay blocked or source missing; poster background stays visible */
-    });
+    function tryPlay() {
+      video.play().catch(function () {
+        /* autoplay blocked or source missing; poster background stays visible */
+      });
+    }
+
+    tryPlay();
+
+    // Low Power Mode and Safari's "Never Auto-Play" block play() without a
+    // user gesture; the first interaction lifts that restriction.
+    function onFirstGesture() {
+      if (video.paused) tryPlay();
+      window.removeEventListener("pointerdown", onFirstGesture);
+      window.removeEventListener("touchend", onFirstGesture);
+      window.removeEventListener("keydown", onFirstGesture);
+    }
+    window.addEventListener("pointerdown", onFirstGesture);
+    window.addEventListener("touchend", onFirstGesture);
+    window.addEventListener("keydown", onFirstGesture);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
