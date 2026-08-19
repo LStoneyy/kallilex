@@ -6,6 +6,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::core::capture::CaptureResult;
 use crate::core::settings::{self, Settings, TauriStoreSettings};
+use crate::core::spellcheck::SpellcheckResult;
 use crate::CaptureState;
 
 #[tauri::command]
@@ -65,5 +66,28 @@ pub fn open_accessibility_settings() -> Result<(), String> {
     #[cfg(not(target_os = "macos"))]
     {
         Ok(())
+    }
+}
+
+/// Runs a local, offline spell check over `text` via the platform
+/// `SpellChecker` (macOS: `NSSpellChecker`, marshalled to the main thread).
+/// `async` so the blocking wait for that main-thread round trip runs on the
+/// async runtime rather than on Tauri's own main thread — which is exactly
+/// the thread the check itself needs to marshal onto, so running this
+/// synchronously would deadlock.
+#[tauri::command]
+pub async fn spellcheck(app: AppHandle, text: String) -> Result<SpellcheckResult, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use crate::core::spellcheck::run_spellcheck;
+        use crate::platform::MacosSpellChecker;
+
+        let checker = MacosSpellChecker::new(app);
+        run_spellcheck(&checker, &text).map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, text);
+        Ok(SpellcheckResult::default())
     }
 }

@@ -33,3 +33,22 @@ export interface CaptureResult {
   reason: CaptureFailureReason | null;
   sourceApp: SourceApp | null;
 }
+
+/**
+ * Mirrors `Misspelling` in `src-tauri/src/core/spellcheck/mod.rs`.
+ * `start`/`length` are UTF-16 code-unit offsets — the same unit JS strings
+ * use internally, so they can be passed straight to `.slice()`.
+ */
+export interface Misspelling {
+  start: number;
+  length: number;
+  word: string;
+  suggestions: string[];
+}
+
+/**
+ * Mirrors `SpellcheckResult` in `src-tauri/src/core/spellcheck/mod.rs`.
+ */
+export interface SpellcheckResult {
+  misspellings: Misspelling[];
+}

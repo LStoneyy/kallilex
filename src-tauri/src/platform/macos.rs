@@ -2,6 +2,7 @@
 //! selection reading, `NSPasteboard` clipboard access, and a synthetic ⌘C
 //! via `CGEvent`.
 
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use accessibility_sys::{
@@ -15,12 +16,15 @@ use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{
-    NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSWorkspace,
+    NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSSpellChecker,
+    NSWorkspace,
 };
-use objc2_foundation::{NSArray, NSData, NSString};
+use objc2_foundation::{NSArray, NSData, NSInteger, NSNotFound, NSString};
+use tauri::AppHandle;
 
 use crate::core::capture::{SelectionBackend, SourceApp};
 use crate::core::clipboard::{Clipboard, ClipboardBackup, ClipboardItem, Keyboard};
+use crate::core::spellcheck::{Misspelling, SpellChecker, SpellcheckError, SpellcheckResult};
 
 /// `kVK_ANSI_C`, the physical keycode for the "C" key regardless of
 /// keyboard layout — what a real ⌘C keystroke sends.
@@ -202,6 +206,99 @@ impl Keyboard for MacosKeyboard {
         key_up.post(CGEventTapLocation::HID);
         Ok(())
     }
+}
+
+/// How long to wait for a spell check marshalled onto the main thread to
+/// complete before giving up. `NSSpellChecker` is fast (in-process, local
+/// dictionaries), so a real timeout here only ever fires if the main thread
+/// itself is wedged.
+const SPELLCHECK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Spell checking via the shared `NSSpellChecker`. All AppKit calls are
+/// marshalled onto the main thread (`NSSpellChecker` is not `Send`): `check`
+/// blocks the calling thread on a channel while `app.run_on_main_thread`
+/// does the actual work.
+pub struct MacosSpellChecker {
+    app: AppHandle,
+}
+
+impl MacosSpellChecker {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl SpellChecker for MacosSpellChecker {
+    fn check(&self, text: &str) -> Result<SpellcheckResult, SpellcheckError> {
+        let (tx, rx) = mpsc::channel();
+        let owned_text = text.to_string();
+
+        self.app
+            .run_on_main_thread(move || {
+                let result = check_on_main_thread(&owned_text);
+                // The receiver may already be gone if `recv_timeout` below
+                // gave up first; that's fine, there's nothing left to do.
+                let _ = tx.send(result);
+            })
+            .map_err(|e| {
+                SpellcheckError::Backend(format!("failed to schedule on the main thread: {e}"))
+            })?;
+
+        rx.recv_timeout(SPELLCHECK_TIMEOUT)
+            .map_err(|_| SpellcheckError::Backend("spell check timed out".to_string()))
+    }
+}
+
+/// Runs the actual `NSSpellChecker` work. Must only ever be called from the
+/// main thread — every AppKit object created here is main-thread-affine.
+fn check_on_main_thread(text: &str) -> SpellcheckResult {
+    let checker = NSSpellChecker::sharedSpellChecker();
+    // Never hardcode a language: let NSSpellChecker pick from the user's
+    // system-preferred languages for whatever text it's given.
+    checker.setAutomaticallyIdentifiesLanguages(true);
+
+    let ns_text = NSString::from_str(text);
+    // NSSpellChecker's NSRange (like all AppKit/Foundation string APIs)
+    // counts UTF-16 code units, so we index into a UTF-16 view of `text`
+    // rather than its UTF-8 bytes or `char`s.
+    let units: Vec<u16> = text.encode_utf16().collect();
+    let total_length = units.len();
+
+    let mut misspellings = Vec::new();
+    let mut cursor: usize = 0;
+
+    while cursor < total_length {
+        let range = checker.checkSpellingOfString_startingAt(&ns_text, cursor as NSInteger);
+
+        if range.location == NSNotFound as usize || range.location >= total_length {
+            break;
+        }
+
+        let start = range.location;
+        let end = (start + range.length).min(total_length);
+        let word = String::from_utf16_lossy(&units[start..end]);
+
+        let suggestions = checker
+            .guessesForWordRange_inString_language_inSpellDocumentWithTag(range, &ns_text, None, 0)
+            .map(|guesses| guesses.iter().map(|s| s.to_string()).collect())
+            .unwrap_or_default();
+
+        misspellings.push(Misspelling {
+            start: start as u32,
+            length: (end - start) as u32,
+            word,
+            suggestions,
+        });
+
+        if range.length == 0 {
+            // Defensive: a zero-length "found" range would otherwise loop
+            // forever at the same offset.
+            break;
+        }
+        cursor = end;
+    }
+
+    SpellcheckResult { misspellings }
 }
 
 /// Opens System Settings directly at Privacy & Security -> Accessibility.

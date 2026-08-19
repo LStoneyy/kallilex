@@ -4,6 +4,7 @@
 pub mod capture;
 pub mod clipboard;
 pub mod settings;
+pub mod spellcheck;
 
 /// Label of the popover window, shared between the tray/window wiring in
 /// `lib.rs` and the Tauri commands in `commands.rs`.

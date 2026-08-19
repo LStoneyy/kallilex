@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CaptureResult, Settings } from "./types";
+import type { CaptureResult, Settings, SpellcheckResult } from "./types";
 
 /**
  * Thin, typed wrappers around the Tauri command surface.
@@ -28,4 +28,8 @@ export async function accessibilityStatus(): Promise<boolean> {
 
 export async function openAccessibilitySettings(): Promise<void> {
   return invoke<void>("open_accessibility_settings");
+}
+
+export async function spellcheck(text: string): Promise<SpellcheckResult> {
+  return invoke<SpellcheckResult>("spellcheck", { text });
 }

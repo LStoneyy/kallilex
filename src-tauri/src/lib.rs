@@ -202,6 +202,7 @@ pub fn run() {
             commands::capture_selection,
             commands::accessibility_status,
             commands::open_accessibility_settings,
+            commands::spellcheck,
         ])
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
