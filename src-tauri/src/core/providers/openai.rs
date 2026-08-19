@@ -150,26 +150,24 @@ async fn send_and_extract_content(
 }
 
 impl Provider for OpenAiCompatibleAdapter {
-    fn complete(
+    async fn complete(
         &self,
         profile: &ProviderProfile,
         api_key: Option<&str>,
         system_prompt: &str,
         user_text: &str,
-    ) -> impl std::future::Future<Output = Result<String, ProviderError>> + Send {
-        async move {
-            let body = json!({
-                "model": profile.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_text},
-                ],
-                "stream": false,
-            });
-            let client = reqwest::Client::new();
-            let request = build_request(&client, profile, api_key, &body)?;
-            send_and_extract_content(request, profile.timeout_secs).await
-        }
+    ) -> Result<String, ProviderError> {
+        let body = json!({
+            "model": profile.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_text},
+            ],
+            "stream": false,
+        });
+        let client = reqwest::Client::new();
+        let request = build_request(&client, profile, api_key, &body)?;
+        send_and_extract_content(request, profile.timeout_secs).await
     }
 }
 

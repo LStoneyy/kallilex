@@ -631,8 +631,8 @@ mod tests {
     #[test]
     fn action_context_reports_the_active_profiles_name_and_privacy() {
         let profile = sample_profile("a");
-        let ctx = action_context(&[profile.clone()], Some("a"));
-        assert_eq!(ctx.configured, true);
+        let ctx = action_context(std::slice::from_ref(&profile), Some("a"));
+        assert!(ctx.configured);
         assert_eq!(ctx.profile_name, Some(profile.name));
         assert_eq!(ctx.privacy, Some(PrivacyClass::Local));
     }

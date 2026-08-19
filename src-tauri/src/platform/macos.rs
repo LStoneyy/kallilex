@@ -84,7 +84,7 @@ impl SelectionBackend for MacosSelectionBackend {
         let app = workspace.frontmostApplication()?;
         Some(SourceApp {
             bundle_id: app.bundleIdentifier().map(|s| s.to_string()),
-            pid: app.processIdentifier() as i32,
+            pid: app.processIdentifier(),
             name: app.localizedName().map(|s| s.to_string()),
         })
     }
