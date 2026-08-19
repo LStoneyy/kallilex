@@ -1,0 +1,15 @@
+/*
+ * Kallilex "Attic Oxide" design tokens.
+ * Dark-first, no gradients.
+ */
+:root {
+  --color-basalt: #17161a; /* main background */
+  --color-marble: #f2eee6; /* primary text */
+  --color-verdigris: #2faf9b; /* accent / active */
+  --color-attic-clay: #e46846; /* main action */
+  --color-tyrian: #7d5778; /* secondary accent */
+  --color-electrum: #d7b45b; /* warnings / highlights */
+  --color-ash: #9c989f; /* muted text */
+
+  color-scheme: dark;
+}
