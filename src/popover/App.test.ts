@@ -1,7 +1,13 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
-import type { CaptureResult, Misspelling, SpellcheckResult } from "../shared/types";
+import type {
+  ActionContext,
+  CaptureResult,
+  Misspelling,
+  Settings,
+  SpellcheckResult,
+} from "../shared/types";
 
 const {
   hidePopover,
@@ -10,6 +16,11 @@ const {
   spellcheck,
   replaceBack,
   copyResult,
+  getSettings,
+  getActionContext,
+  runAction,
+  cancelAction,
+  openSettings,
 } = vi.hoisted(() => ({
   hidePopover: vi.fn(),
   captureSelection: vi.fn(),
@@ -17,6 +28,11 @@ const {
   spellcheck: vi.fn(),
   replaceBack: vi.fn(),
   copyResult: vi.fn(),
+  getSettings: vi.fn(),
+  getActionContext: vi.fn(),
+  runAction: vi.fn(),
+  cancelAction: vi.fn(),
+  openSettings: vi.fn(),
 }));
 
 const { listen } = vi.hoisted(() => ({
@@ -34,6 +50,11 @@ vi.mock("../shared/invoke", () => ({
   spellcheck,
   replaceBack,
   copyResult,
+  getSettings,
+  getActionContext,
+  runAction,
+  cancelAction,
+  openSettings,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -52,6 +73,21 @@ function emptySpellcheck(): SpellcheckResult {
   return { misspellings: [] };
 }
 
+function defaultSettings(): Settings {
+  return {
+    activeProfileId: null,
+    shortcut: "Alt+Cmd+K",
+    spellcheckEnabled: true,
+    popoverPinned: false,
+    accessibilityOnboardingShown: false,
+    profiles: [],
+  };
+}
+
+function notConfiguredContext(): ActionContext {
+  return { configured: false, profileName: null, privacy: null };
+}
+
 const misspelledText = "I halp you";
 const halpMisspelling: Misspelling = {
   start: 2,
@@ -68,12 +104,22 @@ describe("popover App", () => {
     spellcheck.mockClear();
     replaceBack.mockClear();
     copyResult.mockClear();
+    getSettings.mockClear();
+    getActionContext.mockClear();
+    runAction.mockClear();
+    cancelAction.mockClear();
+    openSettings.mockClear();
     listen.mockClear();
     onFocusChanged.mockClear();
     captureSelection.mockResolvedValue(emptyResult());
     spellcheck.mockResolvedValue(emptySpellcheck());
     replaceBack.mockResolvedValue(undefined);
     copyResult.mockResolvedValue(undefined);
+    getSettings.mockResolvedValue(defaultSettings());
+    getActionContext.mockResolvedValue(notConfiguredContext());
+    runAction.mockResolvedValue({ status: "ok", text: "" });
+    cancelAction.mockResolvedValue(undefined);
+    openSettings.mockResolvedValue(undefined);
     listen.mockResolvedValue(() => {});
     onFocusChanged.mockResolvedValue(() => {});
   });
@@ -631,5 +677,331 @@ describe("popover App", () => {
 
     expect(screen.queryByRole("button", { name: "help" })).not.toBeInTheDocument();
     expect(hidePopover).not.toHaveBeenCalled();
+  });
+
+  it("clicking Rewrite calls runAction with the current text and applies the returned text", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "some rewritten text" });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("some captured text", { kind: "rewrite" });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some rewritten text");
+    });
+  });
+
+  it("clicking an action button when not configured shows a settings hint instead of calling runAction", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue(notConfiguredContext());
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    expect(runAction).not.toHaveBeenCalled();
+    const settingsButton = await screen.findByRole("button", { name: "Open Settings" });
+
+    await fireEvent.click(settingsButton);
+    expect(openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the message from an error outcome", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({
+      status: "error",
+      kind: "unreachable",
+      message: "Can't reach the endpoint — is the server running? (connection refused)",
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Can't reach the endpoint — is the server running? (connection refused)"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows a Cancel affordance while an AI action is in flight and cancels it on click", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+
+    let resolveRun: ((outcome: { status: "cancelled" }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    const cancelButton = await screen.findByRole("button", { name: "Cancel" });
+    await fireEvent.click(cancelButton);
+
+    expect(cancelAction).toHaveBeenCalledTimes(1);
+
+    resolveRun?.({ status: "cancelled" });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("discards a stale AI action result after a fresh capture supersedes it, and cancels the in-flight request", async () => {
+    let capturedHandler: ((event: unknown) => void) | undefined;
+    listen.mockImplementation((_event: string, handler: (event: unknown) => void) => {
+      capturedHandler = handler;
+      return Promise.resolve(() => {});
+    });
+
+    captureSelection.mockResolvedValueOnce({
+      text: "first captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+
+    let resolveRun: ((outcome: { status: "ok"; text: string }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("first captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("first captured text", { kind: "rewrite" });
+    });
+
+    // A fresh capture arrives while the action is still in flight.
+    captureSelection.mockResolvedValueOnce({
+      text: "second captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    cancelAction.mockClear();
+    capturedHandler?.({});
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("second captured text");
+    });
+    expect(cancelAction).toHaveBeenCalled();
+
+    // The stale request finally resolves — it must not clobber the fresh
+    // capture, or surface as an error.
+    resolveRun?.({ status: "ok", text: "stale ai result" });
+
+    // Let the now-resolved promise's continuation run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByRole("textbox")).toHaveValue("second captured text");
+    expect(screen.queryByText("stale ai result")).not.toBeInTheDocument();
+  });
+
+  it("disables the capture textarea while an AI action is in flight and re-enables it once it resolves", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+
+    let resolveRun: ((outcome: { status: "ok"; text: string }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+    const textarea = screen.getByRole("textbox");
+    expect(textarea).toBeEnabled();
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(textarea).toBeDisabled();
+    });
+
+    resolveRun?.({ status: "ok", text: "rewritten text" });
+
+    await waitFor(() => {
+      expect(textarea).toBeEnabled();
+    });
+  });
+
+  it("renders the LAN privacy badge with the profile name", async () => {
+    captureSelection.mockResolvedValue(emptyResult());
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "lan",
+    });
+
+    render(App);
+
+    expect(await screen.findByText("Llama · LAN")).toBeInTheDocument();
+  });
+
+  it("renders the Local privacy badge without a profile name", async () => {
+    captureSelection.mockResolvedValue(emptyResult());
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+
+    render(App);
+
+    expect(await screen.findByText("Local")).toBeInTheDocument();
+  });
+
+  it("renders no badge when no provider is configured", async () => {
+    captureSelection.mockResolvedValue(emptyResult());
+    getActionContext.mockResolvedValue(notConfiguredContext());
+
+    render(App);
+
+    await waitFor(() => {
+      expect(getActionContext).toHaveBeenCalled();
+    });
+    expect(screen.queryByText("Local")).not.toBeInTheDocument();
+    expect(screen.queryByText(/· LAN/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/· Cloud/)).not.toBeInTheDocument();
+  });
+
+  it("running a custom instruction on Enter calls runAction with the instruction", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "translated text" });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const customButton = screen.getByRole("button", { name: "Custom" });
+    await fireEvent.click(customButton);
+
+    const customInput = screen.getByPlaceholderText("Describe what to do…");
+    await fireEvent.input(customInput, { target: { value: "Translate to French" } });
+    await fireEvent.keyDown(customInput, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("some captured text", {
+        kind: "custom",
+        instruction: "Translate to French",
+      });
+    });
+  });
+
+  it("does not run automatic spellcheck after capture when spellcheck is disabled in settings", async () => {
+    captureSelection.mockResolvedValue({
+      text: misspelledText,
+      reason: null,
+      sourceApp: null,
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), spellcheckEnabled: false });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(getSettings).toHaveBeenCalled();
+    });
+    expect(spellcheck).not.toHaveBeenCalled();
   });
 });

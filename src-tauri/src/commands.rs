@@ -5,9 +5,14 @@
 use tauri::{AppHandle, Manager};
 
 use crate::core::capture::CaptureResult;
+use crate::core::providers::openai::{self, OpenAiCompatibleAdapter};
+use crate::core::providers::{
+    self, Action, ActionContext, Preset, ProviderProfile, RunActionOutcome,
+};
+use crate::core::secrets::{KeyringSecretStore, SecretStore};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::spellcheck::SpellcheckResult;
-use crate::{CaptureState, ReplaceInFlight};
+use crate::{ActionInFlight, CaptureState, ReplaceInFlight};
 
 /// RAII guard clearing [`ReplaceInFlight`] on drop, so every exit path out
 /// of `replace_back` — success, error, or an unexpected panic — releases the
@@ -29,10 +34,48 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
     settings::get_settings(&store).map_err(|e| e.to_string())
 }
 
+/// Persists `settings`. When the shortcut string has changed, the new
+/// shortcut is parsed *before* anything is saved (a parse failure aborts
+/// the whole save, so a typo can never silently lose the rest of the
+/// settings change); once saved, the old shortcut is unregistered and the
+/// new one registered. Settings stay saved even if that registration step
+/// fails — the popover and tray icon are fully usable without a working
+/// global shortcut, and rolling the save back on a transient registration
+/// error would just leave the user unable to retry the shortcut change.
 #[tauri::command]
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
-    let store = TauriStoreSettings::new(app);
-    settings::set_settings(&store, settings).map_err(|e| e.to_string())
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    let store = TauriStoreSettings::new(app.clone());
+    let previous = settings::get_settings(&store).map_err(|e| e.to_string())?;
+
+    let shortcut_changed = settings.shortcut != previous.shortcut;
+    let new_shortcut = if shortcut_changed {
+        Some(Shortcut::from_str(&settings.shortcut).map_err(|e| {
+            format!(
+                "Kallilex couldn't understand the shortcut \"{}\": {e}",
+                settings.shortcut
+            )
+        })?)
+    } else {
+        None
+    };
+
+    let saved = settings::set_settings(&store, settings).map_err(|e| e.to_string())?;
+
+    if let Some(new_shortcut) = new_shortcut {
+        if let Ok(old_shortcut) = Shortcut::from_str(&previous.shortcut) {
+            let _ = app.global_shortcut().unregister(old_shortcut);
+        }
+        if let Err(err) = app.global_shortcut().register(new_shortcut) {
+            return Err(format!(
+                "Settings were saved, but the new shortcut could not be registered: {err}"
+            ));
+        }
+    }
+
+    Ok(saved)
 }
 
 /// Hides the popover, restoring any pending clipboard backup and clearing
@@ -126,7 +169,9 @@ pub async fn replace_back(app: AppHandle, text: String) -> Result<(), String> {
                 .0
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            captured.as_ref().and_then(|result| result.source_app.clone())
+            captured
+                .as_ref()
+                .and_then(|result| result.source_app.clone())
         };
 
         let clipboard = MacosClipboard;
@@ -197,4 +242,139 @@ pub fn copy_result(app: AppHandle, text: String) -> Result<(), String> {
         let _ = (app, text);
         Ok(())
     }
+}
+
+/// Runs an AI action (Rewrite/Shorten/ImproveClarity/Custom) against the
+/// active provider profile. `async` so the request itself, and the
+/// `tokio::select!` race against a cancel, run on the async runtime.
+///
+/// At most one action runs at a time: starting a new one replaces the
+/// stored cancel sender in [`ActionInFlight`], which drops (and thereby
+/// cancels, via the sender's `Drop` firing the receiver) whatever request
+/// was previously in flight — exactly as an explicit `cancel_action` call
+/// would. See [`ActionInFlight`]'s doc comment for the generation-counter
+/// race guard this relies on.
+#[tauri::command]
+pub async fn run_action(
+    app: AppHandle,
+    text: String,
+    action: Action,
+) -> Result<RunActionOutcome, String> {
+    let store = TauriStoreSettings::new(app.clone());
+    let current_settings = settings::get_settings(&store).map_err(|e| e.to_string())?;
+    let active = providers::active_profile(
+        &current_settings.profiles,
+        current_settings.active_profile_id.as_deref(),
+    );
+
+    let secrets = KeyringSecretStore;
+    let adapter = OpenAiCompatibleAdapter;
+
+    let in_flight = app.state::<ActionInFlight>();
+    let (mut cancel_rx, generation) = in_flight.begin();
+
+    let outcome = tokio::select! {
+        outcome = providers::run_action(active, &secrets, &adapter, &text, &action) => outcome,
+        _ = &mut cancel_rx => RunActionOutcome::Cancelled,
+    };
+
+    in_flight.clear(generation);
+
+    Ok(outcome)
+}
+
+/// Cancels the currently in-flight `run_action` call, if any. A no-op
+/// (never an error) when nothing is in flight, or the request just
+/// finished on its own — the send failing in that race is expected and
+/// harmless.
+#[tauri::command]
+pub fn cancel_action(app: AppHandle) -> Result<(), String> {
+    let in_flight = app.state::<ActionInFlight>();
+    in_flight.cancel();
+    Ok(())
+}
+
+/// Summary of the active profile (if any) for the popover's AI actions
+/// panel: whether an action can even be attempted, and — if so — which
+/// profile and what privacy class its endpoint falls into.
+#[tauri::command]
+pub fn get_action_context(app: AppHandle) -> Result<ActionContext, String> {
+    let store = TauriStoreSettings::new(app);
+    let current_settings = settings::get_settings(&store).map_err(|e| e.to_string())?;
+    Ok(providers::action_context(
+        &current_settings.profiles,
+        current_settings.active_profile_id.as_deref(),
+    ))
+}
+
+#[tauri::command]
+pub fn list_profiles(app: AppHandle) -> Result<Vec<ProviderProfile>, String> {
+    let store = TauriStoreSettings::new(app);
+    providers::list_profiles_core(&store).map_err(|e| e.to_string())
+}
+
+/// Creates or updates a provider profile; see
+/// [`providers::save_profile_core`] for the id-generation, upsert, and API
+/// key handling rules.
+#[tauri::command]
+pub fn save_profile(
+    app: AppHandle,
+    profile: ProviderProfile,
+    api_key: Option<String>,
+) -> Result<Vec<ProviderProfile>, String> {
+    let store = TauriStoreSettings::new(app);
+    let secrets = KeyringSecretStore;
+    providers::save_profile_core(&store, &secrets, profile, api_key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_profile(app: AppHandle, id: String) -> Result<Vec<ProviderProfile>, String> {
+    let store = TauriStoreSettings::new(app);
+    let secrets = KeyringSecretStore;
+    providers::delete_profile_core(&store, &secrets, &id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_active_profile(app: AppHandle, id: Option<String>) -> Result<(), String> {
+    let store = TauriStoreSettings::new(app);
+    providers::set_active_profile_core(&store, id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_presets() -> Result<Vec<Preset>, String> {
+    Ok(providers::presets())
+}
+
+/// Shows (and focuses) the settings window. Used by the popover's
+/// "no provider configured" hint so the user can jump straight to Settings
+/// -> Providers without hunting for the tray menu.
+#[tauri::command]
+pub fn open_settings(app: AppHandle) -> Result<(), String> {
+    crate::show_settings(&app);
+    Ok(())
+}
+
+/// Sends a minimal request to the profile's endpoint and returns the
+/// round-trip latency in milliseconds, or the same `ProviderError` message
+/// a real action against this profile would surface.
+#[tauri::command]
+pub async fn test_connection(app: AppHandle, id: String) -> Result<u128, String> {
+    let store = TauriStoreSettings::new(app);
+    let current_settings = settings::get_settings(&store).map_err(|e| e.to_string())?;
+    let profile = current_settings
+        .profiles
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| format!("No profile with id \"{id}\"."))?;
+
+    let secrets = KeyringSecretStore;
+    let api_key = if profile.has_api_key {
+        secrets.get(&profile.id).map_err(|e| e.to_string())?
+    } else {
+        None
+    };
+
+    openai::test_connection(&profile, api_key.as_deref())
+        .await
+        .map_err(|e| e.to_string())
 }

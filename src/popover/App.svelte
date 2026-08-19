@@ -3,14 +3,25 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
+    cancelAction as cancelActionInvoke,
     captureSelection,
     copyResult,
+    getActionContext,
+    getSettings,
     hidePopover,
     openAccessibilitySettings,
+    openSettings as openSettingsInvoke,
     replaceBack,
+    runAction as runActionInvoke,
     spellcheck as spellcheckInvoke,
   } from "../shared/invoke";
-  import type { CaptureFailureReason, Misspelling, SourceApp } from "../shared/types";
+  import type {
+    Action,
+    ActionContext,
+    CaptureFailureReason,
+    Misspelling,
+    SourceApp,
+  } from "../shared/types";
 
   type Segment = {
     key: string;
@@ -31,8 +42,18 @@
   let popup = $state<SuggestionPopup | null>(null);
   let customOpen = $state(false);
   let customValue = $state("");
+  // Shared across Replace/Copy and the AI actions: only one can be in
+  // flight at a time, and all of Replace/Copy/action buttons are disabled
+  // while any of them runs.
   let busy = $state(false);
   let actionError = $state<string | null>(null);
+  let actionContext = $state<ActionContext | null>(null);
+  let spellcheckEnabled = $state(true);
+  // True only while an AI action (`run_action`) is specifically in flight —
+  // as opposed to `busy`, which is also true during Replace/Copy. Gates the
+  // Cancel affordance and the Escape-cancels-first-then-closes behavior.
+  let aiRunning = $state(false);
+  let showConfiguredHint = $state(false);
 
   let unlisten: UnlistenFn | undefined;
   let unlistenFocus: UnlistenFn | undefined;
@@ -47,6 +68,14 @@
   // check, or the user typing while a check was in flight): the offsets in
   // a stale response no longer match `text`, so they must never be applied.
   let pendingCheckText: string | null = null;
+
+  // Monotonically increasing generation counter, bumped on every fresh
+  // capture. Guards an in-flight `runAiAction` the same way `pendingCheckText`
+  // guards spellcheck: if the generation changes while a request is
+  // outstanding, that request's outcome — and its `finally` state reset —
+  // belongs to a session that no longer exists and must be discarded. Not
+  // `$state` since nothing renders it directly.
+  let captureGeneration = 0;
 
   function buildSegments(value: string, marks: Misspelling[]): Segment[] {
     const sorted = [...marks].sort((a, b) => a.start - b.start);
@@ -96,7 +125,41 @@
     }
   }
 
+  /**
+   * Fetches the AI-action context (whether a provider is configured, which
+   * one, and its privacy class) and the spellcheck-enabled flag. Both can
+   * change while the user was away in Settings, so this runs on mount, on
+   * every fresh capture, and on window focus gain — without touching the
+   * captured text itself.
+   */
+  async function refreshContext() {
+    const [settings, context] = await Promise.all([getSettings(), getActionContext()]);
+    spellcheckEnabled = settings.spellcheckEnabled;
+    actionContext = context;
+    if (context.configured) {
+      showConfiguredHint = false;
+    }
+  }
+
   async function refreshCapture() {
+    // Bumps the session forward, invalidating any `runAiAction` still in
+    // flight from the previous session — see `captureGeneration`'s comment.
+    captureGeneration += 1;
+    if (aiRunning) {
+      // The in-flight request is about to become irrelevant; ask the
+      // backend to abort it instead of letting it run to completion for no
+      // reason. Fire-and-forget: whether or not this succeeds, the
+      // generation bump above already ensures its outcome gets discarded.
+      cancelActionInvoke().catch((error) => console.error("cancel_action failed", error));
+    }
+    // Started concurrently with the capture itself, but deliberately not
+    // awaited before assigning `text` below — `refreshContext` takes an
+    // extra network/store round trip, and letting it gate the text
+    // assignment would leave a window where a user's in-progress edit (or a
+    // manual spellcheck) races a still-pending capture and gets clobbered
+    // once it finally resolves. It's only awaited below, right before the
+    // decision that actually needs it: whether to auto-run spellcheck.
+    const contextPromise = refreshContext();
     const result = await captureSelection();
     text = result.text;
     reason = result.reason;
@@ -104,8 +167,13 @@
     misspellings = [];
     popup = null;
     actionError = null;
+    showConfiguredHint = false;
     busy = false;
-    void runSpellcheck(text);
+    aiRunning = false;
+    await contextPromise;
+    if (spellcheckEnabled) {
+      void runSpellcheck(text);
+    }
   }
 
   onMount(() => {
@@ -133,6 +201,7 @@
       .onFocusChanged(({ payload: focused }) => {
         if (focused) {
           actionError = null;
+          void refreshContext();
         }
       })
       .then((fn) => {
@@ -169,6 +238,114 @@
 
   const canReplace = $derived(text.trim() !== "" && sourceApp !== null && !busy);
   const canCopy = $derived(text.trim() !== "" && !busy);
+  const canRunAction = $derived(text.trim() !== "" && !busy && actionContext !== null);
+
+  type PrivacyBadge = { text: string; class: string };
+
+  function privacyBadge(context: ActionContext | null): PrivacyBadge | null {
+    if (!context || !context.configured) return null;
+    switch (context.privacy) {
+      case "local":
+        return { text: "Local", class: "local" };
+      case "lan":
+        return { text: `${context.profileName} · LAN`, class: "local" };
+      case "cloud":
+        return { text: `${context.profileName} · Cloud`, class: "cloud" };
+      default:
+        // Unparseable base URL — still configured, just an unknown class.
+        return { text: context.profileName ?? "", class: "unknown" };
+    }
+  }
+
+  const badge = $derived(privacyBadge(actionContext));
+
+  /**
+   * Runs an AI action (a bundled one or a custom instruction) against `text`.
+   * No-ops when there's nothing to act on or another action/Replace/Copy is
+   * already running — the shared guard both the buttons' `disabled` state
+   * and this function itself enforce, so a stray keyboard-triggered call
+   * can never sneak past it.
+   */
+  async function runAiAction(action: Action) {
+    if (text.trim() === "" || busy) return;
+    if (actionContext === null) {
+      // The initial `getActionContext()` fetch is still pending — too soon
+      // to know whether a provider is configured, so this isn't (yet) a
+      // "go configure one" situation. `canRunAction` already keeps the
+      // buttons disabled in this state; this guard only protects against a
+      // stray keyboard-triggered call slipping through in the same window.
+      return;
+    }
+    if (!actionContext.configured) {
+      showConfiguredHint = true;
+      return;
+    }
+    showConfiguredHint = false;
+    actionError = null;
+    busy = true;
+    aiRunning = true;
+    const generation = captureGeneration;
+    try {
+      const outcome = await runActionInvoke(text, action);
+      if (generation !== captureGeneration) {
+        // A fresh capture superseded this session while the request was in
+        // flight — `refreshCapture` already reset `text`/`busy`/`aiRunning`
+        // for the new session, and `cancelActionInvoke` was already fired.
+        // The outcome no longer applies to anything on screen: applying it
+        // (or even surfacing its error) would clobber state that belongs to
+        // a newer capture.
+        return;
+      }
+      if (outcome.status === "ok") {
+        text = outcome.text;
+        misspellings = [];
+        popup = null;
+        if (spellcheckEnabled) {
+          void runSpellcheck(outcome.text);
+        }
+      } else if (outcome.status === "notConfigured") {
+        showConfiguredHint = true;
+      } else if (outcome.status === "error") {
+        actionError = outcome.message;
+      }
+      // "cancelled": nothing further to do — just clear the busy state below.
+    } catch (error) {
+      if (generation !== captureGeneration) return;
+      actionError = error instanceof Error ? error.message : String(error);
+    } finally {
+      if (generation === captureGeneration) {
+        busy = false;
+        aiRunning = false;
+      }
+    }
+  }
+
+  function runCustomAction() {
+    const instruction = customValue.trim();
+    if (instruction === "" || !canRunAction) return;
+    void runAiAction({ kind: "custom", instruction });
+  }
+
+  function handleCustomKeydown(event: KeyboardEvent) {
+    if (event.key !== "Enter") return;
+    runCustomAction();
+  }
+
+  async function handleCancelClick() {
+    try {
+      await cancelActionInvoke();
+    } catch (error) {
+      console.error("cancel_action failed", error);
+    }
+  }
+
+  async function handleOpenSettingsClick() {
+    try {
+      await openSettingsInvoke();
+    } catch (error) {
+      console.error("open_settings failed", error);
+    }
+  }
 
   async function handleReplaceClick() {
     actionError = null;
@@ -245,6 +422,13 @@
 
   function handleWindowKeydown(event: KeyboardEvent) {
     if (event.key !== "Escape") return;
+    if (aiRunning) {
+      // First Escape while an AI action is in flight cancels it instead of
+      // closing the popover; a second Escape then falls through to the
+      // normal behavior below.
+      void handleCancelClick();
+      return;
+    }
     if (popup) {
       popup = null;
       return;
@@ -297,6 +481,7 @@
       {...{ autocorrect: "off" }}
       bind:this={textareaEl}
       bind:value={text}
+      disabled={aiRunning}
       oninput={handleInput}
       onscroll={handleScroll}
     ></textarea>
@@ -321,21 +506,78 @@
   </div>
 
   <div class="action-row">
-    <button type="button" class="action-button">Rewrite</button>
-    <button type="button" class="action-button">Shorten</button>
-    <button type="button" class="action-button">Improve clarity</button>
-    <button type="button" class="action-button" class:active={customOpen} onclick={toggleCustom}>
+    <button
+      type="button"
+      class="action-button"
+      disabled={!canRunAction}
+      onclick={() => void runAiAction({ kind: "rewrite" })}
+    >
+      Rewrite
+    </button>
+    <button
+      type="button"
+      class="action-button"
+      disabled={!canRunAction}
+      onclick={() => void runAiAction({ kind: "shorten" })}
+    >
+      Shorten
+    </button>
+    <button
+      type="button"
+      class="action-button"
+      disabled={!canRunAction}
+      onclick={() => void runAiAction({ kind: "improveClarity" })}
+    >
+      Improve clarity
+    </button>
+    <button
+      type="button"
+      class="action-button"
+      class:active={customOpen}
+      disabled={busy}
+      onclick={toggleCustom}
+    >
       Custom
     </button>
   </div>
 
   {#if customOpen}
-    <input
-      class="custom-prompt"
-      type="text"
-      placeholder="Describe what to do…"
-      bind:value={customValue}
-    />
+    <div class="custom-row">
+      <input
+        class="custom-prompt"
+        type="text"
+        placeholder="Describe what to do…"
+        bind:value={customValue}
+        onkeydown={handleCustomKeydown}
+        disabled={busy}
+      />
+      <button
+        type="button"
+        class="custom-run"
+        disabled={!canRunAction || customValue.trim() === ""}
+        onclick={runCustomAction}
+      >
+        Run
+      </button>
+    </div>
+  {/if}
+
+  {#if showConfiguredHint}
+    <div class="ai-hint">
+      <span>No AI provider set up yet — open Settings to add one.</span>
+      <button type="button" onclick={() => void handleOpenSettingsClick()}>
+        Open Settings
+      </button>
+    </div>
+  {/if}
+
+  {#if aiRunning}
+    <div class="ai-progress">
+      <span class="ai-progress-label">Working…</span>
+      <button type="button" class="ai-cancel" onclick={() => void handleCancelClick()}>
+        Cancel
+      </button>
+    </div>
   {/if}
 
   <div class="result-row">
@@ -357,6 +599,8 @@
     </button>
     {#if actionError}
       <span class="action-error">{actionError}</span>
+    {:else if badge}
+      <span class="privacy-badge {badge.class}">{badge.text}</span>
     {:else}
       <span class="badge-placeholder"></span>
     {/if}
@@ -496,6 +740,10 @@
     color: var(--color-ash);
   }
 
+  .capture-field:disabled {
+    opacity: 0.6;
+  }
+
   .suggestion-popup {
     position: absolute;
     z-index: 20;
@@ -564,9 +812,20 @@
     background-color: color-mix(in srgb, var(--color-verdigris) 18%, transparent);
   }
 
+  .action-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .custom-row {
+    display: flex;
+    gap: 6px;
+  }
+
   .custom-prompt {
     box-sizing: border-box;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     border: 1px solid color-mix(in srgb, var(--color-marble) 15%, transparent);
     border-radius: 6px;
     background-color: transparent;
@@ -579,6 +838,77 @@
 
   .custom-prompt::placeholder {
     color: var(--color-ash);
+  }
+
+  .custom-run {
+    border: 1px solid color-mix(in srgb, var(--color-attic-clay) 35%, transparent);
+    background-color: color-mix(in srgb, var(--color-attic-clay) 14%, transparent);
+    color: var(--color-marble);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .custom-run:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .ai-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: color-mix(in srgb, var(--color-marble) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-marble) 12%, transparent);
+  }
+
+  .ai-hint span {
+    color: var(--color-ash);
+    font-size: 11px;
+  }
+
+  .ai-hint button {
+    flex: none;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    background-color: var(--color-attic-clay);
+    color: var(--color-marble);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .ai-progress {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: color-mix(in srgb, var(--color-verdigris) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-verdigris) 30%, transparent);
+  }
+
+  .ai-progress-label {
+    color: var(--color-marble);
+    font-size: 11px;
+  }
+
+  .ai-cancel {
+    flex: none;
+    border: 1px solid color-mix(in srgb, var(--color-marble) 25%, transparent);
+    border-radius: 6px;
+    padding: 4px 10px;
+    background-color: transparent;
+    color: var(--color-marble);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .result-row {
@@ -617,12 +947,41 @@
   .action-error {
     flex: 1;
     /* No dedicated "error" token in the palette; attic-clay is the closest
-       warm/red-ish accent already in use. */
+       warm/red-ish accent already in use. AI provider error messages can
+       run considerably longer than the replace/copy errors this span was
+       originally sized for, so — unlike a single-line ellipsis — it wraps
+       up to 3 lines before truncating. */
     color: var(--color-attic-clay);
     font-size: 11px;
     text-align: right;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .privacy-badge {
+    flex: 1;
+    text-align: right;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* Endpoint stays on this device or the local network — closest to the
+     palette's "positive/active" accent. */
+  .privacy-badge.local {
+    color: var(--color-verdigris);
+  }
+
+  /* The request leaves the network — the palette's warning/highlight
+     accent, without being as alarming as an error color. */
+  .privacy-badge.cloud {
+    color: var(--color-electrum);
+  }
+
+  .privacy-badge.unknown {
+    color: var(--color-ash);
   }
 </style>

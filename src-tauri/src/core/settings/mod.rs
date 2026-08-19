@@ -15,6 +15,8 @@ pub use tauri_store::TauriStoreSettings;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::providers::ProviderProfile;
+
 /// Persisted, non-secret user settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +31,11 @@ pub struct Settings {
     /// onboarding once after upgrading.
     #[serde(default)]
     pub accessibility_onboarding_shown: bool,
+    /// AI provider profiles (spec-05). Defaults to empty (and to empty when
+    /// absent from settings persisted before spec-05) so existing installs
+    /// upgrade cleanly with no profiles configured.
+    #[serde(default)]
+    pub profiles: Vec<ProviderProfile>,
 }
 
 impl Default for Settings {
@@ -39,6 +46,7 @@ impl Default for Settings {
             spellcheck_enabled: true,
             popover_pinned: false,
             accessibility_onboarding_shown: false,
+            profiles: Vec::new(),
         }
     }
 }
@@ -96,6 +104,16 @@ mod tests {
             spellcheck_enabled: false,
             popover_pinned: true,
             accessibility_onboarding_shown: true,
+            profiles: vec![crate::core::providers::ProviderProfile {
+                id: "profile-1".to_string(),
+                name: "My Profile".to_string(),
+                base_url: "http://localhost:11434/v1".to_string(),
+                model: "llama3".to_string(),
+                timeout_secs: 30,
+                custom_headers: vec![],
+                enabled: true,
+                has_api_key: false,
+            }],
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -149,11 +167,22 @@ mod tests {
             ..with_pinned.clone()
         };
         set_settings(&store, with_onboarding_shown.clone()).unwrap();
-        assert!(
-            get_settings(&store)
-                .unwrap()
-                .accessibility_onboarding_shown
-        );
+        assert!(get_settings(&store).unwrap().accessibility_onboarding_shown);
+    }
+
+    #[test]
+    fn pre_spec_05_persisted_json_without_profiles_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        assert!(settings.profiles.is_empty());
     }
 
     #[test]

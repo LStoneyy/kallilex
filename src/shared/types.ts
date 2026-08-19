@@ -8,6 +8,7 @@ export interface Settings {
   spellcheckEnabled: boolean;
   popoverPinned: boolean;
   accessibilityOnboardingShown: boolean;
+  profiles: ProviderProfile[];
 }
 
 /**
@@ -51,4 +52,87 @@ export interface Misspelling {
  */
 export interface SpellcheckResult {
   misspellings: Misspelling[];
+}
+
+/**
+ * Mirrors `HeaderEntry` in `src-tauri/src/core/providers/mod.rs`: a single
+ * custom HTTP header sent with every request for a profile.
+ */
+export interface HeaderEntry {
+  name: string;
+  value: string;
+}
+
+/**
+ * Mirrors `ProviderProfile` in `src-tauri/src/core/providers/mod.rs`. The
+ * API key itself never lives here — see `hasApiKey` — it is looked up
+ * separately through the backend's `SecretStore`, keyed by `id`.
+ */
+export interface ProviderProfile {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  timeoutSecs: number;
+  customHeaders: HeaderEntry[];
+  enabled: boolean;
+  hasApiKey: boolean;
+}
+
+/**
+ * Mirrors `Action` in `src-tauri/src/core/providers/mod.rs`: a bundled AI
+ * action, or a free-form custom instruction.
+ */
+export type Action =
+  | { kind: "rewrite" }
+  | { kind: "shorten" }
+  | { kind: "improveClarity" }
+  | { kind: "custom"; instruction: string };
+
+/**
+ * Mirrors `RunActionOutcome` in `src-tauri/src/core/providers/mod.rs`.
+ * `kind` on the `error` variant is a stable machine-readable discriminant;
+ * `message` is the ready-to-display, actionable text.
+ */
+export type RunActionOutcome =
+  | { status: "ok"; text: string }
+  | { status: "notConfigured" }
+  | { status: "cancelled" }
+  | {
+      status: "error";
+      kind:
+        | "unreachable"
+        | "timeout"
+        | "http"
+        | "missingModel"
+        | "invalidBaseUrl"
+        | "invalidResponse";
+      message: string;
+    };
+
+/**
+ * Mirrors `PrivacyClass` in `src-tauri/src/core/providers/mod.rs`: a coarse
+ * privacy classification of a provider endpoint's host.
+ */
+export type PrivacyClass = "local" | "lan" | "cloud";
+
+/**
+ * Mirrors `ActionContext` in `src-tauri/src/core/providers/mod.rs`: summary
+ * of the active profile (if any) for the popover's AI actions panel.
+ */
+export interface ActionContext {
+  configured: boolean;
+  profileName: string | null;
+  privacy: PrivacyClass | null;
+}
+
+/**
+ * Mirrors `Preset` in `src-tauri/src/core/providers/mod.rs`: a bundled
+ * preset offered when creating a new profile.
+ */
+export interface Preset {
+  id: string;
+  label: string;
+  baseUrl: string;
+  needsApiKey: boolean;
 }

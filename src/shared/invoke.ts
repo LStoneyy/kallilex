@@ -1,5 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CaptureResult, Settings, SpellcheckResult } from "./types";
+import {
+  disable as autostartDisable,
+  enable as autostartEnable,
+  isEnabled as autostartIsEnabled,
+} from "@tauri-apps/plugin-autostart";
+import type {
+  Action,
+  ActionContext,
+  CaptureResult,
+  Preset,
+  ProviderProfile,
+  RunActionOutcome,
+  Settings,
+  SpellcheckResult,
+} from "./types";
 
 /**
  * Thin, typed wrappers around the Tauri command surface.
@@ -40,4 +54,64 @@ export async function replaceBack(text: string): Promise<void> {
 
 export async function copyResult(text: string): Promise<void> {
   return invoke<void>("copy_result", { text });
+}
+
+export async function runAction(text: string, action: Action): Promise<RunActionOutcome> {
+  return invoke<RunActionOutcome>("run_action", { text, action });
+}
+
+export async function cancelAction(): Promise<void> {
+  return invoke<void>("cancel_action");
+}
+
+export async function getActionContext(): Promise<ActionContext> {
+  return invoke<ActionContext>("get_action_context");
+}
+
+export async function listProfiles(): Promise<ProviderProfile[]> {
+  return invoke<ProviderProfile[]>("list_profiles");
+}
+
+export async function saveProfile(
+  profile: ProviderProfile,
+  apiKey?: string | null,
+): Promise<ProviderProfile[]> {
+  return invoke<ProviderProfile[]>("save_profile", { profile, apiKey: apiKey ?? null });
+}
+
+export async function deleteProfile(id: string): Promise<ProviderProfile[]> {
+  return invoke<ProviderProfile[]>("delete_profile", { id });
+}
+
+export async function setActiveProfile(id: string | null): Promise<void> {
+  return invoke<void>("set_active_profile", { id });
+}
+
+export async function getPresets(): Promise<Preset[]> {
+  return invoke<Preset[]>("get_presets");
+}
+
+export async function testConnection(id: string): Promise<number> {
+  return invoke<number>("test_connection", { id });
+}
+
+export async function openSettings(): Promise<void> {
+  return invoke<void>("open_settings");
+}
+
+/**
+ * Thin wrappers around `@tauri-apps/plugin-autostart`'s JS API, kept here so
+ * components never import the plugin directly — tests can mock these like
+ * every other invoke wrapper.
+ */
+export async function isAutostartEnabled(): Promise<boolean> {
+  return autostartIsEnabled();
+}
+
+export async function enableAutostart(): Promise<void> {
+  return autostartEnable();
+}
+
+export async function disableAutostart(): Promise<void> {
+  return autostartDisable();
 }

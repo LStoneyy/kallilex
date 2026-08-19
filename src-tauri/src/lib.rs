@@ -40,6 +40,70 @@ pub(crate) struct CaptureState(pub(crate) Mutex<Option<CaptureResult>>);
 #[derive(Default)]
 pub(crate) struct ReplaceInFlight(pub(crate) std::sync::atomic::AtomicBool);
 
+/// Cancel handle for the (at most one) in-flight AI action request
+/// (spec-05's `run_action` command).
+///
+/// Only one action can be in flight at a time: starting a new one replaces
+/// whatever `Sender` was previously stored here. Dropping a
+/// `oneshot::Sender` fires its `Receiver`, so replacing the slot
+/// automatically cancels the request that owned the old sender — the same
+/// outcome an explicit `cancel_action` call produces by sending on it
+/// directly.
+///
+/// Each stored sender is tagged with a generation counter so that when a
+/// request finishes (cancelled or not), it only clears the slot if it
+/// still holds *that* request's generation — i.e. no newer request has
+/// since replaced it. Without this guard, an unconditional clear after
+/// `select!` could race a newer request's `begin()` and erase its sender
+/// out from under it, leaving that newer request permanently
+/// uncancellable.
+pub(crate) struct ActionInFlight {
+    slot: Mutex<Option<(u64, tokio::sync::oneshot::Sender<()>)>>,
+    next_generation: std::sync::atomic::AtomicU64,
+}
+
+impl ActionInFlight {
+    pub(crate) fn new() -> Self {
+        Self {
+            slot: Mutex::new(None),
+            next_generation: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    /// Registers a new in-flight request, implicitly cancelling any
+    /// previous one (see the struct doc comment). Returns the receiver to
+    /// race against in `tokio::select!` and the generation token to pass
+    /// back to `clear`.
+    pub(crate) fn begin(&self) -> (tokio::sync::oneshot::Receiver<()>, u64) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let generation = self
+            .next_generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut slot = self.slot.lock().unwrap_or_else(|p| p.into_inner());
+        *slot = Some((generation, tx));
+        (rx, generation)
+    }
+
+    /// Clears the slot after a request completes, but only if it still
+    /// holds `generation` (see the struct doc comment).
+    pub(crate) fn clear(&self, generation: u64) {
+        let mut slot = self.slot.lock().unwrap_or_else(|p| p.into_inner());
+        if matches!(&*slot, Some((g, _)) if *g == generation) {
+            *slot = None;
+        }
+    }
+
+    /// Cancels the current in-flight request, if any. A no-op when nothing
+    /// is in flight or the request just finished on its own — the `send`
+    /// failing in that race is expected and ignored.
+    pub(crate) fn cancel(&self) {
+        let mut slot = self.slot.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some((_, tx)) = slot.take() {
+            let _ = tx.send(());
+        }
+    }
+}
+
 /// Shows the popover window under the tray icon, positions it, and gives it
 /// keyboard focus.
 fn show_popover(app: &tauri::AppHandle) {
@@ -69,7 +133,7 @@ fn toggle_popover(app: &tauri::AppHandle) {
     }
 }
 
-fn show_settings(app: &tauri::AppHandle) {
+pub(crate) fn show_settings(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
         let _ = window.show();
         let _ = window.set_focus();
@@ -203,6 +267,10 @@ pub fn run() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -227,6 +295,16 @@ pub fn run() {
             commands::spellcheck,
             commands::replace_back,
             commands::copy_result,
+            commands::run_action,
+            commands::cancel_action,
+            commands::get_action_context,
+            commands::list_profiles,
+            commands::save_profile,
+            commands::delete_profile,
+            commands::set_active_profile,
+            commands::get_presets,
+            commands::test_connection,
+            commands::open_settings,
         ])
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
@@ -236,6 +314,7 @@ pub fn run() {
             app.manage(CaptureState::default());
             app.manage(BackupLifecycle::new());
             app.manage(ReplaceInFlight::default());
+            app.manage(ActionInFlight::new());
 
             let settings_store = TauriStoreSettings::new(app.handle().clone());
             let current_settings = settings::get_settings(&settings_store).unwrap_or_default();
@@ -257,7 +336,8 @@ pub fn run() {
             {
                 use crate::core::capture::SelectionBackend;
 
-                let permission_granted = crate::platform::MacosSelectionBackend.permission_granted();
+                let permission_granted =
+                    crate::platform::MacosSelectionBackend.permission_granted();
                 if !permission_granted && !current_settings.accessibility_onboarding_shown {
                     show_settings(app.handle());
                     let updated_settings = Settings {
@@ -276,14 +356,20 @@ pub fn run() {
                 .license(Some("Apache-2.0"))
                 .icon(app.default_window_icon().cloned())
                 .build();
-            let about_item = PredefinedMenuItem::about(app, Some("About Kallilex"), Some(about_metadata))?;
+            let about_item =
+                PredefinedMenuItem::about(app, Some("About Kallilex"), Some(about_metadata))?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, QUIT_MENU_ID, "Quit", true, None::<&str>)?;
 
-            let tray_menu = Menu::with_items(app, &[&settings_item, &about_item, &separator, &quit_item])?;
+            let tray_menu =
+                Menu::with_items(app, &[&settings_item, &about_item, &separator, &quit_item])?;
 
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().cloned().expect("default window icon"))
+                .icon(
+                    app.default_window_icon()
+                        .cloned()
+                        .expect("default window icon"),
+                )
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
@@ -334,4 +420,62 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cancel_fires_the_receiver_returned_by_begin() {
+        let in_flight = ActionInFlight::new();
+        let (rx, _generation) = in_flight.begin();
+
+        in_flight.cancel();
+
+        assert!(rx.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_second_begin_implicitly_cancels_the_first() {
+        let in_flight = ActionInFlight::new();
+        let (rx1, _g1) = in_flight.begin();
+
+        // Replaces the slot, dropping the first sender — which fires rx1
+        // (with an Err, since nothing was ever sent on it). That the await
+        // completes at all is what matters: it's what `select!`'s
+        // `_ = &mut cancel_rx` branch in `run_action` relies on to notice
+        // it's been superseded.
+        let (_rx2, _g2) = in_flight.begin();
+
+        assert!(rx1.await.is_err());
+    }
+
+    #[tokio::test]
+    async fn clear_with_a_stale_generation_leaves_a_newer_request_cancellable() {
+        let in_flight = ActionInFlight::new();
+        let (_rx1, g1) = in_flight.begin();
+        let (rx2, _g2) = in_flight.begin();
+
+        // Stale: g1 no longer matches what's in the slot (g2 does), so this
+        // must not clear the newer request's sender.
+        in_flight.clear(g1);
+        in_flight.cancel();
+
+        assert!(rx2.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn clear_with_the_current_generation_clears_the_slot() {
+        let in_flight = ActionInFlight::new();
+        let (rx, g) = in_flight.begin();
+
+        in_flight.clear(g);
+        // The slot is now empty, so this is a no-op — the receiver still
+        // resolves, but only because `clear` dropped the sender above, not
+        // because `cancel` sent anything.
+        in_flight.cancel();
+
+        assert!(rx.await.is_err());
+    }
 }
