@@ -309,6 +309,7 @@ h1 .accent {
 
 .code-block code {
   flex: 1;
+  min-width: 0; /* allow shrinking so overflow-x can engage */
   font-size: 0.85rem;
   color: var(--marble);
   overflow-x: auto;
@@ -361,6 +362,9 @@ h1 .accent {
   position: sticky;
   top: 0;
   height: 100vh;
+  /* iOS Safari: the layer must never exceed the visual viewport, or sticky
+     stops pinning while the toolbar is expanded */
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
   background-image: url("assets/demo-poster.svg");
@@ -387,6 +391,7 @@ h1 .accent {
 .demo__step {
   position: relative;
   min-height: 100vh;
+  min-height: 100svh;
   display: grid;
   align-items: end;
   padding: 3rem 1.5rem 4rem;
@@ -616,6 +621,7 @@ h1 .accent {
 }
 
 .install-card {
+  min-width: 0; /* grid item: don't let the code block widen the column */
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
