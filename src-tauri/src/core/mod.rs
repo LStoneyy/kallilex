@@ -1,6 +1,8 @@
 //! Platform-agnostic application core: pure logic and persistence seams
 //! that Tauri commands wrap thinly.
 
+pub mod capture;
+pub mod clipboard;
 pub mod settings;
 
 /// Label of the popover window, shared between the tray/window wiring in

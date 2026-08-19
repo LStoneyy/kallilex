@@ -23,6 +23,12 @@ pub struct Settings {
     pub shortcut: String,
     pub spellcheck_enabled: bool,
     pub popover_pinned: bool,
+    /// Whether the first-run Accessibility permission onboarding panel has
+    /// already been shown. Defaults to `false` (and to `false` when absent
+    /// from previously-persisted settings) so existing installs still see
+    /// onboarding once after upgrading.
+    #[serde(default)]
+    pub accessibility_onboarding_shown: bool,
 }
 
 impl Default for Settings {
@@ -32,6 +38,7 @@ impl Default for Settings {
             shortcut: "Alt+Cmd+K".to_string(),
             spellcheck_enabled: true,
             popover_pinned: false,
+            accessibility_onboarding_shown: false,
         }
     }
 }
@@ -88,6 +95,7 @@ mod tests {
             shortcut: "Ctrl+Alt+K".to_string(),
             spellcheck_enabled: false,
             popover_pinned: true,
+            accessibility_onboarding_shown: true,
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -135,5 +143,30 @@ mod tests {
         };
         set_settings(&store, with_pinned.clone()).unwrap();
         assert!(get_settings(&store).unwrap().popover_pinned);
+
+        let with_onboarding_shown = Settings {
+            accessibility_onboarding_shown: true,
+            ..with_pinned.clone()
+        };
+        set_settings(&store, with_onboarding_shown.clone()).unwrap();
+        assert!(
+            get_settings(&store)
+                .unwrap()
+                .accessibility_onboarding_shown
+        );
+    }
+
+    #[test]
+    fn default_shortcut_parses_as_a_global_shortcut_plugin_shortcut() {
+        use std::str::FromStr;
+        use tauri_plugin_global_shortcut::Shortcut;
+
+        let shortcut = Shortcut::from_str(&Settings::default().shortcut);
+
+        assert!(
+            shortcut.is_ok(),
+            "default shortcut string must parse via the global-shortcut plugin: {:?}",
+            shortcut.err()
+        );
     }
 }
