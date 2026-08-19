@@ -390,13 +390,20 @@
   .editor-backdrop {
     color: transparent;
     overflow: hidden;
+    /* Stacked above the textarea so `.mark` spans can be hit-tested;
+       everything else passes through to the textarea. */
+    z-index: 1;
     pointer-events: none;
   }
 
   .mark {
     pointer-events: auto;
     cursor: pointer;
-    text-decoration: underline wavy var(--color-electrum);
+    /* Longhands, not the `text-decoration` shorthand: WKWebView drops the
+       shorthand entirely when it carries a style/color. */
+    text-decoration-line: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--color-electrum);
     text-decoration-skip-ink: none;
     text-underline-offset: 2px;
   }
