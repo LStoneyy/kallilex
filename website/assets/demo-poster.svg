@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1a1f"/>
+      <stop offset="1" stop-color="#131217"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#201F24"/>
+      <stop offset="1" stop-color="#141318"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- macOS menu bar strip -->
+  <rect x="0" y="0" width="1920" height="44" fill="#0f0e12"/>
+  <circle cx="1830" cy="22" r="7" fill="#9C989F" opacity="0.5"/>
+  <circle cx="1862" cy="22" r="7" fill="#2FAF9B"/>
+  <circle cx="1894" cy="22" r="7" fill="#9C989F" opacity="0.5"/>
+
+  <!-- Popover window mock -->
+  <g transform="translate(710,150)">
+    <rect x="0" y="0" width="500" height="420" rx="20" fill="url(#card)" stroke="#2A292F" stroke-width="2"/>
+
+    <!-- text area lines -->
+    <g stroke="#3a383f" stroke-width="10" stroke-linecap="round">
+      <line x1="36" y1="56" x2="440" y2="56"/>
+      <line x1="36" y1="90" x2="400" y2="90"/>
+      <line x1="36" y1="124" x2="300" y2="124"/>
+    </g>
+
+    <!-- squiggle-underlined word on line 2 -->
+    <path d="M 150 100 q 11 -9 22 0 t 22 0 t 22 0"
+          fill="none" stroke="#E46846" stroke-width="6" stroke-linecap="round"/>
+
+    <!-- divider -->
+    <line x1="36" y1="164" x2="464" y2="164" stroke="#2A292F" stroke-width="2"/>
+
+    <!-- action row: pill buttons -->
+    <g font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',Helvetica,Arial,sans-serif" font-size="18" fill="#F2EEE6">
+      <rect x="36" y="188" width="110" height="40" rx="20" fill="none" stroke="#2FAF9B" stroke-width="2"/>
+      <text x="91" y="214" text-anchor="middle" fill="#2FAF9B">Rewrite</text>
+
+      <rect x="158" y="188" width="110" height="40" rx="20" fill="none" stroke="#2FAF9B" stroke-width="2"/>
+      <text x="213" y="214" text-anchor="middle" fill="#2FAF9B">Shorten</text>
+
+      <rect x="280" y="188" width="120" height="40" rx="20" fill="none" stroke="#2FAF9B" stroke-width="2"/>
+      <text x="340" y="214" text-anchor="middle" fill="#2FAF9B">Improve</text>
+
+      <rect x="412" y="188" width="90" height="40" rx="20" fill="none" stroke="#2FAF9B" stroke-width="2"/>
+      <text x="457" y="214" text-anchor="middle" fill="#2FAF9B">Custom</text>
+    </g>
+
+    <!-- result area -->
+    <g stroke="#3a383f" stroke-width="10" stroke-linecap="round">
+      <line x1="36" y1="270" x2="464" y2="270"/>
+      <line x1="36" y1="304" x2="420" y2="304"/>
+      <line x1="36" y1="338" x2="360" y2="338"/>
+    </g>
+
+    <!-- footer row: Local badge + Replace button -->
+    <g font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',Helvetica,Arial,sans-serif" font-size="16">
+      <rect x="36" y="368" width="86" height="32" rx="16" fill="#2FAF9B" opacity="0.16" stroke="#2FAF9B" stroke-width="2"/>
+      <circle cx="55" cy="384" r="5" fill="#2FAF9B"/>
+      <text x="70" y="390" fill="#2FAF9B">Local</text>
+
+      <rect x="330" y="364" width="134" height="42" rx="10" fill="#E46846"/>
+      <text x="397" y="391" text-anchor="middle" fill="#17161A" font-weight="600">Replace</text>
+    </g>
+  </g>
+</svg>
