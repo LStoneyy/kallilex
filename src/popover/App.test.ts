@@ -513,7 +513,7 @@ describe("popover App", () => {
     expect(hidePopover).toHaveBeenCalledTimes(1);
   });
 
-  it("clicking Copy invokes copy_result with the current text and hides the popover", async () => {
+  it("clicking Copy invokes copy_result with the current text and does not hide the popover", async () => {
     captureSelection.mockResolvedValue({
       text: "result text",
       reason: null,
@@ -532,7 +532,9 @@ describe("popover App", () => {
     await waitFor(() => {
       expect(copyResult).toHaveBeenCalledWith("result text");
     });
-    expect(hidePopover).toHaveBeenCalledTimes(1);
+    // The popover now stays open so the user can see the "Copied ✓"
+    // confirmation — see the copy-feedback tests below.
+    expect(hidePopover).not.toHaveBeenCalled();
   });
 
   it("a rejected replace_back shows the error and does not hide the popover", async () => {
@@ -1003,5 +1005,190 @@ describe("popover App", () => {
       expect(getSettings).toHaveBeenCalled();
     });
     expect(spellcheck).not.toHaveBeenCalled();
+  });
+
+  it("shows a 'Copied ✓' confirmation after Copy, reverts after 1.5s, and a second copy before expiry restarts the timer", async () => {
+    captureSelection.mockResolvedValue({
+      text: "result text",
+      reason: null,
+      sourceApp: null,
+    });
+
+    render(App);
+
+    // Let the initial (real-timer) capture settle before switching to fake
+    // timers for the Copy-confirmation timeout itself.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled();
+    });
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+      // Flush the microtasks from the resolved `copyResult` promise so
+      // `copied` flips to true and the confirmation timeout gets armed.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByRole("button", { name: "Copied ✓" })).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(screen.getByRole("button", { name: "Copied ✓" })).toBeInTheDocument();
+
+      // A second copy before the first timeout expires restarts the timer
+      // instead of stacking with it.
+      await fireEvent.click(screen.getByRole("button", { name: "Copied ✓" }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByRole("button", { name: "Copied ✓" })).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(1000);
+      // 1000ms after the restart — the original 1500ms window would have
+      // already elapsed by now, so this only passes if the timer restarted.
+      expect(screen.getByRole("button", { name: "Copied ✓" })).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders the character count for captured text and updates it while typing", async () => {
+    captureSelection.mockResolvedValue({
+      text: "hello",
+      reason: null,
+      sourceApp: null,
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByText("5 chars")).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByRole("textbox");
+    await fireEvent.input(textarea, { target: { value: "hello world" } });
+
+    expect(screen.getByText("11 chars")).toBeInTheDocument();
+  });
+
+  it("does not render a character count when the editor is empty", async () => {
+    captureSelection.mockResolvedValue(emptyResult());
+
+    render(App);
+
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/chars$/)).not.toBeInTheDocument();
+  });
+
+  it("refreshes the scroll shadow classes after an AI action replaces the text", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some long captured text that overflows the editor",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "short" });
+
+    const { container } = render(App);
+
+    const textarea = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+
+    // Stub the textarea's scroll metrics via a mutable flag so the same
+    // getters can report "overflowing" before the AI run and "not
+    // overflowing" after it, without needing a real layout engine.
+    let overflowing = true;
+    Object.defineProperty(textarea, "scrollTop", { configurable: true, value: 0 });
+    Object.defineProperty(textarea, "clientHeight", { configurable: true, get: () => 100 });
+    Object.defineProperty(textarea, "scrollHeight", {
+      configurable: true,
+      get: () => (overflowing ? 200 : 100),
+    });
+
+    // The initial capture already called `updateScrollShadows()` before
+    // these getters were installed; refresh the classes against the stub.
+    await fireEvent.scroll(textarea);
+
+    const editor = container.querySelector(".editor") as HTMLElement;
+    expect(editor).toHaveClass("can-scroll-down");
+
+    overflowing = false;
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("short");
+    });
+
+    await waitFor(() => {
+      expect(editor).not.toHaveClass("can-scroll-down");
+    });
+  });
+
+  it("clears the 'Copied ✓' confirmation when the text changes underneath it", async () => {
+    captureSelection.mockResolvedValue({
+      text: "result text",
+      reason: null,
+      sourceApp: null,
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled();
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Copied ✓" })).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByRole("textbox");
+    await fireEvent.input(textarea, { target: { value: "edited text" } });
+
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copied ✓" })).not.toBeInTheDocument();
+  });
+
+  it("exposes a stable 'Working…' accessible name on the progress indicator while an AI action is in flight", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+
+    let resolveRun: ((outcome: { status: "ok"; text: string }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    expect(await screen.findByLabelText("Working…")).toBeInTheDocument();
+
+    resolveRun?.({ status: "ok", text: "rewritten text" });
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Working…")).not.toBeInTheDocument();
+    });
   });
 });

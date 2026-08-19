@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
@@ -54,6 +54,14 @@
   // Cancel affordance and the Escape-cancels-first-then-closes behavior.
   let aiRunning = $state(false);
   let showConfiguredHint = $state(false);
+  // True briefly after a successful Copy, to confirm the action without
+  // relying on the popover closing (it no longer does).
+  let copied = $state(false);
+  let copiedTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  // Whether the editor's content overflows above/below the visible area —
+  // drives the top/bottom scroll-shadow pseudo-elements.
+  let canScrollUp = $state(false);
+  let canScrollDown = $state(false);
 
   let unlisten: UnlistenFn | undefined;
   let unlistenFocus: UnlistenFn | undefined;
@@ -141,10 +149,30 @@
     }
   }
 
+  function updateScrollShadows() {
+    if (!textareaEl) return;
+    const { scrollTop, scrollHeight, clientHeight } = textareaEl;
+    canScrollUp = scrollTop > 0;
+    canScrollDown = scrollTop + clientHeight < scrollHeight - 1;
+  }
+
+  // Clears the "Copied ✓" confirmation and its pending timeout — used both
+  // where a fresh capture/edit already resets other state, and standalone
+  // whenever `text` changes underneath a stale confirmation that no longer
+  // matches what's on the clipboard.
+  function clearCopied() {
+    if (copiedTimeoutId !== undefined) {
+      clearTimeout(copiedTimeoutId);
+      copiedTimeoutId = undefined;
+    }
+    copied = false;
+  }
+
   async function refreshCapture() {
     // Bumps the session forward, invalidating any `runAiAction` still in
     // flight from the previous session — see `captureGeneration`'s comment.
     captureGeneration += 1;
+    clearCopied();
     if (aiRunning) {
       // The in-flight request is about to become irrelevant; ask the
       // backend to abort it instead of letting it run to completion for no
@@ -174,6 +202,10 @@
     if (spellcheckEnabled) {
       void runSpellcheck(text);
     }
+    // Wait for the DOM to reflect the new `text` before measuring scroll
+    // extents, otherwise this would read the previous capture's layout.
+    await tick();
+    updateScrollShadows();
   }
 
   onMount(() => {
@@ -217,12 +249,17 @@
     destroyed = true;
     unlisten?.();
     unlistenFocus?.();
+    if (copiedTimeoutId !== undefined) {
+      clearTimeout(copiedTimeoutId);
+    }
   });
 
   function handleInput() {
     // The moment the text changes, every stored offset is stale.
     misspellings = [];
     popup = null;
+    clearCopied();
+    updateScrollShadows();
   }
 
   function handleScroll() {
@@ -230,6 +267,7 @@
       backdropEl.scrollTop = textareaEl.scrollTop;
       backdropEl.scrollLeft = textareaEl.scrollLeft;
     }
+    updateScrollShadows();
   }
 
   function handleCheckSpellingClick() {
@@ -300,9 +338,16 @@
         text = outcome.text;
         misspellings = [];
         popup = null;
+        clearCopied();
         if (spellcheckEnabled) {
           void runSpellcheck(outcome.text);
         }
+        // Deliberately not re-checking `generation` after this await:
+        // `updateScrollShadows` only reads the currently rendered DOM, so
+        // even if a newer capture raced in during `tick()`, the recompute
+        // is correct for whatever is on screen.
+        await tick();
+        updateScrollShadows();
       } else if (outcome.status === "notConfigured") {
         showConfiguredHint = true;
       } else if (outcome.status === "error") {
@@ -363,9 +408,16 @@
   async function handleCopyClick() {
     actionError = null;
     busy = true;
+    clearCopied();
     try {
       await copyResult(text);
-      void hidePopover();
+      // Deliberately no `hidePopover()` here — the popover stays open so
+      // the user can see the confirmation below.
+      copied = true;
+      copiedTimeoutId = setTimeout(() => {
+        copied = false;
+        copiedTimeoutId = undefined;
+      }, 1500);
     } catch (error) {
       actionError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -402,7 +454,9 @@
     // rendered against the new text while the follow-up check is in flight.
     misspellings = [];
     text = corrected;
+    clearCopied();
     void runSpellcheck(corrected);
+    void tick().then(updateScrollShadows);
   }
 
   function handleWindowClick() {
@@ -455,12 +509,22 @@
   {/if}
 
   <div class="toolbar">
+    {#if text.length > 0}
+      <span class="char-count">{text.length} chars</span>
+    {:else}
+      <span class="char-count-placeholder"></span>
+    {/if}
     <button type="button" class="check-spelling" onclick={handleCheckSpellingClick}>
       Check spelling
     </button>
   </div>
 
-  <div class="editor" bind:this={editorEl}>
+  <div
+    class="editor"
+    class:can-scroll-up={canScrollUp}
+    class:can-scroll-down={canScrollDown}
+    bind:this={editorEl}
+  >
     <div class="editor-backdrop" bind:this={backdropEl} aria-hidden="true">
       {#each segments as segment (segment.key)}
         {#if segment.misspelling}
@@ -573,7 +637,7 @@
 
   {#if aiRunning}
     <div class="ai-progress">
-      <span class="ai-progress-label">Working…</span>
+      <span class="ai-progress-label" role="status" aria-label="Working…">Working</span>
       <button type="button" class="ai-cancel" onclick={() => void handleCancelClick()}>
         Cancel
       </button>
@@ -595,7 +659,7 @@
       disabled={!canCopy}
       onclick={() => void handleCopyClick()}
     >
-      Copy
+      {copied ? "Copied ✓" : "Copy"}
     </button>
     {#if actionError}
       <span class="action-error">{actionError}</span>
@@ -620,7 +684,7 @@
     box-sizing: border-box;
     width: 100%;
     height: 100vh;
-    background-color: var(--color-basalt);
+    background-color: color-mix(in srgb, var(--color-basalt) 80%, transparent);
     border: 1px solid color-mix(in srgb, var(--color-marble) 12%, transparent);
     border-radius: 10px;
     display: flex;
@@ -667,7 +731,14 @@
 
   .toolbar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .char-count,
+  .char-count-placeholder {
+    color: var(--color-ash);
+    font-size: 11px;
   }
 
   .check-spelling {
@@ -688,6 +759,37 @@
     position: relative;
     flex: 1;
     min-height: 0;
+  }
+
+  .editor::before,
+  .editor::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 12px;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .editor::before {
+    top: 0;
+    background: linear-gradient(to bottom, var(--color-basalt), transparent);
+  }
+
+  .editor::after {
+    bottom: 0;
+    background: linear-gradient(to top, var(--color-basalt), transparent);
+  }
+
+  .editor.can-scroll-up::before {
+    opacity: 1;
+  }
+
+  .editor.can-scroll-down::after {
+    opacity: 1;
   }
 
   .editor-backdrop,
@@ -734,6 +836,11 @@
     outline: none;
     background: transparent;
     color: var(--color-marble);
+    caret-color: var(--color-verdigris);
+  }
+
+  .capture-field::selection {
+    background-color: color-mix(in srgb, var(--color-verdigris) 35%, transparent);
   }
 
   .capture-field::placeholder {
@@ -983,5 +1090,123 @@
 
   .privacy-badge.unknown {
     color: var(--color-ash);
+  }
+
+  /* Micro-interaction polish shared across the popover's clickable
+     surfaces: color transitions on every button, plus a consistent
+     focus-visible ring (also on the custom-instruction input). Decorative
+     motion (transform, keyframe animation) lives in the
+     prefers-reduced-motion media query below instead. */
+  .action-button,
+  .result-button,
+  .custom-run,
+  .check-spelling,
+  .ai-cancel,
+  .ai-hint button,
+  .permission-banner button,
+  .suggestion-popup li button {
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .action-button:focus-visible,
+  .result-button:focus-visible,
+  .custom-run:focus-visible,
+  .check-spelling:focus-visible,
+  .ai-cancel:focus-visible,
+  .ai-hint button:focus-visible,
+  .permission-banner button:focus-visible,
+  .suggestion-popup li button:focus-visible,
+  .custom-prompt:focus-visible {
+    outline: 2px solid var(--color-verdigris);
+    outline-offset: 1px;
+  }
+
+  .custom-prompt {
+    caret-color: var(--color-verdigris);
+  }
+
+  /* Static (reduced-motion) state of the "Working…" ellipsis: a plain,
+     unanimated "…". The no-preference query below animates it. */
+  .ai-progress-label::after {
+    content: "…";
+    display: inline-block;
+    width: 1em;
+    text-align: left;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .action-button,
+    .result-button,
+    .custom-run,
+    .check-spelling,
+    .ai-cancel,
+    .ai-hint button,
+    .permission-banner button,
+    .suggestion-popup li button {
+      transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease,
+        transform 80ms ease;
+    }
+
+    .action-button:active:not(:disabled),
+    .result-button:active:not(:disabled),
+    .custom-run:active:not(:disabled),
+    .check-spelling:active:not(:disabled),
+    .ai-cancel:active:not(:disabled),
+    .ai-hint button:active:not(:disabled),
+    .permission-banner button:active:not(:disabled),
+    .suggestion-popup li button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    @keyframes row-in {
+      from {
+        opacity: 0;
+        transform: translateY(-3px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Each of these is behind an `{#if}`, so this only ever fires on the
+       state change that mounts it — never as an idle/looping animation. */
+    .permission-banner,
+    .custom-row,
+    .ai-hint,
+    .ai-progress,
+    .suggestion-popup {
+      animation: row-in 140ms ease-out;
+    }
+
+    @keyframes ai-ellipsis {
+      0% {
+        content: "";
+      }
+      25% {
+        content: ".";
+      }
+      50% {
+        content: "..";
+      }
+      75%,
+      100% {
+        content: "…";
+      }
+    }
+
+    /* Only exists in the DOM while `aiRunning`, so this never runs idle
+       either. The base rule's `content: "…"` above stays in effect as a
+       static fallback on engines that can't animate `content`; the
+       keyframes below take over `content` once the animation runs. */
+    .ai-progress-label::after {
+      animation: ai-ellipsis 1.2s steps(4, jump-none) infinite;
+    }
   }
 </style>

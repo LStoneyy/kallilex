@@ -28,7 +28,8 @@
         "skipTaskbar": true,
         "focus": false,
         "shadow": true,
-        "center": false
+        "center": false,
+        "windowEffects": { "effects": ["popover"], "radius": 10 }
       },
       {
         "label": "settings",
