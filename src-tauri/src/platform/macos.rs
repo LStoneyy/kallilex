@@ -19,7 +19,7 @@ use objc2_app_kit::{
     NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSSpellChecker,
     NSWorkspace,
 };
-use objc2_foundation::{NSArray, NSData, NSInteger, NSNotFound, NSString};
+use objc2_foundation::{NSArray, NSData, NSOrthography, NSRange, NSString, NSTextCheckingType};
 use tauri::AppHandle;
 
 use crate::core::capture::{SelectionBackend, SourceApp};
@@ -251,12 +251,27 @@ impl SpellChecker for MacosSpellChecker {
 
 /// Runs the actual `NSSpellChecker` work. Must only ever be called from the
 /// main thread — every AppKit object created here is main-thread-affine.
+///
+/// Two passes, in order:
+///
+/// 1. The unified `checkString:...:orthography:` API, with no forced
+///    language: the shared checker already honors the user's system
+///    language preferences (multi-language auto identification), so we
+///    never call `setAutomaticallyIdentifiesLanguages` ourselves. This is
+///    the API that correctly flags misspellings once a dominant language is
+///    identified (validated fixture: "Das ist ein kleinner Test" -> `de` ->
+///    finds "kleinner").
+/// 2. A fallback that only runs when pass 1's orthography couldn't
+///    determine a language (`dominantLanguage` is absent or `"und"` —
+///    undetermined). Short, linguistically ambiguous text triggers this: on
+///    "und", the unified API silently flags nothing at all (validated
+///    fixture: "Her is a smal test" -> `und` -> pass 1 finds nothing, the
+///    fallback loop over `checkSpellingOfString:startingAt:language:...`
+///    with the checker's currently selected language finds "smal"). This
+///    is `NSSpellChecker`'s own behavior around orthography detection, not
+///    a binding bug.
 fn check_on_main_thread(text: &str) -> SpellcheckResult {
     let checker = NSSpellChecker::sharedSpellChecker();
-    // Never hardcode a language: let NSSpellChecker pick from the user's
-    // system-preferred languages for whatever text it's given.
-    checker.setAutomaticallyIdentifiesLanguages(true);
-
     let ns_text = NSString::from_str(text);
     // NSSpellChecker's NSRange (like all AppKit/Foundation string APIs)
     // counts UTF-16 code units, so we index into a UTF-16 view of `text`
@@ -264,39 +279,81 @@ fn check_on_main_thread(text: &str) -> SpellcheckResult {
     let units: Vec<u16> = text.encode_utf16().collect();
     let total_length = units.len();
 
-    let mut misspellings = Vec::new();
-    let mut cursor: usize = 0;
+    // Pass 1: unified API, respects automatic multi-language identification.
+    let mut orthography: Option<Retained<NSOrthography>> = None;
+    // SAFETY: `ns_text` and the out-param `orthography` are both valid for
+    // the duration of this call; `word_count` is intentionally null (we
+    // don't need it).
+    let results = unsafe {
+        checker.checkString_range_types_options_inSpellDocumentWithTag_orthography_wordCount(
+            &ns_text,
+            NSRange::new(0, total_length),
+            NSTextCheckingType::Spelling.0,
+            None,
+            0,
+            Some(&mut orthography),
+            std::ptr::null_mut(),
+        )
+    };
+    let dominant = orthography.as_ref().map(|o| o.dominantLanguage().to_string());
+    let mut ranges: Vec<NSRange> = results.iter().map(|r| r.range()).collect();
 
-    while cursor < total_length {
-        let range = checker.checkSpellingOfString_startingAt(&ns_text, cursor as NSInteger);
-
-        if range.location == NSNotFound as usize || range.location >= total_length {
-            break;
+    // Pass 2: only when pass 1 couldn't settle on a language at all — the
+    // exact condition under which the unified API flags nothing.
+    if matches!(dominant.as_deref(), None | Some("und")) {
+        let language = checker.language();
+        let mut cursor = 0usize;
+        while cursor < total_length {
+            // SAFETY: `ns_text` and `language` are valid for the call;
+            // `word_count` is intentionally null.
+            let range = unsafe {
+                checker.checkSpellingOfString_startingAt_language_wrap_inSpellDocumentWithTag_wordCount(
+                    &ns_text,
+                    cursor as isize,
+                    Some(&language),
+                    false,
+                    0,
+                    std::ptr::null_mut(),
+                )
+            };
+            if range.location >= total_length || range.length == 0 {
+                break;
+            }
+            let already_found = ranges
+                .iter()
+                .any(|r| r.location == range.location && r.length == range.length);
+            if !already_found {
+                ranges.push(range);
+            }
+            cursor = range.location + range.length;
         }
-
-        let start = range.location;
-        let end = (start + range.length).min(total_length);
-        let word = String::from_utf16_lossy(&units[start..end]);
-
-        let suggestions = checker
-            .guessesForWordRange_inString_language_inSpellDocumentWithTag(range, &ns_text, None, 0)
-            .map(|guesses| guesses.iter().map(|s| s.to_string()).collect())
-            .unwrap_or_default();
-
-        misspellings.push(Misspelling {
-            start: start as u32,
-            length: (end - start) as u32,
-            word,
-            suggestions,
-        });
-
-        if range.length == 0 {
-            // Defensive: a zero-length "found" range would otherwise loop
-            // forever at the same offset.
-            break;
-        }
-        cursor = end;
     }
+
+    ranges.sort_by_key(|r| r.location);
+
+    let misspellings = ranges
+        .into_iter()
+        .filter_map(|range| {
+            let start = range.location;
+            let end = (start + range.length).min(total_length);
+            if start >= total_length || end <= start {
+                return None;
+            }
+            let word = String::from_utf16_lossy(&units[start..end]);
+
+            let suggestions = checker
+                .guessesForWordRange_inString_language_inSpellDocumentWithTag(range, &ns_text, None, 0)
+                .map(|guesses| guesses.iter().map(|s| s.to_string()).collect())
+                .unwrap_or_default();
+
+            Some(Misspelling {
+                start: start as u32,
+                length: (end - start) as u32,
+                word,
+                suggestions,
+            })
+        })
+        .collect();
 
     SpellcheckResult { misspellings }
 }
