@@ -4,20 +4,94 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Kallilex — local-first writing utility for the macOS menu bar</title>
-  <meta name="description" content="Kallilex is a tiny, local-first writing utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
+  <title>Kallilex — offline spell check &amp; AI rewriting from the macOS menu bar</title>
+  <meta name="description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Kallilex — local-first writing utility for the macOS menu bar">
-  <meta property="og:description" content="Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
-  <meta property="og:image" content="https://lstoneyy.github.io/kallilex/assets/og-image.png">
-  <meta property="og:url" content="https://lstoneyy.github.io/kallilex/">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:title" content="Kallilex — offline spell check &amp; AI rewriting from the macOS menu bar">
+  <meta property="og:description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
+  <meta property="og:image" content="https://kallilex.webcommits.info/assets/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="https://kallilex.webcommits.info/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kallilex — offline spell check &amp; AI rewriting from the macOS menu bar">
+  <meta name="twitter:description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
+  <meta name="twitter:image" content="https://kallilex.webcommits.info/assets/og-card.png">
 
-  <link rel="canonical" href="https://lstoneyy.github.io/kallilex/">
+  <link rel="canonical" href="https://kallilex.webcommits.info/">
 
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Kallilex",
+    "operatingSystem": "macOS",
+    "applicationCategory": "UtilitiesApplication",
+    "description": "Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "downloadUrl": "https://github.com/LStoneyy/kallilex/releases",
+    "url": "https://kallilex.webcommits.info/",
+    "image": "https://kallilex.webcommits.info/assets/og-image.png"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Why does Kallilex need the Accessibility permission?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Kallilex uses macOS's Accessibility API to read the text you have selected in the frontmost app when you press the hotkey. That's the only thing it's used for — a system prompt asks for the permission on first run, and you can revoke it any time in System Settings."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which AI providers and models work with Kallilex?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Any provider that exposes an OpenAI-compatible chat-completions endpoint — local or cloud. Presets are included for Ollama, LM Studio, and OpenAI, and you can point Kallilex at any custom base URL and model."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does spell check work offline?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Spell check runs fully on-device through macOS's built-in NSSpellChecker, using your system's preferred languages. No network connection and no AI provider are needed for it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where does my text go?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Your text stays on your Mac by default. Spell check is local, and an AI request is only sent when you explicitly trigger a rewrite — a badge shows whether your provider is Local, LAN, or Cloud before anything is sent. Kallilex has no telemetry and never logs your text."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Kallilex free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Kallilex is free and open source under the Apache-2.0 license. There are no accounts, no subscriptions, and no cloud backend."
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
 
@@ -30,6 +104,7 @@
       <nav class="site-nav" aria-label="Primary">
         <span class="nav-full">
           <a href="#features">Features</a>
+          <a href="#faq">FAQ</a>
           <a href="#install">Install</a>
         </span>
         <a href="https://github.com/LStoneyy/kallilex" target="_blank" rel="noopener">GitHub ↗</a>
@@ -51,8 +126,8 @@
         </h1>
 
         <p class="hero__subline">
-          Kallilex is a tiny, local-first writing utility for the macOS menu bar. Select text anywhere,
-          press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.
+          Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar.
+          Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.
         </p>
 
         <div class="hero__buttons">
@@ -213,6 +288,38 @@
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="8" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M11.5 12H21M17 12v3M14 12v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             <h3>Keys in the Keychain</h3>
             <p>API keys are stored in the macOS Keychain and never touch a config file on disk.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ --------------------------------------------------------------- -->
+    <section class="faq" id="faq">
+      <div class="container">
+        <div class="section-heading">
+          <h2>FAQ</h2>
+          <svg class="squiggle" viewBox="0 0 96 20" aria-hidden="true"><path d="M4 12 q11 -9 22 0 t22 0 t22 0 t22 0"/></svg>
+        </div>
+        <div class="faq__list">
+          <div class="faq__item" data-reveal>
+            <h3>Why does Kallilex need the Accessibility permission?</h3>
+            <p>Kallilex uses macOS's Accessibility API to read the text you have selected in the frontmost app when you press the hotkey. That's the only thing it's used for — a system prompt asks for the permission on first run, and you can revoke it any time in System Settings.</p>
+          </div>
+          <div class="faq__item" data-reveal>
+            <h3>Which AI providers and models work with Kallilex?</h3>
+            <p>Any provider that exposes an OpenAI-compatible chat-completions endpoint — local or cloud. Presets are included for Ollama, LM Studio, and OpenAI, and you can point Kallilex at any custom base URL and model.</p>
+          </div>
+          <div class="faq__item" data-reveal>
+            <h3>Does spell check work offline?</h3>
+            <p>Yes. Spell check runs fully on-device through macOS's built-in NSSpellChecker, using your system's preferred languages. No network connection and no AI provider are needed for it.</p>
+          </div>
+          <div class="faq__item" data-reveal>
+            <h3>Where does my text go?</h3>
+            <p>Your text stays on your Mac by default. Spell check is local, and an AI request is only sent when you explicitly trigger a rewrite — a badge shows whether your provider is Local, LAN, or Cloud before anything is sent. Kallilex has no telemetry and never logs your text.</p>
+          </div>
+          <div class="faq__item" data-reveal>
+            <h3>Is Kallilex free?</h3>
+            <p>Yes. Kallilex is free and open source under the Apache-2.0 license. There are no accounts, no subscriptions, and no cloud backend.</p>
           </div>
         </div>
       </div>

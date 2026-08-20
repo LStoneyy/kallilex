@@ -23,3 +23,4 @@ jobs:
           publish_dir: ./website
           publish_branch: gh-pages
           force_orphan: true
+          cname: kallilex.webcommits.info
