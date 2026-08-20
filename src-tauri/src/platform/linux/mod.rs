@@ -43,14 +43,24 @@ pub fn open_permission_settings() -> Result<(), String> {
 
 /// Tray-only behavior is achieved simply by never showing a Dock-equivalent
 /// window, with no activation-policy API to call — so on X11 this is still a
-/// no-op. On Wayland it also runs the read-only portal capability probe
-/// (spec-12 Slice A) once, synchronously, before the rest of startup
-/// consults `platform_info()`: this runs on Tauri's main-thread `setup` hook,
-/// not inside the tokio runtime, so blocking on the async probe here is
-/// safe and doesn't risk a nested-runtime panic.
-pub fn setup(_app: &mut tauri::App) {
+/// no-op. On Wayland it registers the app id with the portal's host
+/// Registry and then runs the read-only portal capability probe (spec-12)
+/// once, synchronously, before the rest of startup consults
+/// `platform_info()`: this runs on Tauri's main-thread `setup` hook, not
+/// inside the tokio runtime, so blocking on the async work here is safe
+/// and doesn't risk a nested-runtime panic.
+pub fn setup(app: &mut tauri::App) {
     if session::current() == SessionType::Wayland {
-        let caps = tauri::async_runtime::block_on(wayland::probe());
+        let app_id = app.config().identifier.clone();
+        let caps = tauri::async_runtime::block_on(async {
+            // Register the app id with the portal's host Registry BEFORE any
+            // other portal contact (the portal resolves and caches a peer's
+            // app id on first use): GlobalShortcuts refuses to bind without
+            // an app id, and RemoteDesktop keys restore tokens off it. See
+            // `wayland::register_app_id`.
+            wayland::register_app_id(&app_id).await;
+            wayland::probe().await
+        });
         wayland::init(caps);
     }
 }

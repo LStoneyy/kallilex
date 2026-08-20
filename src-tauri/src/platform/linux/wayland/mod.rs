@@ -67,6 +67,41 @@ pub fn init(caps: WaylandCapabilities) {
     let _ = CAPABILITIES.set(caps);
 }
 
+/// Registers this (non-sandboxed) process as the owner of `app_id` with
+/// the portal's host Registry (`org.freedesktop.host.portal.Registry`),
+/// so portals that key permissions and persistence off the app id see a
+/// stable identity: GlobalShortcuts refuses to bind without one (the
+/// portal answers `NotAllowed: An app id is required`), and RemoteDesktop
+/// restore tokens are stored per app id. Only processes started through a
+/// desktop entry get an id for free — the launcher wraps them in a
+/// systemd scope that encodes it — so a terminal launch, an autostart
+/// run, or `pnpm tauri dev` has none without this call.
+///
+/// Must run before any other portal call: the portal resolves and caches
+/// a peer's app id on first contact.
+///
+/// Registration only succeeds when the desktop database actually holds an
+/// entry for `app_id` — the portal looks up `<app_id>.desktop` and rejects
+/// the request with `App info not found` otherwise (verified against
+/// xdg-desktop-portal 1.21). It therefore requires the installed package
+/// to ship a desktop entry whose basename matches the bundle identifier,
+/// and it is normal for this to fail in an uninstalled dev run.
+///
+/// Failure is deliberately non-fatal and silent: portal versions before
+/// 1.20 have no Registry interface at all, ashpd no-ops when actually
+/// sandboxed, and a run that already has an app id needs nothing here.
+/// The user-visible consequence of genuinely having no app id is reported
+/// where it becomes real — the shortcut bind logs why it failed and the
+/// in-app notice names the missing capability — not from this seam.
+pub async fn register_app_id(app_id: &str) {
+    const REGISTER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+    let Ok(app_id) = ashpd::AppID::try_from(app_id.to_string()) else {
+        return;
+    };
+    let _ = tokio::time::timeout(REGISTER_TIMEOUT, ashpd::register_host_app(app_id)).await;
+}
+
 pub use probe::probe;
 pub use remote_desktop::{send_chord, Chord};
 pub use shortcut::run_portal_shortcut;
