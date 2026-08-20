@@ -7,6 +7,7 @@
     enableAutostart,
     getPresets,
     getSettings,
+    getWaylandShortcutTrigger,
     isAutostartEnabled,
     listProfiles,
     openAccessibilitySettings,
@@ -34,6 +35,14 @@
   let platformInfo = $state<PlatformInfo | null>(null);
   const defaultShortcut = $derived(platformInfo?.defaultShortcut ?? "Alt+Cmd+K");
 
+  // The Wayland GlobalShortcuts portal (spec-12 Slice B), when the running
+  // compositor offers it, is the sole owner of the "capture" shortcut: the
+  // General tab's shortcut field switches to a read-only display of
+  // whatever the portal reports instead of the free-text input/Save flow.
+  const portalManagedShortcut = $derived(
+    platformInfo?.session === "wayland" && (platformInfo.wayland?.globalShortcut ?? false),
+  );
+
   // ---- shared settings (General + Providers both need it) -------------
 
   let settings = $state<Settings | null>(null);
@@ -49,6 +58,16 @@
   let shortcutSaving = $state(false);
   let shortcutError = $state<string | null>(null);
   let shortcutSaved = $state(false);
+
+  // Portal-reported trigger for the read-only display (see
+  // `portalManagedShortcut`). The settings window is created hidden at app
+  // startup, well before the portal bind (which can involve a compositor
+  // confirmation dialog) has had a chance to complete, so a single fetch on
+  // mount would often stick at "not currently bound" forever. Polled on the
+  // same interval as the accessibility status below instead, for the
+  // window's whole lifetime, so it also picks up a later bind, a stream
+  // that ends at runtime (cleared back to `null`), and mid-run rebinds.
+  let portalTrigger = $state<string | null>(null);
 
   async function handleSaveShortcut() {
     shortcutError = null;
@@ -296,10 +315,15 @@
 
   let granted = $state(false);
   let intervalId: ReturnType<typeof setInterval> | undefined;
+  let portalTriggerIntervalId: ReturnType<typeof setInterval> | undefined;
   let destroyed = false;
 
   async function refreshAccessibilityStatus() {
     granted = await accessibilityStatus();
+  }
+
+  async function refreshPortalTrigger() {
+    portalTrigger = await getWaylandShortcutTrigger();
   }
 
   onMount(() => {
@@ -321,6 +345,16 @@
           void refreshAccessibilityStatus();
         }, POLL_INTERVAL_MS);
       }
+      // Likewise, only meaningful once we know the portal-managed shortcut
+      // applies; started here (not unconditionally at mount) for the same
+      // reason, and polled for the window's whole lifetime rather than
+      // fetched once — see `portalTrigger`'s comment above.
+      if (info.session === "wayland" && info.wayland?.globalShortcut) {
+        void refreshPortalTrigger();
+        portalTriggerIntervalId = setInterval(() => {
+          void refreshPortalTrigger();
+        }, POLL_INTERVAL_MS);
+      }
     });
   });
 
@@ -328,6 +362,9 @@
     destroyed = true;
     if (intervalId !== undefined) {
       clearInterval(intervalId);
+    }
+    if (portalTriggerIntervalId !== undefined) {
+      clearInterval(portalTriggerIntervalId);
     }
   });
 </script>
@@ -366,24 +403,42 @@
     {#if activeTab === "general"}
       <section class="general">
         <h2>Shortcut</h2>
-        <p class="hint">
-          The global shortcut that opens Kallilex from anywhere, e.g. <code>{defaultShortcut}</code>.
-        </p>
-        <div class="row">
-          <input
-            class="text-input"
-            type="text"
-            bind:value={shortcutDraft}
-            placeholder={defaultShortcut}
-          />
-          <button type="button" disabled={shortcutSaving} onclick={() => void handleSaveShortcut()}>
-            {shortcutSaving ? "Saving…" : "Save"}
-          </button>
-        </div>
-        {#if shortcutError}
-          <p class="error">{shortcutError}</p>
-        {:else if shortcutSaved}
-          <p class="confirm">Shortcut saved and active.</p>
+        {#if portalManagedShortcut}
+          <p class="hint">
+            The global shortcut that opens Kallilex from anywhere.
+          </p>
+          {#if portalTrigger}
+            <p><code>{portalTrigger}</code></p>
+            <p class="hint">
+              This shortcut is managed by your system — change it in your desktop's keyboard
+              settings.
+            </p>
+          {:else}
+            <p class="hint">
+              Not currently bound — your system declined or hasn't confirmed the shortcut. You can
+              still open Kallilex from the tray.
+            </p>
+          {/if}
+        {:else}
+          <p class="hint">
+            The global shortcut that opens Kallilex from anywhere, e.g. <code>{defaultShortcut}</code>.
+          </p>
+          <div class="row">
+            <input
+              class="text-input"
+              type="text"
+              bind:value={shortcutDraft}
+              placeholder={defaultShortcut}
+            />
+            <button type="button" disabled={shortcutSaving} onclick={() => void handleSaveShortcut()}>
+              {shortcutSaving ? "Saving…" : "Save"}
+            </button>
+          </div>
+          {#if shortcutError}
+            <p class="error">{shortcutError}</p>
+          {:else if shortcutSaved}
+            <p class="confirm">Shortcut saved and active.</p>
+          {/if}
         {/if}
 
         <h2>Autostart</h2>

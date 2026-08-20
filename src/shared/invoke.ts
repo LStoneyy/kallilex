@@ -105,6 +105,15 @@ export async function getPlatformInfo(): Promise<PlatformInfo> {
 }
 
 /**
+ * The Wayland GlobalShortcuts portal's reported trigger for the "capture"
+ * shortcut (spec-12 Slice B), or `null` when unbound. Only meaningful on
+ * sessions where `PlatformInfo.wayland?.globalShortcut` is true.
+ */
+export async function getWaylandShortcutTrigger(): Promise<string | null> {
+  return invoke<string | null>("get_wayland_shortcut_trigger");
+}
+
+/**
  * Thin wrappers around `@tauri-apps/plugin-autostart`'s JS API, kept here so
  * components never import the plugin directly — tests can mock these like
  * every other invoke wrapper.

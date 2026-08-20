@@ -316,6 +316,7 @@ pub fn run() {
             commands::get_presets,
             commands::test_connection,
             commands::open_settings,
+            commands::get_wayland_shortcut_trigger,
         ])
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
@@ -325,25 +326,40 @@ pub fn run() {
             app.manage(BackupLifecycle::new());
             app.manage(ReplaceInFlight::default());
             app.manage(ActionInFlight::new());
+            app.manage(platform::PortalShortcutTrigger::default());
 
             let settings_store = TauriStoreSettings::new(app.handle().clone());
             let current_settings = settings::get_settings(&settings_store).unwrap_or_default();
 
-            let shortcut = resolve_shortcut(app.handle(), &current_settings);
-            if let Err(err) = app.global_shortcut().register(shortcut) {
-                // Registration is still attempted above regardless; on
-                // platforms/sessions where failure is expected (Linux
-                // Wayland has no portal-backed global shortcuts wired up
-                // yet), skip the dialog — the frontend surfaces a one-line
-                // notice instead, so this isn't silent, just not a popup.
-                if !platform::global_shortcut_failure_expected() {
-                    show_error_dialog(
-                        app.handle(),
-                        format!(
-                            "Kallilex couldn't register the global shortcut ({err}). \
-                             You can still open Kallilex from the tray icon."
-                        ),
-                    );
+            if platform::use_portal_global_shortcut() {
+                // The GlobalShortcuts portal is the sole owner of the
+                // "capture" trigger on this session: the tauri
+                // global-shortcut plugin registration below is skipped
+                // entirely rather than attempted and ignored, since its
+                // underlying key-grab mechanism doesn't work under Wayland
+                // anyway.
+                platform::spawn_portal_shortcut(
+                    app.handle().clone(),
+                    current_settings.shortcut.clone(),
+                    trigger_capture,
+                );
+            } else {
+                let shortcut = resolve_shortcut(app.handle(), &current_settings);
+                if let Err(err) = app.global_shortcut().register(shortcut) {
+                    // Registration is still attempted above regardless; on
+                    // platforms/sessions where failure is expected (Linux
+                    // Wayland has no portal-backed global shortcuts wired up
+                    // yet), skip the dialog — the frontend surfaces a one-line
+                    // notice instead, so this isn't silent, just not a popup.
+                    if !platform::global_shortcut_failure_expected() {
+                        show_error_dialog(
+                            app.handle(),
+                            format!(
+                                "Kallilex couldn't register the global shortcut ({err}). \
+                                 You can still open Kallilex from the tray icon."
+                            ),
+                        );
+                    }
                 }
             }
 

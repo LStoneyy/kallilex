@@ -85,7 +85,10 @@ pub fn position_popover(window: &tauri::WebviewWindow) {
         Ok(cursor) => (cursor.x as i32, cursor.y as i32),
         // Cursor position unavailable: fall back to the monitor's top-right
         // corner rather than guessing.
-        Err(_) => (min_x + work_area.size.width as i32 - window_size.width as i32, min_y),
+        Err(_) => (
+            min_x + work_area.size.width as i32 - window_size.width as i32,
+            min_y,
+        ),
     };
 
     let clamped = PhysicalPosition::new(x.clamp(min_x, max_x), y.clamp(min_y, max_y));
@@ -172,6 +175,34 @@ pub fn tray_icon_as_template() -> bool {
     false
 }
 
+/// Whether the Wayland GlobalShortcuts portal should own the "capture"
+/// shortcut instead of the tauri global-shortcut plugin. There must be
+/// exactly one owner of that trigger: when the portal is present, `lib.rs`
+/// must not also attempt plugin-based registration, since the plugin's
+/// underlying key-grab mechanism doesn't work under Wayland anyway and
+/// attempting both would either double-fire or race on which one the
+/// compositor actually delivers events through.
+pub fn use_portal_global_shortcut() -> bool {
+    session::current() == SessionType::Wayland && wayland::capabilities().global_shortcut
+}
+
+/// Spawns the long-lived async task that binds the "capture" shortcut
+/// through the `GlobalShortcuts` portal and routes its `Activated` signal
+/// into `on_activated`. Only meaningful (and only ever called) when
+/// [`use_portal_global_shortcut`] is `true`. See `wayland::run_portal_shortcut`
+/// for the full bind/listen/failure-handling logic.
+pub fn spawn_portal_shortcut(
+    app: tauri::AppHandle,
+    preferred_shortcut: String,
+    on_activated: fn(&tauri::AppHandle),
+) {
+    tauri::async_runtime::spawn(wayland::run_portal_shortcut(
+        app,
+        preferred_shortcut,
+        on_activated,
+    ));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,7 +222,9 @@ mod tests {
 
         assert_eq!(info.session.as_deref(), Some("wayland"));
         assert!(!info.replace_back_available);
-        let wayland = info.wayland.expect("wayland info must be present on a Wayland session");
+        let wayland = info
+            .wayland
+            .expect("wayland info must be present on a Wayland session");
         assert!(!wayland.global_shortcut);
         assert!(!wayland.input_synthesis);
         assert!(!wayland.can_persist_session);
@@ -208,7 +241,9 @@ mod tests {
         let info = platform_info_for(SessionType::Wayland, caps);
 
         assert!(info.replace_back_available);
-        let wayland = info.wayland.expect("wayland info must be present on a Wayland session");
+        let wayland = info
+            .wayland
+            .expect("wayland info must be present on a Wayland session");
         assert!(wayland.input_synthesis);
         assert!(!wayland.global_shortcut);
     }
@@ -223,7 +258,9 @@ mod tests {
 
         let info = platform_info_for(SessionType::Wayland, caps);
 
-        let wayland = info.wayland.expect("wayland info must be present on a Wayland session");
+        let wayland = info
+            .wayland
+            .expect("wayland info must be present on a Wayland session");
         assert!(wayland.global_shortcut);
         assert!(wayland.input_synthesis);
         assert!(wayland.can_persist_session);

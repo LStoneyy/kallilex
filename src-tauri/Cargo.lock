@@ -2234,6 +2234,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "core-graphics",
  "enigo",
+ "futures-util",
  "keyring",
  "libc",
  "objc2",

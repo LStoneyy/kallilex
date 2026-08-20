@@ -41,6 +41,13 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 /// fails — the popover and tray icon are fully usable without a working
 /// global shortcut, and rolling the save back on a transient registration
 /// error would just leave the user unable to retry the shortcut change.
+///
+/// When [`platform::use_portal_global_shortcut`] is true, the whole
+/// parse/unregister/register dance (and its validation) is skipped: the
+/// GlobalShortcuts portal, not the tauri plugin, owns the trigger there, and
+/// the Settings UI shows the field read-only on that session. The shortcut
+/// string is still persisted as-is — it remains the default the same
+/// on-disk settings would use on an X11 session on the same machine.
 #[tauri::command]
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
     use std::str::FromStr;
@@ -49,7 +56,8 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, Stri
     let store = TauriStoreSettings::new(app.clone());
     let previous = settings::get_settings(&store).map_err(|e| e.to_string())?;
 
-    let shortcut_changed = settings.shortcut != previous.shortcut;
+    let shortcut_changed =
+        !platform::use_portal_global_shortcut() && settings.shortcut != previous.shortcut;
     let new_shortcut = if shortcut_changed {
         Some(Shortcut::from_str(&settings.shortcut).map_err(|e| {
             format!(
@@ -75,6 +83,23 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, Stri
     }
 
     Ok(saved)
+}
+
+/// The GlobalShortcuts portal-reported human-readable trigger for the
+/// "capture" shortcut (spec-12 Slice B), or `None` when unbound — the portal
+/// declined/hasn't confirmed a bind, or this isn't a portal-managed session
+/// at all (the state is `manage`d unconditionally but only ever written to
+/// from the portal task). Used by the Settings window's General tab to show
+/// the shortcut read-only on sessions where `platform::use_portal_global_shortcut()`
+/// is true.
+#[tauri::command]
+pub fn get_wayland_shortcut_trigger(app: AppHandle) -> Result<Option<String>, String> {
+    let state = app.state::<platform::PortalShortcutTrigger>();
+    let trigger = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Ok(trigger.clone())
 }
 
 /// Hides the popover, restoring any pending clipboard backup and clearing

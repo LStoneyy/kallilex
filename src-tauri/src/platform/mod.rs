@@ -6,24 +6,24 @@
 //! wiring it into the `#[cfg]` blocks below; nothing else in the crate
 //! changes.
 
-#[cfg(target_os = "macos")]
-mod macos;
 #[cfg(target_os = "linux")]
 mod linux;
-
 #[cfg(target_os = "macos")]
-pub use macos::{
-    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
-    open_permission_settings, platform_info, position_popover, selection_backend, setup,
-    spell_checker, tray_icon_as_template, tray_icon_bytes, tray_open_captures,
-    wants_tray_open_entry,
-};
+mod macos;
+
 #[cfg(target_os = "linux")]
 pub use linux::{
-    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
-    open_permission_settings, platform_info, position_popover, selection_backend, setup,
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard, open_permission_settings,
+    platform_info, position_popover, selection_backend, setup, spawn_portal_shortcut,
     spell_checker, tray_icon_as_template, tray_icon_bytes, tray_open_captures,
-    wants_tray_open_entry,
+    use_portal_global_shortcut, wants_tray_open_entry,
+};
+#[cfg(target_os = "macos")]
+pub use macos::{
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard, open_permission_settings,
+    platform_info, position_popover, selection_backend, setup, spawn_portal_shortcut,
+    spell_checker, tray_icon_as_template, tray_icon_bytes, tray_open_captures,
+    use_portal_global_shortcut, wants_tray_open_entry,
 };
 
 /// Platform metadata surfaced to the frontend via the `get_platform_info`
@@ -62,3 +62,14 @@ pub struct WaylandCapabilitiesInfo {
     pub input_synthesis: bool,
     pub can_persist_session: bool,
 }
+
+/// The portal-reported, human-readable trigger description for the single
+/// "capture" shortcut bound through the Wayland GlobalShortcuts portal
+/// (spec-12 Slice B) — e.g. what the compositor's own shortcut-binding UI
+/// showed the user, not necessarily the `preferred_trigger` hint Kallilex
+/// requested. `None` until a successful bind stores a value: before the
+/// portal task has run, when the bind failed or was declined, or on any
+/// platform/session where `use_portal_global_shortcut()` is false (the
+/// state is still `manage`d there, just never written to).
+#[derive(Default)]
+pub struct PortalShortcutTrigger(pub std::sync::Mutex<Option<String>>);

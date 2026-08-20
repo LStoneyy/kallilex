@@ -1,4 +1,5 @@
-//! Wayland XDG-portal capability probing (spec-12 Slice A).
+//! Wayland XDG-portal capability probing (spec-12 Slice A) and the
+//! GlobalShortcuts portal binding built on top of it (spec-12 Slice B).
 //!
 //! Wayland has no single API surface for global shortcuts or input
 //! synthesis the way X11 does; instead, compositors *optionally* implement
@@ -11,11 +12,12 @@
 //!
 //! The probe itself ([`probe::probe`]) is read-only: it only creates portal
 //! proxies and reads their `version` D-Bus property, which never shows a
-//! permission dialog. Actually *using* a capability (binding a shortcut,
-//! starting a remote-desktop session) happens in later slices and is the
-//! only place a dialog can appear.
+//! permission dialog. Actually *using* a capability — binding a shortcut
+//! ([`shortcut::run_portal_shortcut`]), starting a remote-desktop session
+//! (a later slice) — is the only place a dialog can appear.
 
 mod probe;
+mod shortcut;
 
 use std::sync::OnceLock;
 
@@ -59,6 +61,7 @@ pub fn init(caps: WaylandCapabilities) {
 }
 
 pub use probe::probe;
+pub use shortcut::run_portal_shortcut;
 
 #[cfg(test)]
 mod tests {
@@ -70,10 +73,13 @@ mod tests {
         // fallback behavior via a fresh default value rather than the real
         // static (which other tests in the same binary may have already
         // populated).
-        assert_eq!(WaylandCapabilities::default(), WaylandCapabilities {
-            global_shortcut: false,
-            input_synthesis: false,
-            can_persist_session: false,
-        });
+        assert_eq!(
+            WaylandCapabilities::default(),
+            WaylandCapabilities {
+                global_shortcut: false,
+                input_synthesis: false,
+                can_persist_session: false,
+            }
+        );
     }
 }

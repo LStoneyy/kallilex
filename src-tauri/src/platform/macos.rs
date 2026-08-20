@@ -320,7 +320,9 @@ fn check_on_main_thread(text: &str) -> SpellcheckResult {
             std::ptr::null_mut(),
         )
     };
-    let dominant = orthography.as_ref().map(|o| o.dominantLanguage().to_string());
+    let dominant = orthography
+        .as_ref()
+        .map(|o| o.dominantLanguage().to_string());
     let mut ranges: Vec<NSRange> = results.iter().map(|r| r.range()).collect();
 
     // Pass 2: only when pass 1 couldn't settle on a language at all — the
@@ -367,7 +369,9 @@ fn check_on_main_thread(text: &str) -> SpellcheckResult {
             let word = String::from_utf16_lossy(&units[start..end]);
 
             let suggestions = checker
-                .guessesForWordRange_inString_language_inSpellDocumentWithTag(range, &ns_text, None, 0)
+                .guessesForWordRange_inString_language_inSpellDocumentWithTag(
+                    range, &ns_text, None, 0,
+                )
                 .map(|guesses| guesses.iter().map(|s| s.to_string()).collect())
                 .unwrap_or_default();
 
@@ -438,7 +442,8 @@ fn activate_on_main_thread(pid: i32) -> Result<(), String> {
     // source app brought forward regardless of what else is currently
     // active.
     #[allow(deprecated)]
-    let activated = app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+    let activated =
+        app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
 
     if activated {
         Ok(())
@@ -545,4 +550,23 @@ pub fn tray_icon_bytes() -> &'static [u8] {
 /// menu bar (light and dark) automatically.
 pub fn tray_icon_as_template() -> bool {
     true
+}
+
+/// Portals are a Linux/XDG-desktop-portal concept; macOS has no equivalent,
+/// so the tauri global-shortcut plugin registration in `lib.rs` is always
+/// used here.
+pub fn use_portal_global_shortcut() -> bool {
+    false
+}
+
+/// Never actually called: `use_portal_global_shortcut` always returns
+/// `false` on macOS, so `lib.rs` never takes the portal-shortcut branch that
+/// would call this. Kept as a no-op purely so the cross-platform seam
+/// surface (`platform::spawn_portal_shortcut`) exists identically on both
+/// platforms.
+pub fn spawn_portal_shortcut(
+    _app: tauri::AppHandle,
+    _preferred_shortcut: String,
+    _on_activated: fn(&tauri::AppHandle),
+) {
 }

@@ -19,6 +19,7 @@ const {
   enableAutostart,
   disableAutostart,
   getPlatformInfo,
+  getWaylandShortcutTrigger,
 } = vi.hoisted(() => ({
   accessibilityStatus: vi.fn(),
   openAccessibilitySettings: vi.fn(),
@@ -34,6 +35,7 @@ const {
   enableAutostart: vi.fn(),
   disableAutostart: vi.fn(),
   getPlatformInfo: vi.fn(),
+  getWaylandShortcutTrigger: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -51,6 +53,7 @@ vi.mock("../shared/invoke", () => ({
   enableAutostart,
   disableAutostart,
   getPlatformInfo,
+  getWaylandShortcutTrigger,
 }));
 
 function defaultSettings(): Settings {
@@ -116,6 +119,7 @@ describe("settings App", () => {
     enableAutostart.mockClear();
     disableAutostart.mockClear();
     getPlatformInfo.mockClear();
+    getWaylandShortcutTrigger.mockClear();
 
     accessibilityStatus.mockResolvedValue(false);
     getSettings.mockResolvedValue(defaultSettings());
@@ -126,6 +130,7 @@ describe("settings App", () => {
     enableAutostart.mockResolvedValue(undefined);
     disableAutostart.mockResolvedValue(undefined);
     getPlatformInfo.mockResolvedValue(macosPlatformInfo());
+    getWaylandShortcutTrigger.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -463,5 +468,82 @@ describe("settings App", () => {
     expect(
       screen.queryByText(/Wayland capabilities \(detected via your desktop's XDG portals\)/),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the portal-reported trigger read-only when the compositor offers the GlobalShortcuts portal", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: false, canPersistSession: false },
+    });
+    getWaylandShortcutTrigger.mockResolvedValue("CTRL+ALT+k");
+
+    render(App);
+
+    expect(await screen.findByText("CTRL+ALT+k", { selector: "code" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/This shortcut is managed by your system/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("shows a not-bound hint when the portal declined or hasn't confirmed the shortcut", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: false, canPersistSession: false },
+    });
+    getWaylandShortcutTrigger.mockResolvedValue(null);
+
+    render(App);
+
+    expect(
+      await screen.findByText(/Not currently bound/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("picks up a later-confirmed portal trigger by polling, since the bind can still be pending when the window mounts", async () => {
+    vi.useFakeTimers();
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: false, canPersistSession: false },
+    });
+    getWaylandShortcutTrigger.mockResolvedValue(null);
+
+    render(App);
+
+    await vi.waitFor(() => {
+      expect(getWaylandShortcutTrigger).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText(/Not currently bound/)).toBeInTheDocument();
+
+    getWaylandShortcutTrigger.mockResolvedValue("CTRL+ALT+k");
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(screen.getByText("CTRL+ALT+k", { selector: "code" })).toBeInTheDocument();
+    expect(screen.queryByText(/Not currently bound/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the free-text shortcut input on Wayland when the compositor has no GlobalShortcuts portal", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: false, inputSynthesis: false, canPersistSession: false },
+    });
+
+    render(App);
+
+    expect(await screen.findByPlaceholderText("Alt+Cmd+K")).toBeInTheDocument();
+    expect(getWaylandShortcutTrigger).not.toHaveBeenCalled();
   });
 });
