@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Kallilex — offline spell check &amp; AI rewriting from the macOS menu bar</title>
-  <meta name="description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
+  <title>Kallilex — offline spell check &amp; AI rewriting, macOS &amp; Linux</title>
+  <meta name="description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar and Linux tray. Select text anywhere, press ⌥⌘K / Ctrl+Alt+K, spell-check offline or rewrite with your own AI — and put it right back.">
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Kallilex — offline spell check &amp; AI rewriting from the macOS menu bar">
-  <meta property="og:description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
+  <meta property="og:title" content="Kallilex — offline spell check &amp; AI rewriting, macOS &amp; Linux">
+  <meta property="og:description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar and Linux tray. Select text anywhere, press ⌥⌘K / Ctrl+Alt+K, spell-check offline or rewrite with your own AI — and put it right back.">
   <meta property="og:image" content="https://kallilex.webcommits.info/assets/og-card.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:url" content="https://kallilex.webcommits.info/">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Kallilex — offline spell check &amp; AI rewriting from the macOS menu bar">
-  <meta name="twitter:description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.">
+  <meta name="twitter:title" content="Kallilex — offline spell check &amp; AI rewriting, macOS &amp; Linux">
+  <meta name="twitter:description" content="Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar and Linux tray. Select text anywhere, press ⌥⌘K / Ctrl+Alt+K, spell-check offline or rewrite with your own AI — and put it right back.">
   <meta name="twitter:image" content="https://kallilex.webcommits.info/assets/og-card.png">
 
   <link rel="canonical" href="https://kallilex.webcommits.info/">
@@ -29,9 +29,9 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Kallilex",
-    "operatingSystem": "macOS",
+    "operatingSystem": "macOS, Linux",
     "applicationCategory": "UtilitiesApplication",
-    "description": "Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar. Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.",
+    "description": "Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar and Linux tray. Select text anywhere, press ⌥⌘K / Ctrl+Alt+K, spell-check offline or rewrite with your own AI — and put it right back.",
     "offers": {
       "@type": "Offer",
       "price": "0",
@@ -54,7 +54,7 @@
         "name": "Why does Kallilex need the Accessibility permission?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Kallilex uses macOS's Accessibility API to read the text you have selected in the frontmost app when you press the hotkey. That's the only thing it's used for — a system prompt asks for the permission on first run, and you can revoke it any time in System Settings."
+          "text": "Kallilex uses macOS's Accessibility API to read the text you have selected in the frontmost app when you press the hotkey. That's the only thing it's used for — a system prompt asks for the permission on first run, and you can revoke it any time in System Settings. On Linux there's no equivalent permission to grant for capture — X11 reads the current selection directly and Wayland needs none either; the only optional prompt is the paste-back permission for Replace on portal-capable Wayland compositors like GNOME and KDE, a portal dialog you can decline or turn off in Settings → General without losing capture or Copy."
         }
       },
       {
@@ -70,7 +70,7 @@
         "name": "Does spell check work offline?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Spell check runs fully on-device through macOS's built-in NSSpellChecker, using your system's preferred languages. No network connection and no AI provider are needed for it."
+          "text": "Yes. Spell check runs fully on-device through macOS's built-in NSSpellChecker, using your system's preferred languages. On Linux, the same check runs through a Hunspell-compatible engine (spellbook), reading your system's Hunspell dictionaries when present. No network connection and no AI provider are needed for it."
         }
       },
       {
@@ -78,7 +78,7 @@
         "name": "Where does my text go?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Your text stays on your Mac by default. Spell check is local, and an AI request is only sent when you explicitly trigger a rewrite — a badge shows whether your provider is Local, LAN, or Cloud before anything is sent. Kallilex has no telemetry and never logs your text."
+          "text": "Your text stays on your machine by default. Spell check is local, and an AI request is only sent when you explicitly trigger a rewrite — a badge shows whether your provider is Local, LAN, or Cloud before anything is sent. Kallilex has no telemetry and never logs your text."
         }
       },
       {
@@ -126,13 +126,13 @@
         </h1>
 
         <p class="hero__subline">
-          Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar.
-          Select text anywhere, press ⌥⌘K, spell-check offline or rewrite with your own AI — and put it right back.
+          Kallilex is a tiny, local-first spell checker and AI rewriting utility for the macOS menu bar and Linux tray.
+          Select text anywhere, press ⌥⌘K / Ctrl+Alt+K, spell-check offline or rewrite with your own AI — and put it right back.
         </p>
 
         <div class="hero__buttons">
           <a class="btn btn-primary" data-download href="https://github.com/LStoneyy/kallilex/releases">
-            Download for macOS
+            <span data-download-label>Download for macOS</span>
             <span data-version hidden></span>
           </a>
           <button class="btn btn-outline" type="button" data-brew-toggle aria-expanded="false" aria-controls="brew-panel">
@@ -154,7 +154,7 @@
         </div>
 
         <p class="trust-line">Free &amp; open source · Apache-2.0 · No accounts, no telemetry</p>
-        <p class="req-note">macOS · Apple Silicon &amp; Intel (universal)</p>
+        <p class="req-note">macOS · Apple Silicon &amp; Intel (universal) · Linux · x86_64 (.deb, .rpm, AppImage)</p>
       </div>
     </section>
 
@@ -175,8 +175,8 @@
         <div class="container">
           <div class="demo__card" data-reveal>
             <span class="demo__kicker">Capture</span>
-            <h2>Select anywhere. Summon with <kbd>⌥</kbd><kbd>⌘</kbd><kbd>K</kbd>.</h2>
-            <p>Selected text from any app lands in a compact popover at your menu bar.</p>
+            <h2>Select anywhere. Summon with <kbd>⌥</kbd><kbd>⌘</kbd><kbd>K</kbd> — or <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>K</kbd> on Linux.</h2>
+            <p>Selected text from any app lands in a compact popover — at your menu bar on macOS, your tray on Linux.</p>
           </div>
         </div>
       </section>
@@ -186,7 +186,7 @@
           <div class="demo__card" data-reveal>
             <span class="demo__kicker">Spell check</span>
             <h2>Offline. Native. Instant.</h2>
-            <p>macOS-native spell checking marks mistakes inline; click a word, pick a suggestion. Nothing ever leaves your Mac.</p>
+            <p>Native offline spell checking marks mistakes inline; click a word, pick a suggestion. Nothing ever leaves your device.</p>
           </div>
         </div>
       </section>
@@ -237,7 +237,7 @@
           </div>
           <div class="how__step" data-reveal>
             <div class="how__num">2</div>
-            <p>Press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>K</kbd></p>
+            <p>Press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>K</kbd> on Linux)</p>
           </div>
           <div class="how__step" data-reveal>
             <div class="how__num">3</div>
@@ -262,12 +262,12 @@
           <div class="feature-card" data-reveal>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="4" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="8" r="1" fill="currentColor"/><rect x="7" y="13" width="10" height="7" rx="2" stroke="currentColor" stroke-width="1.6"/></svg>
             <h3>Menu-bar native</h3>
-            <p>A borderless popover, a global shortcut, and an app that stays out of your Dock.</p>
+            <p>A borderless popover, a global shortcut, and an app that lives in your menu bar on macOS or your tray on Linux — never in the Dock or taskbar.</p>
           </div>
           <div class="feature-card" data-reveal>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 18q3-3 5.5 0t5.5 0t5-0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M6 6l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <h3>Offline spell check</h3>
-            <p>Powered by macOS's native NSSpellChecker, using your installed system languages.</p>
+            <p>Powered by macOS's native NSSpellChecker, or a Hunspell-compatible engine on Linux, using your installed system languages.</p>
           </div>
           <div class="feature-card" data-reveal>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="7" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="17" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 10.5L14.5 8M9.5 13.5L14.5 16" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -287,7 +287,7 @@
           <div class="feature-card" data-reveal>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="8" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M11.5 12H21M17 12v3M14 12v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             <h3>Keys in the Keychain</h3>
-            <p>API keys are stored in the macOS Keychain and never touch a config file on disk.</p>
+            <p>API keys are stored in your system keychain — the macOS Keychain, or the Secret Service (gnome-keyring/KWallet) on Linux — and never touch a config file on disk.</p>
           </div>
         </div>
       </div>
@@ -303,7 +303,7 @@
         <div class="faq__list">
           <div class="faq__item" data-reveal>
             <h3>Why does Kallilex need the Accessibility permission?</h3>
-            <p>Kallilex uses macOS's Accessibility API to read the text you have selected in the frontmost app when you press the hotkey. That's the only thing it's used for — a system prompt asks for the permission on first run, and you can revoke it any time in System Settings.</p>
+            <p>Kallilex uses macOS's Accessibility API to read the text you have selected in the frontmost app when you press the hotkey. That's the only thing it's used for — a system prompt asks for the permission on first run, and you can revoke it any time in System Settings. On Linux there's no equivalent permission to grant for capture — X11 reads the current selection directly and Wayland needs none either; the only optional prompt is the paste-back permission for Replace on portal-capable Wayland compositors like GNOME and KDE, a portal dialog you can decline or turn off in Settings → General without losing capture or Copy.</p>
           </div>
           <div class="faq__item" data-reveal>
             <h3>Which AI providers and models work with Kallilex?</h3>
@@ -311,11 +311,11 @@
           </div>
           <div class="faq__item" data-reveal>
             <h3>Does spell check work offline?</h3>
-            <p>Yes. Spell check runs fully on-device through macOS's built-in NSSpellChecker, using your system's preferred languages. No network connection and no AI provider are needed for it.</p>
+            <p>Yes. Spell check runs fully on-device through macOS's built-in NSSpellChecker, using your system's preferred languages. On Linux, the same check runs through a Hunspell-compatible engine (spellbook), reading your system's Hunspell dictionaries when present. No network connection and no AI provider are needed for it.</p>
           </div>
           <div class="faq__item" data-reveal>
             <h3>Where does my text go?</h3>
-            <p>Your text stays on your Mac by default. Spell check is local, and an AI request is only sent when you explicitly trigger a rewrite — a badge shows whether your provider is Local, LAN, or Cloud before anything is sent. Kallilex has no telemetry and never logs your text.</p>
+            <p>Your text stays on your machine by default. Spell check is local, and an AI request is only sent when you explicitly trigger a rewrite — a badge shows whether your provider is Local, LAN, or Cloud before anything is sent. Kallilex has no telemetry and never logs your text.</p>
           </div>
           <div class="faq__item" data-reveal>
             <h3>Is Kallilex free?</h3>
@@ -345,7 +345,7 @@
             <h3>Direct download</h3>
             <div class="install-card__links">
               <a class="btn btn-primary" data-download href="https://github.com/LStoneyy/kallilex/releases">
-                Download for macOS
+                <span data-download-label>Download for macOS</span>
                 <span data-version hidden></span>
               </a>
               <a href="https://github.com/LStoneyy/kallilex/releases">All releases →</a>
@@ -355,6 +355,29 @@
               On first launch macOS will show "Kallilex was not opened" — click Done, then
               System Settings → Privacy &amp; Security → Open Anyway. One time only.
             </div>
+          </div>
+          <div class="install-card">
+            <h3>Linux packages</h3>
+            <div class="install-card__links">
+              <a class="btn btn-outline btn-small" data-download-deb href="https://github.com/LStoneyy/kallilex/releases">.deb</a>
+              <a class="btn btn-outline btn-small" data-download-rpm href="https://github.com/LStoneyy/kallilex/releases">.rpm</a>
+              <a class="btn btn-outline btn-small" data-download-appimage href="https://github.com/LStoneyy/kallilex/releases">AppImage</a>
+            </div>
+            <div class="code-block">
+              <code>sudo apt install ./Kallilex-*.deb</code>
+              <button class="copy-btn" type="button" data-copy="sudo apt install ./Kallilex-*.deb">Copy</button>
+            </div>
+            <div class="code-block">
+              <code>sudo dnf install ./Kallilex-*.rpm</code>
+              <button class="copy-btn" type="button" data-copy="sudo dnf install ./Kallilex-*.rpm">Copy</button>
+            </div>
+            <div class="code-block">
+              <code>chmod +x Kallilex-*.AppImage</code>
+              <button class="copy-btn" type="button" data-copy="chmod +x Kallilex-*.AppImage">Copy</button>
+            </div>
+            <p class="muted-note">Wayland support depends on your compositor's XDG portals; X11 is fully supported. Settings → Accessibility shows which capabilities are live on your session.</p>
+              <p class="muted-note">On GNOME, the tray icon needs the AppIndicator extension (<code>gnome-shell-extension-appindicator</code>) — without it the icon won&#39;t appear; that&#39;s the extension missing, not the app failing.</p>
+            <p class="muted-note">On Wayland, prefer the .deb or .rpm: the portal-bound global shortcut needs the desktop entry those packages install, which an AppImage cannot install — on X11 the AppImage is fully equivalent.</p>
           </div>
         </div>
       </div>

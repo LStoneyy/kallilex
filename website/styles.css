@@ -680,14 +680,8 @@ h1 .accent {
 
 .install__grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 1.5rem;
-}
-
-@media (max-width: 800px) {
-  .install__grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .install-card {
