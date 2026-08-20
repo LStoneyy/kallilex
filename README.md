@@ -36,7 +36,10 @@ Kallilex also ships for Linux, distributed as `.deb`, `.rpm`, and AppImage packa
 Support depends on your session type:
 
 - **X11 sessions** — full functionality: global shortcut, automatic capture, and Replace all work as on macOS.
-- **Wayland sessions** — degraded mode: open Kallilex from the tray icon ("Open Kallilex") instead of using a global shortcut; it captures your current selection (the X11/Wayland primary selection). Use **Copy** to get the result — the global shortcut and automatic **Replace** are unavailable on Wayland today. Native Wayland support (global shortcut + text injection) is planned.
+- **Wayland sessions** — support depends on which XDG desktop portals your compositor provides; Kallilex detects this at startup and enables each feature independently. Settings → Accessibility shows which capabilities are live.
+  - KDE Plasma and GNOME 48+: the full loop — global shortcut (bound through the system; rebind it in your desktop's keyboard settings) and automatic Replace. The first Replace asks for the remote-desktop input permission once via your desktop's own dialog; the grant persists until you revoke it in system settings.
+  - Hyprland: global shortcut works; Replace is unavailable (no RemoteDesktop portal) — use Copy.
+  - Sway and other wlroots compositors: degraded mode — open Kallilex from the tray ("Open Kallilex") to capture the primary selection, use Copy.
 
 Install:
 

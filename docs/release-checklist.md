@@ -7,7 +7,7 @@ the sections in order; do not publish a release until every gate passes.
 
 - [ ] CI is green on `main` (typecheck/lint, frontend tests, clippy, Rust
       tests, and `tauri build` all pass).
-- [ ] Manual app matrix (section 2) has been run and passes.
+- [ ] Manual app matrix (sections 2 and 3) has been run and passes.
 - [ ] README accuracy check: README describes only shipped behavior, contains
       no contradictions (e.g. no diff-view claims), and any version
       references match the release being cut.
@@ -37,7 +37,35 @@ Kallilex does not crash, and no secret is left on the clipboard afterwards.
 - [ ] Password/secure field checked — capture fails or falls back gracefully,
       no crash, no secret leaked to the clipboard afterwards.
 
-## 3. Clean-Mac smoke run
+## 3. Linux manual matrix
+
+Verify portal support per compositor. For each environment, launch the app and
+confirm the listed capabilities work as specified; the app should report which
+portals are active in Settings → Accessibility.
+
+- [ ] X11 regression pass: shortcut → capture → replace → clipboard restored
+      (existing tier-1 behavior).
+- [ ] GNOME 48+ Wayland full round-trip: global shortcut triggers capture;
+      Replace types the result back into the source app; original clipboard
+      restored; the RemoteDesktop permission dialog appears exactly once across
+      app restarts (restore token works).
+- [ ] KDE Plasma 6 Wayland full round-trip: same as GNOME, plus the portal's
+      shortcut-bind dialog appears on first launch and the binding survives an
+      app restart (portal identifies the app id correctly).
+- [ ] Hyprland: global shortcut works; Replace is absent/copy-only; the notice
+      names the missing RemoteDesktop portal.
+- [ ] Sway (wlroots): spec-11 degraded-mode regression — tray capture works,
+      copy-only, notice names both missing portals; no permission dialogs ever
+      appear.
+- [ ] Token revocation: revoke Kallilex's remote-desktop permission in system
+      settings → the next Replace re-prompts exactly once, then works.
+- [ ] Popover keyboard focus on GNOME and KDE Wayland: when the popover opens
+      it actually has keyboard focus (type immediately). (This is a known
+      verification point for tao/xdg-activation.)
+- [ ] No-portal environment: with xdg-desktop-portal absent, Kallilex reports
+      no Wayland capabilities (degraded mode) rather than pretending.
+
+## 4. Clean-Mac smoke run
 
 Run this on a Mac (or a fresh user account) that has never run Kallilex:
 
@@ -52,7 +80,7 @@ Run this on a Mac (or a fresh user account) that has never run Kallilex:
 - [ ] Full workflow works: select text → ⌥⌘K → run an action → Replace puts
       the result back into the source app.
 
-## 4. Shipping steps
+## 5. Shipping steps
 
 1. [ ] Bump `version` in `package.json`, `src-tauri/tauri.conf.json`, and
        `src-tauri/Cargo.toml` — keep all three in sync.
@@ -61,10 +89,10 @@ Run this on a Mac (or a fresh user account) that has never run Kallilex:
 4. [ ] Push the tag.
 5. [ ] Wait for the `Release` GitHub Actions workflow to build the universal
        app and attach the zip to a draft release.
-6. [ ] Run the gates in sections 1–3 above against the built release.
+6. [ ] Run the gates in sections 1–4 above against the built release.
 7. [ ] Publish the draft release.
 
-## 5. Privacy check
+## 6. Privacy check
 
 - [ ] Confirm no telemetry/analytics code or dependency has been added.
 - [ ] Confirm any logs the app produces (if present) contain no selection
