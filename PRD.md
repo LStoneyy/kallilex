@@ -28,7 +28,7 @@ Core properties: fast, unobtrusive, privacy-conscious, free, open source (Apache
 - No streaming responses.
 - No Harper / grammar-style checking.
 - No llama.cpp process management (external server only).
-- No Linux/Windows builds, no light theme, no auto-updater.
+- No light theme, no auto-updater. Platform support: macOS (menu bar, full functionality), Linux X11 (tier 1, full capture/replace loop), Linux Wayland (degraded mode: tray-triggered capture + copy-only); Windows remains unsupported (planned).
 - No Mac App Store distribution, no notarization in v1.
 - No telemetry, crash reporting, or analytics of any kind.
 

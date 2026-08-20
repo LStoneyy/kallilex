@@ -1,5 +1,14 @@
 {
   "bundle": {
-    "resources": ["resources/dictionaries"]
+    "targets": ["deb", "rpm", "appimage"],
+    "resources": ["resources/dictionaries"],
+    "category": "Utility",
+    "shortDescription": "Menu-bar writing utility",
+    "longDescription": "Kallilex captures your selected text from any app for spell checking and AI-assisted rewriting, then puts the result back.",
+    "linux": {
+      "deb": {
+        "section": "utils"
+      }
+    }
   }
 }

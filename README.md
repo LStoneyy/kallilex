@@ -18,7 +18,7 @@ The workflow is:
 
 Kallilex stays fast, unobtrusive, privacy-conscious, free, and open source.
 
-## Installation
+## Installation (macOS)
 
 Kallilex ships as a macOS app, distributed as a zip on [GitHub Releases](../../releases).
 
@@ -28,6 +28,25 @@ Kallilex ships as a macOS app, distributed as a zip on [GitHub Releases](../../r
 4. On the first capture, macOS prompts for **Accessibility** permission — grant it under **System Settings → Privacy & Security → Accessibility**. Kallilex needs this to read the selected text from the frontmost app.
 
 Notarized builds and a Homebrew cask are on the roadmap; see [Later](#later).
+
+## Linux
+
+Kallilex also ships for Linux, distributed as `.deb`, `.rpm`, and AppImage packages on [GitHub Releases](../../releases).
+
+Support depends on your session type:
+
+- **X11 sessions** — full functionality: global shortcut, automatic capture, and Replace all work as on macOS.
+- **Wayland sessions** — degraded mode: open Kallilex from the tray icon ("Open Kallilex") instead of using a global shortcut; it captures your current selection (the X11/Wayland primary selection). Use **Copy** to get the result — the global shortcut and automatic **Replace** are unavailable on Wayland today. Native Wayland support (global shortcut + text injection) is planned.
+
+Install:
+
+- **Debian/Ubuntu:** `sudo apt install ./Kallilex-*.deb`
+- **Fedora:** `sudo dnf install ./Kallilex-*.rpm`
+- **AppImage:** download it, `chmod +x Kallilex-*.AppImage`, then run it directly.
+
+On GNOME, the tray icon requires the AppIndicator extension (`gnome-shell-extension-appindicator`) — without it, the icon simply won't show up; that's the extension missing, not the app being broken.
+
+Kallilex picks up system Hunspell dictionaries from `/usr/share/hunspell` and `/usr/share/myspell` automatically and prefers them; it also bundles fallback `en_US` and German dictionaries for machines without system dictionaries installed. The bundled dictionaries carry their own licenses (the German dictionary is GPL-licensed), with the license texts included in the package; the app itself remains Apache-2.0.
 
 ## Capture
 
@@ -194,7 +213,7 @@ pnpm tauri dev     # run in development
 pnpm tauri build   # build a release app bundle
 ```
 
-CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck), `pnpm test` (frontend tests), `cargo clippy` and `cargo test` for the Rust side, and a full `tauri build`, all on macOS.
+CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck), `pnpm test` (frontend tests), `cargo clippy` and `cargo test` for the Rust side, and a full `tauri build`, on both macOS and Linux.
 
 ## v1 feature set
 
