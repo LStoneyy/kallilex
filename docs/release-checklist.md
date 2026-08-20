@@ -64,6 +64,12 @@ portals are active in Settings → Accessibility.
       verification point for tao/xdg-activation.)
 - [ ] No-portal environment: with xdg-desktop-portal absent, Kallilex reports
       no Wayland capabilities (degraded mode) rather than pretending.
+- [ ] App id on Wayland: from an *installed* package, launching Kallilex from a
+      terminal (not the app menu) still binds the global shortcut — the package
+      ships `com.webcommits.kallilex.desktop`, which is what lets the portal
+      resolve the app id it requires. An uninstalled dev run (`pnpm tauri dev`)
+      has no app id and logs "An app id is required"; that is expected, not a
+      release blocker.
 
 ## 4. Clean-Mac smoke run
 

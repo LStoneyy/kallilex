@@ -59,6 +59,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "macOS": { "signingIdentity": "-" }
+    "macOS": { "signingIdentity": "-" },
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/applications/com.webcommits.kallilex.desktop": "packaging/com.webcommits.kallilex.desktop"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/applications/com.webcommits.kallilex.desktop": "packaging/com.webcommits.kallilex.desktop"
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,20 @@
+# Portal identity entry — not a second menu entry (hence NoDisplay).
+#
+# XDG desktop portals key permissions and persistence off an application
+# id: the GlobalShortcuts portal refuses to bind a shortcut without one,
+# and RemoteDesktop stores its input-permission restore token per id.
+# Processes started from a desktop entry inherit that id from the systemd
+# scope the launcher wraps them in, but a terminal launch or an autostart
+# run does not — those register the bundle identifier with the portal's
+# host registry instead, and the portal only accepts an id it can resolve
+# to an installed desktop entry of the same name. This file is that entry;
+# the visible menu entry stays Kallilex.desktop.
+[Desktop Entry]
+Type=Application
+Name=Kallilex
+Comment=Menu-bar writing utility
+Exec=kallilex
+Icon=kallilex
+Terminal=false
+Categories=Utility;
+NoDisplay=true
