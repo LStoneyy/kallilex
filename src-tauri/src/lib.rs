@@ -401,14 +401,8 @@ pub fn run() {
             let tray_menu = Menu::with_items(app, &menu_items)?;
 
             TrayIconBuilder::new()
-                // Only the @2x raster is embedded: tray-icon builds a single
-                // NSImage scaled to a fixed 18 pt height, so the 44 px source
-                // downsamples crisply on both Retina and non-Retina displays.
-                // icons/tray.png (@1x) stays committed as an artwork artifact.
-                .icon(tauri::image::Image::from_bytes(include_bytes!(
-                    "../icons/tray@2x.png"
-                ))?)
-                .icon_as_template(true)
+                .icon(tauri::image::Image::from_bytes(platform::tray_icon_bytes())?)
+                .icon_as_template(platform::tray_icon_as_template())
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {

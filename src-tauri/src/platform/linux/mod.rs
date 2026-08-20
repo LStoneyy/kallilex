@@ -120,3 +120,20 @@ pub fn tray_open_captures() -> bool {
 pub fn global_shortcut_failure_expected() -> bool {
     session::current() == SessionType::Wayland
 }
+
+/// The embedded tray-icon raster: the same K glyph as macOS, but
+/// pre-colored in the logo's verdigris accent (#2faf9b). Linux trays have
+/// no template-image recoloring, so the macOS black template glyph would
+/// be near-invisible on dark panels (e.g. Ubuntu's top bar); the accent
+/// color stays legible on both dark and light panels. The 44 px @2x source
+/// scales down cleanly on standard-DPI trays; icons/tray-linux.png (@1x)
+/// stays committed as an artwork artifact.
+pub fn tray_icon_bytes() -> &'static [u8] {
+    include_bytes!("../../../icons/tray-linux@2x.png")
+}
+
+/// No template-image concept on Linux trays; the flag is ignored there,
+/// passed as `false` for clarity.
+pub fn tray_icon_as_template() -> bool {
+    false
+}

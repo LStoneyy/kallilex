@@ -531,3 +531,17 @@ pub fn tray_open_captures() -> bool {
 pub fn global_shortcut_failure_expected() -> bool {
     false
 }
+
+/// The embedded tray-icon raster. Only the @2x raster is embedded:
+/// tray-icon builds a single NSImage scaled to a fixed 18 pt height, so the
+/// 44 px source downsamples crisply on both Retina and non-Retina displays.
+/// icons/tray.png (@1x) stays committed as an artwork artifact.
+pub fn tray_icon_bytes() -> &'static [u8] {
+    include_bytes!("../../icons/tray@2x.png")
+}
+
+/// The black glyph is a template image: macOS recolors it to match the
+/// menu bar (light and dark) automatically.
+pub fn tray_icon_as_template() -> bool {
+    true
+}
