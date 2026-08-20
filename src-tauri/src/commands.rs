@@ -48,6 +48,12 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 /// the Settings UI shows the field read-only on that session. The shortcut
 /// string is still persisted as-is — it remains the default the same
 /// on-disk settings would use on an X11 session on the same machine.
+///
+/// When `input_synthesis_enabled` changes (spec-13 Slice A), the new value
+/// is pushed to [`platform::set_input_synthesis_enabled`] right after the
+/// save succeeds, so a live toggle takes effect immediately — no restart,
+/// and (when switched off) any already-open RemoteDesktop session is
+/// dropped as part of that call.
 #[tauri::command]
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
     use std::str::FromStr;
@@ -70,6 +76,10 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, Stri
     };
 
     let saved = settings::set_settings(&store, settings).map_err(|e| e.to_string())?;
+
+    if saved.input_synthesis_enabled != previous.input_synthesis_enabled {
+        platform::set_input_synthesis_enabled(saved.input_synthesis_enabled);
+    }
 
     if let Some(new_shortcut) = new_shortcut {
         if let Ok(old_shortcut) = Shortcut::from_str(&previous.shortcut) {

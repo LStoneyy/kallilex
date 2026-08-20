@@ -10,6 +10,8 @@ export interface Settings {
   accessibilityOnboardingShown: boolean;
   profiles: ProviderProfile[];
   waylandRestoreToken: string | null;
+  /** Wayland-only opt-out (spec-13 Slice A) from RemoteDesktop-portal input synthesis. */
+  inputSynthesisEnabled: boolean;
 }
 
 /**

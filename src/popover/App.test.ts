@@ -87,6 +87,7 @@ function defaultSettings(): Settings {
     accessibilityOnboardingShown: false,
     profiles: [],
     waylandRestoreToken: null,
+    inputSynthesisEnabled: true,
   };
 }
 
@@ -1340,6 +1341,72 @@ describe("popover App", () => {
     });
     expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
     expect(screen.queryByText(waylandNoticeNoGlobalShortcutText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
+  });
+
+  // spec-13 Slice A: the input-synthesis opt-out.
+
+  it("hides Replace on Wayland when the compositor is capable but the user switched input synthesis off", async () => {
+    // `replaceBackAvailable: true` here simulates `loadPlatformInfo()`'s
+    // per-window cache being stale (populated before the user toggled the
+    // setting) — the frontend's own `inputSynthesisOffByChoice` guard, not
+    // just the backend-computed flag, must still hide Replace.
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: true,
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: false },
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), inputSynthesisEnabled: false });
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: null, pid: 0, name: null },
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+    expect(screen.queryByRole("button", { name: "Replace" })).not.toBeInTheDocument();
+  });
+
+  it("shows no Wayland notice when input synthesis is off by choice and the GlobalShortcuts portal still works", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: false,
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: false },
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), inputSynthesisEnabled: false });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(getPlatformInfo).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoGlobalShortcutText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
+  });
+
+  it("names only the missing GlobalShortcuts portal when input synthesis is off by choice and the shortcut portal is also missing", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: false,
+      wayland: { globalShortcut: false, inputSynthesis: true, canPersistSession: false },
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), inputSynthesisEnabled: false });
+
+    render(App);
+
+    expect(await screen.findByText(waylandNoticeNoGlobalShortcutText)).toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
     expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
   });
 });

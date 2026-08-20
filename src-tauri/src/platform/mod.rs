@@ -14,16 +14,16 @@ mod macos;
 #[cfg(target_os = "linux")]
 pub use linux::{
     app_activator, clipboard, global_shortcut_failure_expected, keyboard, open_permission_settings,
-    platform_info, position_popover, selection_backend, setup, spawn_portal_shortcut,
-    spell_checker, tray_icon_as_template, tray_icon_bytes, tray_open_captures,
-    use_portal_global_shortcut, wants_tray_open_entry,
+    platform_info, position_popover, selection_backend, set_input_synthesis_enabled, setup,
+    spawn_portal_shortcut, spell_checker, tray_icon_as_template, tray_icon_bytes,
+    tray_open_captures, use_portal_global_shortcut, wants_tray_open_entry,
 };
 #[cfg(target_os = "macos")]
 pub use macos::{
     app_activator, clipboard, global_shortcut_failure_expected, keyboard, open_permission_settings,
-    platform_info, position_popover, selection_backend, setup, spawn_portal_shortcut,
-    spell_checker, tray_icon_as_template, tray_icon_bytes, tray_open_captures,
-    use_portal_global_shortcut, wants_tray_open_entry,
+    platform_info, position_popover, selection_backend, set_input_synthesis_enabled, setup,
+    spawn_portal_shortcut, spell_checker, tray_icon_as_template, tray_icon_bytes,
+    tray_open_captures, use_portal_global_shortcut, wants_tray_open_entry,
 };
 
 /// Platform metadata surfaced to the frontend via the `get_platform_info`

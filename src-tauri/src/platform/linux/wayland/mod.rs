@@ -26,6 +26,7 @@ mod probe;
 mod remote_desktop;
 mod shortcut;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 /// Wayland-portal-backed capabilities detected for the current compositor.
@@ -106,9 +107,78 @@ pub use probe::probe;
 pub use remote_desktop::{send_chord, Chord};
 pub use shortcut::run_portal_shortcut;
 
+/// Process-wide, user-controlled opt-out from input synthesis (spec-13 Slice
+/// A): whether the user currently allows Kallilex to synthesize Ctrl+C /
+/// Ctrl+V through the RemoteDesktop portal. Defaults to `true` so a process
+/// that hasn't yet loaded settings (or is running on X11/macOS, where this
+/// is never consulted) behaves exactly as it did before this setting
+/// existed. Kept separate from [`CAPABILITIES`]: that describes what the
+/// compositor offers and never changes after the startup probe, while this
+/// is a live user choice that can flip at any time from Settings.
+static INPUT_SYNTHESIS_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Updates the user's input-synthesis opt-out flag. When `enabled` is
+/// `false`, also drops any live RemoteDesktop session
+/// ([`remote_desktop::drop_session`]) so Kallilex never sits holding an open
+/// remote-input session it has just decided not to use.
+///
+/// Deliberately does **not** touch `Settings::wayland_restore_token`: the
+/// portal-side permission grant outlives our own setting either way (the
+/// compositor remembers it independently of whether Kallilex currently
+/// wants to use it), so discarding the stored token here would only make
+/// re-enabling cost the user a fresh permission dialog for no actual
+/// security benefit. Revoking the grant for real is the desktop's job, not
+/// this app's.
+pub fn set_input_synthesis_enabled(enabled: bool) {
+    INPUT_SYNTHESIS_ENABLED.store(enabled, Ordering::SeqCst);
+    if !enabled {
+        remote_desktop::drop_session();
+    }
+}
+
+/// Reads the user's current input-synthesis opt-out flag.
+pub fn user_input_synthesis_enabled() -> bool {
+    INPUT_SYNTHESIS_ENABLED.load(Ordering::SeqCst)
+}
+
+/// Pure combination of compositor capability and user choice, factored out
+/// of [`input_synthesis_live`] so it can be unit-tested directly over all
+/// four combinations without touching any process-wide state.
+fn input_synthesis_live_from(capable: bool, user_enabled: bool) -> bool {
+    capable && user_enabled
+}
+
+/// Whether input synthesis is actually usable right now: the compositor
+/// must support the `RemoteDesktop` portal *and* the user must not have
+/// switched it off. The probe result lives in [`CAPABILITIES`], a
+/// `OnceLock` populated once at startup, since it describes a fact about
+/// the compositor that never changes for the life of the process; the user
+/// flag is separately, freely mutable, so toggling the setting takes effect
+/// immediately without requiring a restart.
+pub fn input_synthesis_live() -> bool {
+    input_synthesis_live_from(
+        capabilities().input_synthesis,
+        user_input_synthesis_enabled(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn input_synthesis_live_from_all_four_combinations() {
+        assert!(input_synthesis_live_from(true, true));
+        assert!(!input_synthesis_live_from(true, false));
+        assert!(!input_synthesis_live_from(false, true));
+        assert!(!input_synthesis_live_from(false, false));
+        // A disabled setting on a capable compositor must be indistinguishable
+        // from the outside from an incapable compositor: both produce `false`.
+        assert_eq!(
+            input_synthesis_live_from(true, false),
+            input_synthesis_live_from(false, false)
+        );
+    }
 
     #[test]
     fn capabilities_default_to_all_false_before_init() {

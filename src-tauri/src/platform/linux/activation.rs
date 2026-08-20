@@ -52,7 +52,13 @@ impl AppActivator for LinuxAppActivator {
     /// itself (the [`SourceApp`] parameter) carries no usable identity on
     /// this path — see [`SourceApp::focus_return`] — this is intentional,
     /// not a partial implementation: there is nothing more specific to
-    /// activate by.
+    /// activate by. This whole path is only reached when
+    /// `wayland::input_synthesis_live()` is true — the RemoteDesktop
+    /// portal's input-synthesis capability being available is not enough on
+    /// its own (spec-13 Slice A): the user may also have switched input
+    /// synthesis off in Settings, in which case this returns the same `Err`
+    /// as a compositor without the portal at all, by choice rather than by
+    /// limitation.
     ///
     /// Hiding runs via `run_on_main_thread` and is not waited on: the hide
     /// request is simply queued, and `core::replace::replace_back`'s
@@ -72,7 +78,7 @@ impl AppActivator for LinuxAppActivator {
         match session::current() {
             SessionType::X11 => activate_x11(app),
             SessionType::Wayland => {
-                if wayland::capabilities().input_synthesis {
+                if wayland::input_synthesis_live() {
                     hide_popover_for_focus_return(&self.app)
                 } else {
                     Err("window activation is unavailable on Wayland".to_string())

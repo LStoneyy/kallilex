@@ -55,6 +55,11 @@
   let actionError = $state<string | null>(null);
   let actionContext = $state<ActionContext | null>(null);
   let spellcheckEnabled = $state(true);
+  // The user's spec-13 Slice A opt-out from Wayland input synthesis.
+  // Defaults to `true` (permissive) so nothing flashes away before the
+  // first `refreshContext()` resolves, matching `spellcheckEnabled`'s
+  // convention above.
+  let inputSynthesisEnabled = $state(true);
   // True only while an AI action (`run_action`) is specifically in flight —
   // as opposed to `busy`, which is also true during Replace/Copy. Gates the
   // Cancel affordance and the Escape-cancels-first-then-closes behavior.
@@ -149,6 +154,7 @@
   async function refreshContext() {
     const [settings, context] = await Promise.all([getSettings(), getActionContext()]);
     spellcheckEnabled = settings.spellcheckEnabled;
+    inputSynthesisEnabled = settings.inputSynthesisEnabled;
     actionContext = context;
     if (context.configured) {
       showConfiguredHint = false;
@@ -284,21 +290,43 @@
   }
 
   const canReplace = $derived(text.trim() !== "" && sourceApp !== null && !busy);
+  // True when the user has switched input synthesis off (spec-13 Slice A)
+  // on a Wayland session — the only session type the setting is honored on.
+  // Needed on top of `platformInfo.replaceBackAvailable` because
+  // `loadPlatformInfo()` caches its result per window, so a toggle in
+  // Settings while the popover is already open wouldn't otherwise be
+  // reflected until the next reload.
+  const inputSynthesisOffByChoice = $derived(
+    platformInfo?.session === "wayland" && !inputSynthesisEnabled,
+  );
   // Hidden entirely (not disabled) when the platform doesn't support
-  // Replace at all — defaults to shown while `platformInfo` is still
-  // loading, so nothing flashes away on platforms where it ends up
-  // available (macOS today).
-  const showReplace = $derived(platformInfo === null || platformInfo.replaceBackAvailable);
+  // Replace at all, or the user switched it off — defaults to shown while
+  // `platformInfo` is still loading, so nothing flashes away on platforms
+  // where it ends up available (macOS today).
+  const showReplace = $derived(
+    platformInfo === null || (platformInfo.replaceBackAvailable && !inputSynthesisOffByChoice),
+  );
   // Wayland's global shortcut and automatic replace-back availability
   // depend on which XDG portals the running compositor implements (spec-12)
   // — this is a plain factual notice about what's missing, not an error
   // state, so it renders unconditionally (when anything is missing) rather
-  // than behind any dismiss/error affordance.
+  // than behind any dismiss/error affordance. Replace being off is a
+  // separate case: when it's off because the *user* switched input
+  // synthesis off, that's a deliberate choice, not something wrong with the
+  // session, so it is never reported here at all — only the shortcut
+  // dimension still matters in that case (spec-13 Slice A).
   const waylandNoticeText = $derived.by(() => {
     if (platformInfo?.session !== "wayland") return null;
     const wayland = platformInfo.wayland;
     const hasGlobalShortcut = wayland?.globalShortcut ?? false;
     const hasInputSynthesis = wayland?.inputSynthesis ?? false;
+
+    if (!inputSynthesisEnabled) {
+      return hasGlobalShortcut
+        ? null
+        : "Wayland session: your compositor doesn't offer the GlobalShortcuts portal — open Kallilex from the tray to capture your selection.";
+    }
+
     if (hasGlobalShortcut && hasInputSynthesis) return null;
     if (!hasGlobalShortcut && !hasInputSynthesis) {
       return "Wayland session: your compositor doesn't offer the GlobalShortcuts or RemoteDesktop portals — open Kallilex from the tray to capture, and copy results manually.";

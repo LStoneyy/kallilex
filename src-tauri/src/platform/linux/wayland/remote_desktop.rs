@@ -15,7 +15,9 @@
 //! 3. [`AshpdBackend`]: the real portal calls, plus the process-wide
 //!    [`send_chord`] entry point that lazily starts a single manager task
 //!    owning the one live session (see that function's doc comment for the
-//!    threading rationale).
+//!    threading rationale), and [`drop_session`] (spec-13 Slice A), which
+//!    tells that same manager to release the session without starting one
+//!    that didn't already exist.
 //!
 //! **Keycode caveat (accepted for v1):** `NotifyKeyboardKeycode` takes Linux
 //! evdev keycodes, which are *positional* (they identify a physical key,
@@ -360,18 +362,28 @@ impl RemoteDesktopBackend for AshpdBackend {
     }
 }
 
-/// One request for the manager task: which chord to send, and where to
-/// reply once it's done (or failed).
-struct SessionRequest {
-    chord: Chord,
-    reply: std::sync::mpsc::Sender<Result<(), String>>,
+/// A single message routed through the manager task's request channel:
+/// either "send this chord" (spec-12) or "drop the live session" (spec-13
+/// Slice A, the input-synthesis opt-out).
+enum ManagerMessage {
+    /// Send `chord`, replying exactly once with the outcome. Preserving
+    /// "exactly one reply per `SendChord`" is what makes [`send_chord`]'s
+    /// blocking `recv()` safe — see that function's doc comment.
+    SendChord {
+        chord: Chord,
+        reply: std::sync::mpsc::Sender<Result<(), String>>,
+    },
+    /// Drop the manager's live session (if any), releasing its portal
+    /// resources. No reply: [`drop_session`] is fire-and-forget, since there
+    /// is nothing meaningful to report back and no caller waits on it.
+    DropSession,
 }
 
 /// Process-wide handle to the manager task's request channel, lazily
 /// created by the first [`send_chord`] call. See [`send_chord`]'s doc
 /// comment for why the manager — and, transitively, the portal session
 /// itself — is started on first use rather than at startup.
-static MANAGER: OnceLock<mpsc::UnboundedSender<SessionRequest>> = OnceLock::new();
+static MANAGER: OnceLock<mpsc::UnboundedSender<ManagerMessage>> = OnceLock::new();
 
 /// Returns the manager task's request sender, spawning the manager the
 /// first time this is called — on its own dedicated OS thread (via
@@ -379,7 +391,7 @@ static MANAGER: OnceLock<mpsc::UnboundedSender<SessionRequest>> = OnceLock::new(
 /// clone of `app`. See [`send_chord`]'s doc comment for why a dedicated
 /// thread, rather than `tauri::async_runtime::spawn` onto the shared tokio
 /// pool, is required here.
-fn manager_sender(app: &tauri::AppHandle) -> mpsc::UnboundedSender<SessionRequest> {
+fn manager_sender(app: &tauri::AppHandle) -> mpsc::UnboundedSender<ManagerMessage> {
     MANAGER
         .get_or_init(|| {
             let (tx, rx) = mpsc::unbounded_channel();
@@ -394,22 +406,43 @@ fn manager_sender(app: &tauri::AppHandle) -> mpsc::UnboundedSender<SessionReques
 }
 
 /// The manager task body: owns the one live [`AshpdSession`] (if any) and a
-/// [`TauriStoreSettings`] handle, and processes requests strictly
+/// [`TauriStoreSettings`] handle, and processes messages strictly
 /// sequentially from a single-consumer channel — that alone serializes all
 /// portal access, so no additional locking is needed anywhere in this
 /// module. Runs for the lifetime of the app; the loop only ends if every
-/// [`mpsc::UnboundedSender`] clone (held by past/future [`send_chord`]
-/// calls) has been dropped, which in practice never happens before process
-/// exit.
-async fn run_manager(app: tauri::AppHandle, mut requests: mpsc::UnboundedReceiver<SessionRequest>) {
+/// [`mpsc::UnboundedSender`] clone (held by past/future [`send_chord`]/
+/// [`drop_session`] calls) has been dropped, which in practice never happens
+/// before process exit.
+async fn run_manager(app: tauri::AppHandle, mut requests: mpsc::UnboundedReceiver<ManagerMessage>) {
     let backend = AshpdBackend;
     let store = TauriStoreSettings::new(app);
     let mut session: Option<AshpdSession> = None;
 
-    while let Some(request) = requests.recv().await {
-        let result =
-            ensure_session_and_send_chord(&backend, &mut session, &store, request.chord).await;
-        let _ = request.reply.send(result);
+    while let Some(message) = requests.recv().await {
+        match message {
+            ManagerMessage::SendChord { chord, reply } => {
+                let result =
+                    ensure_session_and_send_chord(&backend, &mut session, &store, chord).await;
+                let _ = reply.send(result);
+            }
+            ManagerMessage::DropSession => {
+                session = None;
+            }
+        }
+    }
+}
+
+/// Drops the manager's live RemoteDesktop session (if any), so Kallilex
+/// never sits holding an open remote-input session it has decided not to
+/// use (spec-13 Slice A, called when the user switches input synthesis
+/// off). Deliberately never spawns the manager: a manager that was never
+/// created has no session to drop, so starting one here just to immediately
+/// idle it would be pure overhead with no observable effect. Send failure
+/// (the manager thread having died) is ignored — there's nothing left to
+/// clean up on this side either way.
+pub fn drop_session() {
+    if let Some(sender) = MANAGER.get() {
+        let _ = sender.send(ManagerMessage::DropSession);
     }
 }
 
@@ -457,7 +490,7 @@ pub fn send_chord(app: &tauri::AppHandle, chord: Chord) -> Result<(), String> {
     let (reply_tx, reply_rx) = std::sync::mpsc::channel();
 
     sender
-        .send(SessionRequest {
+        .send(ManagerMessage::SendChord {
             chord,
             reply: reply_tx,
         })

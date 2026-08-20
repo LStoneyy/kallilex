@@ -56,6 +56,27 @@ pub struct Settings {
     /// spec-12) so existing installs upgrade cleanly with no stored token.
     #[serde(default)]
     pub wayland_restore_token: Option<String>,
+    /// Whether Kallilex may synthesize keystrokes (Ctrl+C / Ctrl+V) through
+    /// the Wayland `RemoteDesktop` portal (spec-13 Slice A). Defaults to
+    /// `true` via [`default_input_synthesis_enabled`] rather than a bare
+    /// `#[serde(default)]` (which would be `false` for a `bool`): settings
+    /// persisted before spec-13 have no opinion on this field at all, and
+    /// the correct reading of "no opinion" is "keep today's behavior" —
+    /// Replace kept working before this setting existed, so it must keep
+    /// working after upgrading, not silently disappear because a missing
+    /// key defaulted to `false`. The flag is honored on Wayland sessions
+    /// **only**: on macOS and X11, synthetic input needs no portal
+    /// permission at all, so there is nothing to opt out of, and honoring
+    /// it there would let a Wayland-era choice quietly degrade an X11
+    /// session on the same machine (e.g. a laptop that runs both).
+    #[serde(default = "default_input_synthesis_enabled")]
+    pub input_synthesis_enabled: bool,
+}
+
+/// See [`Settings::input_synthesis_enabled`]'s doc comment for why this is a
+/// named helper rather than bare `#[serde(default)]`.
+fn default_input_synthesis_enabled() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -68,6 +89,7 @@ impl Default for Settings {
             accessibility_onboarding_shown: false,
             profiles: Vec::new(),
             wayland_restore_token: None,
+            input_synthesis_enabled: true,
         }
     }
 }
@@ -136,6 +158,7 @@ mod tests {
                 has_api_key: false,
             }],
             wayland_restore_token: Some("restore-token-abc".to_string()),
+            input_synthesis_enabled: false,
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -200,6 +223,13 @@ mod tests {
             get_settings(&store).unwrap().wayland_restore_token,
             Some("token-xyz".to_string())
         );
+
+        let with_input_synthesis_disabled = Settings {
+            input_synthesis_enabled: false,
+            ..with_restore_token.clone()
+        };
+        set_settings(&store, with_input_synthesis_disabled.clone()).unwrap();
+        assert!(!get_settings(&store).unwrap().input_synthesis_enabled);
     }
 
     #[test]
@@ -216,6 +246,23 @@ mod tests {
         let settings: Settings = serde_json::from_str(json).expect("should deserialize");
 
         assert_eq!(settings.wayland_restore_token, None);
+    }
+
+    #[test]
+    fn pre_spec_13_persisted_json_without_input_synthesis_enabled_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        assert!(settings.input_synthesis_enabled);
     }
 
     #[test]

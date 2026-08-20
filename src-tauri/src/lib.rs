@@ -331,6 +331,13 @@ pub fn run() {
             let settings_store = TauriStoreSettings::new(app.handle().clone());
             let current_settings = settings::get_settings(&settings_store).unwrap_or_default();
 
+            // spec-13 Slice A: apply the persisted input-synthesis opt-out
+            // before anything below consults `platform::platform_info()` (or
+            // any other reader of `wayland::input_synthesis_live()`), so the
+            // very first capability report already reflects the user's
+            // choice instead of the all-permissive process-wide default.
+            platform::set_input_synthesis_enabled(current_settings.input_synthesis_enabled);
+
             if platform::use_portal_global_shortcut() {
                 // The GlobalShortcuts portal is the sole owner of the
                 // "capture" trigger on this session: the tauri

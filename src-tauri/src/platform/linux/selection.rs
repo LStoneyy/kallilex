@@ -24,18 +24,20 @@ impl SelectionBackend for LinuxSelectionBackend {
     /// standard EWMH/ICCCM properties of that window; `None` on any X11
     /// protocol error. Wayland has no cross-client window query protocol at
     /// all, so the real identity can never be read there; instead, when
-    /// (and only when) the RemoteDesktop portal's input-synthesis
-    /// capability is live, this returns the documented
+    /// (and only when) input synthesis is live — the RemoteDesktop portal's
+    /// capability is present *and* the user hasn't switched it off in
+    /// Settings (spec-13 Slice A) — this returns the documented
     /// [`SourceApp::focus_return`] placeholder so replace-back stays
-    /// available (spec-12 Slice C). Without input synthesis there is
-    /// nothing useful replace-back could do with any source app identity
-    /// anyway, so this stays `None` (spec-11 behavior) and Replace stays
-    /// hidden.
+    /// available (spec-12 Slice C). Without live input synthesis, whether
+    /// because the compositor lacks the portal or because the user opted
+    /// out, there is nothing useful replace-back could do with any source
+    /// app identity anyway, so this stays `None` (spec-11 behavior) and
+    /// Replace stays hidden.
     fn frontmost_app(&self) -> Option<SourceApp> {
         match session::current() {
             SessionType::X11 => frontmost_app_x11().ok().flatten(),
             SessionType::Wayland => {
-                if wayland::capabilities().input_synthesis {
+                if wayland::input_synthesis_live() {
                     Some(SourceApp::focus_return())
                 } else {
                     None

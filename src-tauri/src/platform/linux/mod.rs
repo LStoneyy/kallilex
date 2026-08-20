@@ -113,15 +113,32 @@ pub fn position_popover(window: &tauri::WebviewWindow) {
 /// source app) needs either `_NET_ACTIVE_WINDOW` activation (X11) or the
 /// `RemoteDesktop` portal's input-synthesis capability (Wayland, spec-12).
 pub fn platform_info() -> crate::platform::PlatformInfo {
-    platform_info_for(session::current(), wayland::capabilities())
+    platform_info_for(
+        session::current(),
+        wayland::capabilities(),
+        wayland::user_input_synthesis_enabled(),
+    )
 }
 
-/// Pure session+capabilities → `PlatformInfo` mapping, kept separate from
-/// `platform_info` so the X11/Wayland branching can be unit-tested directly
-/// against injected values instead of the real session/portal state.
+/// Pure session+capabilities+user-choice → `PlatformInfo` mapping, kept
+/// separate from `platform_info` so the X11/Wayland branching can be
+/// unit-tested directly against injected values instead of the real
+/// session/portal/settings state.
+///
+/// `input_synthesis_enabled` is the user's spec-13 Slice A opt-out, passed
+/// in rather than read from global state so this stays a pure function.
+/// It's threaded into exactly one field, `replace_back_available` — Replace
+/// needs input synthesis to be both offered *and* wanted — while
+/// `wayland.input_synthesis` (inside `WaylandCapabilitiesInfo`) stays
+/// unaffected by it on purpose: `PlatformInfo.wayland` reports what the
+/// compositor *offers* (the probe result), and `replace_back_available`
+/// reports what is *actually usable*. Those are two different facts, and
+/// the frontend needs both to tell "your compositor lacks this" apart from
+/// "you switched this off" (see `waylandNoticeText` in `popover/App.svelte`).
 fn platform_info_for(
     session: SessionType,
     caps: WaylandCapabilities,
+    input_synthesis_enabled: bool,
 ) -> crate::platform::PlatformInfo {
     match session {
         SessionType::X11 => crate::platform::PlatformInfo {
@@ -135,7 +152,7 @@ fn platform_info_for(
         SessionType::Wayland => crate::platform::PlatformInfo {
             os: "linux",
             session: Some("wayland".to_string()),
-            replace_back_available: caps.input_synthesis,
+            replace_back_available: caps.input_synthesis && input_synthesis_enabled,
             permission_required: false,
             default_shortcut: crate::core::settings::default_shortcut().to_string(),
             wayland: Some(crate::platform::WaylandCapabilitiesInfo {
@@ -145,6 +162,17 @@ fn platform_info_for(
             }),
         },
     }
+}
+
+/// Updates the user's input-synthesis opt-out (spec-13 Slice A). Delegates
+/// straight to [`wayland::set_input_synthesis_enabled`], whose flag is only
+/// ever consulted from Wayland-only branches (`platform_info_for`'s
+/// `SessionType::Wayland` arm, and the `wayland::input_synthesis_live()`
+/// call sites in `keyboard.rs`/`activation.rs`/`selection.rs`) — that, not
+/// anything checked here, is what scopes the setting to Wayland sessions;
+/// on X11 this is stored but never read.
+pub fn set_input_synthesis_enabled(enabled: bool) {
+    wayland::set_input_synthesis_enabled(enabled);
 }
 
 /// Linux wants an explicit "Open Kallilex" tray-menu entry: SNI
@@ -223,7 +251,7 @@ mod tests {
 
     #[test]
     fn x11_has_replace_back_and_no_wayland_info() {
-        let info = platform_info_for(SessionType::X11, WaylandCapabilities::default());
+        let info = platform_info_for(SessionType::X11, WaylandCapabilities::default(), true);
 
         assert_eq!(info.session.as_deref(), Some("x11"));
         assert!(info.replace_back_available);
@@ -232,7 +260,7 @@ mod tests {
 
     #[test]
     fn wayland_with_no_capabilities_has_no_replace_back() {
-        let info = platform_info_for(SessionType::Wayland, WaylandCapabilities::default());
+        let info = platform_info_for(SessionType::Wayland, WaylandCapabilities::default(), true);
 
         assert_eq!(info.session.as_deref(), Some("wayland"));
         assert!(!info.replace_back_available);
@@ -252,7 +280,7 @@ mod tests {
             can_persist_session: false,
         };
 
-        let info = platform_info_for(SessionType::Wayland, caps);
+        let info = platform_info_for(SessionType::Wayland, caps, true);
 
         assert!(info.replace_back_available);
         let wayland = info
@@ -270,7 +298,7 @@ mod tests {
             can_persist_session: true,
         };
 
-        let info = platform_info_for(SessionType::Wayland, caps);
+        let info = platform_info_for(SessionType::Wayland, caps, true);
 
         let wayland = info
             .wayland
@@ -278,5 +306,26 @@ mod tests {
         assert!(wayland.global_shortcut);
         assert!(wayland.input_synthesis);
         assert!(wayland.can_persist_session);
+    }
+
+    #[test]
+    fn wayland_input_synthesis_disabled_by_user_hides_replace_but_not_the_capability_report() {
+        // spec-13 Slice A: `replace_back_available` reports what's actually
+        // usable (capability AND user choice); `wayland.input_synthesis`
+        // keeps reporting what the compositor offers, unaffected by the
+        // user's choice — the two answer different questions.
+        let caps = WaylandCapabilities {
+            global_shortcut: false,
+            input_synthesis: true,
+            can_persist_session: false,
+        };
+
+        let info = platform_info_for(SessionType::Wayland, caps, false);
+
+        assert!(!info.replace_back_available);
+        let wayland = info
+            .wayland
+            .expect("wayland info must be present on a Wayland session");
+        assert!(wayland.input_synthesis);
     }
 }

@@ -522,6 +522,13 @@ pub fn platform_info() -> crate::platform::PlatformInfo {
     }
 }
 
+/// No-op: macOS's synthetic ⌘C/⌘V (via `CGEvent`, see `send_cmd_key`) needs
+/// no grantable permission at all, so there is nothing on this platform for
+/// the spec-13 Slice A opt-out to actually gate. The setting is still
+/// persisted (cross-platform, in `Settings`) but never surfaced or
+/// consulted here.
+pub fn set_input_synthesis_enabled(_enabled: bool) {}
+
 /// macOS's menu bar already reliably delivers tray left-clicks, so no extra
 /// "Open Kallilex" menu entry is needed (spec-11 Slice B, Linux-only).
 pub fn wants_tray_open_entry() -> bool {

@@ -65,6 +65,7 @@ function defaultSettings(): Settings {
     accessibilityOnboardingShown: false,
     profiles: [],
     waylandRestoreToken: null,
+    inputSynthesisEnabled: true,
   };
 }
 
