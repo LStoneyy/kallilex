@@ -11,6 +11,7 @@ mod keyboard;
 mod selection;
 mod session;
 mod spellcheck;
+mod wayland;
 
 pub use activation::app_activator;
 pub use clipboard::LinuxClipboard;
@@ -19,6 +20,7 @@ pub use selection::selection_backend;
 pub use spellcheck::spell_checker;
 
 use session::SessionType;
+use wayland::WaylandCapabilities;
 
 /// Constructs the Linux `Clipboard`.
 pub fn clipboard() -> LinuxClipboard {
@@ -35,9 +37,19 @@ pub fn open_permission_settings() -> Result<(), String> {
     Ok(())
 }
 
-/// No-op on Linux: tray-only behavior is achieved simply by never showing a
-/// Dock-equivalent window, with no activation-policy API to call.
-pub fn setup(_app: &mut tauri::App) {}
+/// Tray-only behavior is achieved simply by never showing a Dock-equivalent
+/// window, with no activation-policy API to call — so on X11 this is still a
+/// no-op. On Wayland it also runs the read-only portal capability probe
+/// (spec-12 Slice A) once, synchronously, before the rest of startup
+/// consults `platform_info()`: this runs on Tauri's main-thread `setup` hook,
+/// not inside the tokio runtime, so blocking on the async probe here is
+/// safe and doesn't risk a nested-runtime panic.
+pub fn setup(_app: &mut tauri::App) {
+    if session::current() == SessionType::Wayland {
+        let caps = tauri::async_runtime::block_on(wayland::probe());
+        wayland::init(caps);
+    }
+}
 
 /// Positions the popover at the current cursor position, clamped to the
 /// current monitor's work area so it always stays fully on-screen — Linux
@@ -81,18 +93,40 @@ pub fn position_popover(window: &tauri::WebviewWindow) {
 }
 
 /// Linux platform metadata: session-aware. Replace (write-back into the
-/// source app) needs `_NET_ACTIVE_WINDOW` activation, which is X11-only.
+/// source app) needs either `_NET_ACTIVE_WINDOW` activation (X11) or the
+/// `RemoteDesktop` portal's input-synthesis capability (Wayland, spec-12).
 pub fn platform_info() -> crate::platform::PlatformInfo {
-    let session = session::current();
-    crate::platform::PlatformInfo {
-        os: "linux",
-        session: Some(match session {
-            SessionType::X11 => "x11".to_string(),
-            SessionType::Wayland => "wayland".to_string(),
-        }),
-        replace_back_available: session == SessionType::X11,
-        permission_required: false,
-        default_shortcut: crate::core::settings::default_shortcut().to_string(),
+    platform_info_for(session::current(), wayland::capabilities())
+}
+
+/// Pure session+capabilities → `PlatformInfo` mapping, kept separate from
+/// `platform_info` so the X11/Wayland branching can be unit-tested directly
+/// against injected values instead of the real session/portal state.
+fn platform_info_for(
+    session: SessionType,
+    caps: WaylandCapabilities,
+) -> crate::platform::PlatformInfo {
+    match session {
+        SessionType::X11 => crate::platform::PlatformInfo {
+            os: "linux",
+            session: Some("x11".to_string()),
+            replace_back_available: true,
+            permission_required: false,
+            default_shortcut: crate::core::settings::default_shortcut().to_string(),
+            wayland: None,
+        },
+        SessionType::Wayland => crate::platform::PlatformInfo {
+            os: "linux",
+            session: Some("wayland".to_string()),
+            replace_back_available: caps.input_synthesis,
+            permission_required: false,
+            default_shortcut: crate::core::settings::default_shortcut().to_string(),
+            wayland: Some(crate::platform::WaylandCapabilitiesInfo {
+                global_shortcut: caps.global_shortcut,
+                input_synthesis: caps.input_synthesis,
+                can_persist_session: caps.can_persist_session,
+            }),
+        },
     }
 }
 
@@ -136,4 +170,62 @@ pub fn tray_icon_bytes() -> &'static [u8] {
 /// passed as `false` for clarity.
 pub fn tray_icon_as_template() -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn x11_has_replace_back_and_no_wayland_info() {
+        let info = platform_info_for(SessionType::X11, WaylandCapabilities::default());
+
+        assert_eq!(info.session.as_deref(), Some("x11"));
+        assert!(info.replace_back_available);
+        assert!(info.wayland.is_none());
+    }
+
+    #[test]
+    fn wayland_with_no_capabilities_has_no_replace_back() {
+        let info = platform_info_for(SessionType::Wayland, WaylandCapabilities::default());
+
+        assert_eq!(info.session.as_deref(), Some("wayland"));
+        assert!(!info.replace_back_available);
+        let wayland = info.wayland.expect("wayland info must be present on a Wayland session");
+        assert!(!wayland.global_shortcut);
+        assert!(!wayland.input_synthesis);
+        assert!(!wayland.can_persist_session);
+    }
+
+    #[test]
+    fn wayland_with_input_synthesis_enables_replace_back() {
+        let caps = WaylandCapabilities {
+            global_shortcut: false,
+            input_synthesis: true,
+            can_persist_session: false,
+        };
+
+        let info = platform_info_for(SessionType::Wayland, caps);
+
+        assert!(info.replace_back_available);
+        let wayland = info.wayland.expect("wayland info must be present on a Wayland session");
+        assert!(wayland.input_synthesis);
+        assert!(!wayland.global_shortcut);
+    }
+
+    #[test]
+    fn wayland_capabilities_pass_through_can_persist_session() {
+        let caps = WaylandCapabilities {
+            global_shortcut: true,
+            input_synthesis: true,
+            can_persist_session: true,
+        };
+
+        let info = platform_info_for(SessionType::Wayland, caps);
+
+        let wayland = info.wayland.expect("wayland info must be present on a Wayland session");
+        assert!(wayland.global_shortcut);
+        assert!(wayland.input_synthesis);
+        assert!(wayland.can_persist_session);
+    }
 }

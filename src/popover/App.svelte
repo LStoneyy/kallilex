@@ -289,11 +289,25 @@
   // loading, so nothing flashes away on platforms where it ends up
   // available (macOS today).
   const showReplace = $derived(platformInfo === null || platformInfo.replaceBackAvailable);
-  // Wayland can't support the global shortcut or automatic replace-back at
-  // all (no cross-app selection/injection APIs) — this is a plain factual
-  // notice, not an error state, so it renders unconditionally rather than
-  // behind any dismiss/error affordance.
-  const showWaylandNotice = $derived(platformInfo?.session === "wayland");
+  // Wayland's global shortcut and automatic replace-back availability
+  // depend on which XDG portals the running compositor implements (spec-12)
+  // — this is a plain factual notice about what's missing, not an error
+  // state, so it renders unconditionally (when anything is missing) rather
+  // than behind any dismiss/error affordance.
+  const waylandNoticeText = $derived.by(() => {
+    if (platformInfo?.session !== "wayland") return null;
+    const wayland = platformInfo.wayland;
+    const hasGlobalShortcut = wayland?.globalShortcut ?? false;
+    const hasInputSynthesis = wayland?.inputSynthesis ?? false;
+    if (hasGlobalShortcut && hasInputSynthesis) return null;
+    if (!hasGlobalShortcut && !hasInputSynthesis) {
+      return "Wayland session: your compositor doesn't offer the GlobalShortcuts or RemoteDesktop portals — open Kallilex from the tray to capture, and copy results manually.";
+    }
+    if (!hasGlobalShortcut) {
+      return "Wayland session: your compositor doesn't offer the GlobalShortcuts portal — open Kallilex from the tray to capture your selection.";
+    }
+    return "Wayland session: your compositor doesn't offer the RemoteDesktop portal — automatic replace is unavailable; copy the result instead.";
+  });
   const canCopy = $derived(text.trim() !== "" && !busy);
   const canRunAction = $derived(text.trim() !== "" && !busy && actionContext !== null);
 
@@ -663,11 +677,8 @@
     </div>
   {/if}
 
-  {#if showWaylandNotice}
-    <p class="wayland-notice">
-      Wayland session: global shortcut and automatic replace are unavailable — open Kallilex from
-      the tray to capture your selection.
-    </p>
+  {#if waylandNoticeText}
+    <p class="wayland-notice">{waylandNoticeText}</p>
   {/if}
 
   <div class="result-row">

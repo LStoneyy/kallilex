@@ -86,6 +86,7 @@ function defaultSettings(): Settings {
     popoverPinned: false,
     accessibilityOnboardingShown: false,
     profiles: [],
+    waylandRestoreToken: null,
   };
 }
 
@@ -100,11 +101,16 @@ function macosPlatformInfo(): PlatformInfo {
     replaceBackAvailable: true,
     permissionRequired: true,
     defaultShortcut: "Alt+Cmd+K",
+    wayland: null,
   };
 }
 
-const waylandNoticeText =
-  "Wayland session: global shortcut and automatic replace are unavailable — open Kallilex from the tray to capture your selection.";
+const waylandNoticeNoCapabilitiesText =
+  "Wayland session: your compositor doesn't offer the GlobalShortcuts or RemoteDesktop portals — open Kallilex from the tray to capture, and copy results manually.";
+const waylandNoticeNoGlobalShortcutText =
+  "Wayland session: your compositor doesn't offer the GlobalShortcuts portal — open Kallilex from the tray to capture your selection.";
+const waylandNoticeNoInputSynthesisText =
+  "Wayland session: your compositor doesn't offer the RemoteDesktop portal — automatic replace is unavailable; copy the result instead.";
 
 const misspelledText = "I halp you";
 const halpMisspelling: Misspelling = {
@@ -1237,25 +1243,75 @@ describe("popover App", () => {
     });
   });
 
-  it("shows the Wayland degraded-mode notice when the platform session is wayland", async () => {
+  it("shows no Wayland notice when the compositor offers both portals", async () => {
     getPlatformInfo.mockResolvedValue({
       ...macosPlatformInfo(),
       os: "linux",
       session: "wayland",
-      replaceBackAvailable: false,
+      replaceBackAvailable: true,
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: false },
     });
 
-    render(App);
-
-    expect(await screen.findByText(waylandNoticeText)).toBeInTheDocument();
-  });
-
-  it("does not show the Wayland notice on the default (macOS) platform info", async () => {
     render(App);
 
     await waitFor(() => {
       expect(getPlatformInfo).toHaveBeenCalled();
     });
-    expect(screen.queryByText(waylandNoticeText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoGlobalShortcutText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
+  });
+
+  it("shows the combined notice when the compositor offers neither portal", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: false,
+      wayland: { globalShortcut: false, inputSynthesis: false, canPersistSession: false },
+    });
+
+    render(App);
+
+    expect(await screen.findByText(waylandNoticeNoCapabilitiesText)).toBeInTheDocument();
+  });
+
+  it("shows the GlobalShortcuts-missing notice when only the shortcut portal is unavailable", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: true,
+      wayland: { globalShortcut: false, inputSynthesis: true, canPersistSession: false },
+    });
+
+    render(App);
+
+    expect(await screen.findByText(waylandNoticeNoGlobalShortcutText)).toBeInTheDocument();
+  });
+
+  it("shows the RemoteDesktop-missing notice when only the replace portal is unavailable", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: false,
+      wayland: { globalShortcut: true, inputSynthesis: false, canPersistSession: false },
+    });
+
+    render(App);
+
+    expect(await screen.findByText(waylandNoticeNoInputSynthesisText)).toBeInTheDocument();
+  });
+
+  it("does not show any Wayland notice on the default (macOS) platform info", async () => {
+    render(App);
+
+    await waitFor(() => {
+      expect(getPlatformInfo).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoGlobalShortcutText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
   });
 });

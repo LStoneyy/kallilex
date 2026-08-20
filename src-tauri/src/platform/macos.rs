@@ -509,6 +509,7 @@ pub fn platform_info() -> crate::platform::PlatformInfo {
         replace_back_available: true,
         permission_required: true,
         default_shortcut: crate::core::settings::default_shortcut().to_string(),
+        wayland: None,
     }
 }
 

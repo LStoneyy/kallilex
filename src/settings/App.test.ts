@@ -61,6 +61,7 @@ function defaultSettings(): Settings {
     popoverPinned: false,
     accessibilityOnboardingShown: false,
     profiles: [],
+    waylandRestoreToken: null,
   };
 }
 
@@ -80,6 +81,7 @@ function macosPlatformInfo(): PlatformInfo {
     replaceBackAvailable: true,
     permissionRequired: true,
     defaultShortcut: "Alt+Cmd+K",
+    wayland: null,
   };
 }
 
@@ -406,23 +408,47 @@ describe("settings App", () => {
     expect(accessibilityStatus).not.toHaveBeenCalled();
   });
 
-  it("shows the Wayland degraded-mode explanation on the accessibility tab when the session is wayland", async () => {
+  it("shows both Wayland capability rows as unavailable when the compositor offers neither portal", async () => {
     getPlatformInfo.mockResolvedValue({
       ...macosPlatformInfo(),
       os: "linux",
       permissionRequired: false,
       session: "wayland",
+      wayland: { globalShortcut: false, inputSynthesis: false, canPersistSession: false },
     });
 
     render(App);
     await openAccessibilityTab();
 
     expect(
-      await screen.findByText(/global shortcut and automatic replace-back aren't available/),
+      await screen.findByText(
+        /Unavailable — your compositor doesn't offer the GlobalShortcuts portal/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Unavailable — your compositor doesn't offer the RemoteDesktop portal/),
     ).toBeInTheDocument();
   });
 
-  it("does not show the Wayland explanation on an x11 session", async () => {
+  it("shows both Wayland capability rows as available when the compositor offers both portals", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: true },
+    });
+
+    render(App);
+    await openAccessibilityTab();
+
+    expect(
+      await screen.findByText(/Managed by your system \(GlobalShortcuts portal\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Available \(RemoteDesktop portal\)/)).toBeInTheDocument();
+  });
+
+  it("does not show the Wayland capability list on an x11 session", async () => {
     getPlatformInfo.mockResolvedValue({
       ...macosPlatformInfo(),
       os: "linux",
@@ -435,7 +461,7 @@ describe("settings App", () => {
 
     await screen.findByText("No system permission is needed to capture selections on this platform.");
     expect(
-      screen.queryByText(/global shortcut and automatic replace-back aren't available/),
+      screen.queryByText(/Wayland capabilities \(detected via your desktop's XDG portals\)/),
     ).not.toBeInTheDocument();
   });
 });

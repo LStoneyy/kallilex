@@ -46,6 +46,16 @@ pub struct Settings {
     /// upgrade cleanly with no profiles configured.
     #[serde(default)]
     pub profiles: Vec<ProviderProfile>,
+    /// An XDG `RemoteDesktop` portal *session restore token* (spec-12), not
+    /// a credential: storing it in the Tauri Store is correct because it
+    /// only lets this app skip re-prompting the user for the
+    /// input-synthesis permission on future launches, and the compositor
+    /// can revoke it at any time (in which case the next session request
+    /// simply re-prompts, same as never having had a token). Defaults to
+    /// `None` (and to `None` when absent from settings persisted before
+    /// spec-12) so existing installs upgrade cleanly with no stored token.
+    #[serde(default)]
+    pub wayland_restore_token: Option<String>,
 }
 
 impl Default for Settings {
@@ -57,6 +67,7 @@ impl Default for Settings {
             popover_pinned: false,
             accessibility_onboarding_shown: false,
             profiles: Vec::new(),
+            wayland_restore_token: None,
         }
     }
 }
@@ -124,6 +135,7 @@ mod tests {
                 enabled: true,
                 has_api_key: false,
             }],
+            wayland_restore_token: Some("restore-token-abc".to_string()),
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -178,6 +190,32 @@ mod tests {
         };
         set_settings(&store, with_onboarding_shown.clone()).unwrap();
         assert!(get_settings(&store).unwrap().accessibility_onboarding_shown);
+
+        let with_restore_token = Settings {
+            wayland_restore_token: Some("token-xyz".to_string()),
+            ..with_onboarding_shown.clone()
+        };
+        set_settings(&store, with_restore_token.clone()).unwrap();
+        assert_eq!(
+            get_settings(&store).unwrap().wayland_restore_token,
+            Some("token-xyz".to_string())
+        );
+    }
+
+    #[test]
+    fn pre_spec_12_persisted_json_without_wayland_restore_token_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": []
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        assert_eq!(settings.wayland_restore_token, None);
     }
 
     #[test]

@@ -9,6 +9,7 @@ export interface Settings {
   popoverPinned: boolean;
   accessibilityOnboardingShown: boolean;
   profiles: ProviderProfile[];
+  waylandRestoreToken: string | null;
 }
 
 /**
@@ -138,6 +139,16 @@ export interface Preset {
 }
 
 /**
+ * Mirrors `WaylandCapabilitiesInfo` in `src-tauri/src/platform/mod.rs`:
+ * XDG-portal capabilities detected for the current Wayland compositor.
+ */
+export interface WaylandCapabilities {
+  globalShortcut: boolean;
+  inputSynthesis: boolean;
+  canPersistSession: boolean;
+}
+
+/**
  * Mirrors `PlatformInfo` in `src-tauri/src/platform/mod.rs`: platform
  * metadata surfaced to the frontend by the `get_platform_info` command.
  */
@@ -147,4 +158,5 @@ export interface PlatformInfo {
   replaceBackAvailable: boolean;
   permissionRequired: boolean;
   defaultShortcut: string;
+  wayland: WaylandCapabilities | null;
 }

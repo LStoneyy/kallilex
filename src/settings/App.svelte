@@ -576,11 +576,24 @@
             No system permission is needed to capture selections on this platform.
           </p>
           {#if platformInfo?.session === "wayland"}
+            <p class="hint">Wayland capabilities (detected via your desktop's XDG portals):</p>
             <p>
-              On Wayland, Kallilex captures your selection through "Open Kallilex" in the tray
-              menu rather than the global shortcut — click it to pull in whatever's currently
-              selected, then copy the result where you need it. The global shortcut and automatic
-              replace-back aren't available under Wayland; X11 sessions support the full flow.
+              <strong>Global shortcut:</strong>
+              {#if platformInfo.wayland?.globalShortcut}
+                Managed by your system (GlobalShortcuts portal).
+              {:else}
+                Unavailable — your compositor doesn't offer the GlobalShortcuts portal. Use "Open
+                Kallilex" in the tray menu to capture.
+              {/if}
+            </p>
+            <p>
+              <strong>Replace:</strong>
+              {#if platformInfo.wayland?.inputSynthesis}
+                Available (RemoteDesktop portal).
+              {:else}
+                Unavailable — your compositor doesn't offer the RemoteDesktop portal. Results can
+                still be copied.
+              {/if}
             </p>
           {/if}
         {/if}

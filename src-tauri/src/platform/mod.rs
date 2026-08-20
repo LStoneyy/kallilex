@@ -44,4 +44,21 @@ pub struct PlatformInfo {
     pub permission_required: bool,
     /// The platform's default global shortcut, for UI labels/placeholders.
     pub default_shortcut: String,
+    /// XDG-portal capability probe results (spec-12). `None` on macOS and on
+    /// X11 sessions, where portals aren't consulted at all; `Some` on
+    /// Wayland sessions, reflecting whatever the running compositor's
+    /// desktop portal backend actually implements.
+    pub wayland: Option<WaylandCapabilitiesInfo>,
+}
+
+/// Wayland-portal-backed capabilities surfaced to the frontend, mirroring
+/// `platform::linux::wayland::WaylandCapabilities` for the parts the UI
+/// needs to know about (see that type for what each flag means and how it's
+/// probed).
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaylandCapabilitiesInfo {
+    pub global_shortcut: bool,
+    pub input_synthesis: bool,
+    pub can_persist_session: bool,
 }
