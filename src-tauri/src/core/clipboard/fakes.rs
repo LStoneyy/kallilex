@@ -107,6 +107,7 @@ impl Clipboard for FakeClipboard {
     }
 
     fn wait_for_change(&self, prev: u64, _timeout: Duration) -> bool {
+        self.log.record("wait_for_change");
         // The fake is fully synchronous: by the time capture() calls this,
         // a landed FakeKeyboard::send_copy() has already bumped the count.
         self.change_count() != prev

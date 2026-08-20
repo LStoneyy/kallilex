@@ -511,3 +511,23 @@ pub fn platform_info() -> crate::platform::PlatformInfo {
         default_shortcut: crate::core::settings::default_shortcut().to_string(),
     }
 }
+
+/// macOS's menu bar already reliably delivers tray left-clicks, so no extra
+/// "Open Kallilex" menu entry is needed (spec-11 Slice B, Linux-only).
+pub fn wants_tray_open_entry() -> bool {
+    false
+}
+
+/// macOS always has a working Accessibility-backed synthetic-copy fallback,
+/// so opening the popover never needs to eagerly trigger a capture
+/// (spec-11 Slice B, Linux Wayland-only).
+pub fn tray_open_captures() -> bool {
+    false
+}
+
+/// macOS's global shortcut registration is expected to succeed (or fail for
+/// a genuine, worth-reporting reason), unlike Linux Wayland's compositor-
+/// dependent support (spec-11 Slice B, Linux-only).
+pub fn global_shortcut_failure_expected() -> bool {
+    false
+}

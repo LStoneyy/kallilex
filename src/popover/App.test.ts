@@ -103,6 +103,9 @@ function macosPlatformInfo(): PlatformInfo {
   };
 }
 
+const waylandNoticeText =
+  "Wayland session: global shortcut and automatic replace are unavailable — open Kallilex from the tray to capture your selection.";
+
 const misspelledText = "I halp you";
 const halpMisspelling: Misspelling = {
   start: 2,
@@ -1232,5 +1235,27 @@ describe("popover App", () => {
     await waitFor(() => {
       expect(screen.queryByLabelText("Working…")).not.toBeInTheDocument();
     });
+  });
+
+  it("shows the Wayland degraded-mode notice when the platform session is wayland", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: false,
+    });
+
+    render(App);
+
+    expect(await screen.findByText(waylandNoticeText)).toBeInTheDocument();
+  });
+
+  it("does not show the Wayland notice on the default (macOS) platform info", async () => {
+    render(App);
+
+    await waitFor(() => {
+      expect(getPlatformInfo).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(waylandNoticeText)).not.toBeInTheDocument();
   });
 });

@@ -72,8 +72,9 @@ pub trait SelectionBackend: Send + Sync {
     fn ax_selected_text(&self) -> Option<String>;
 }
 
-/// Orchestrates a single capture: the Accessibility API primary path, then
-/// an automatic clipboard fallback, then an empty result with a reason.
+/// Orchestrates a single capture: the Accessibility API primary path (on
+/// Linux: the primary-selection read), then an automatic clipboard
+/// fallback, then an empty result with a reason.
 ///
 /// Always starts by resolving any unresolved backup left pending by a prior
 /// capture (`lifecycle.restore_pending`), returning the clipboard to its
@@ -85,6 +86,14 @@ pub trait SelectionBackend: Send + Sync {
 ///
 /// The source app is always recorded on the result (when available),
 /// regardless of which path — or neither — produced text.
+///
+/// If `keyboard.send_copy()` itself fails (e.g. Linux Wayland, where
+/// synthetic key events are unavailable), the just-taken backup is restored
+/// immediately and the result is `NoSelection` without ever calling
+/// `wait_for_change` — there is nothing to wait for a copy that was never
+/// sent, and waiting out `FALLBACK_SETTLE_TIMEOUT` anyway would only add a
+/// pointless delay. This is what makes the fallback path fully inert on
+/// Wayland: no synthetic copy is attempted, and no fallback wait happens.
 pub fn capture(
     backend: &dyn SelectionBackend,
     clipboard: &dyn Clipboard,
@@ -121,7 +130,19 @@ pub fn capture(
     let backup = clipboard.backup();
     lifecycle.store(backup);
     let prev = clipboard.change_count();
-    let _ = keyboard.send_copy();
+
+    if keyboard.send_copy().is_err() {
+        // No synthetic copy was actually sent (e.g. unavailable on
+        // Wayland): resolve the backup immediately instead of waiting out
+        // `FALLBACK_SETTLE_TIMEOUT` for a change that can never land.
+        lifecycle.restore_pending(clipboard);
+        return CaptureResult {
+            text: String::new(),
+            reason: Some(CaptureFailureReason::NoSelection),
+            source_app,
+        };
+    }
+
     let changed = clipboard.wait_for_change(prev, FALLBACK_SETTLE_TIMEOUT);
 
     if changed {
@@ -231,8 +252,33 @@ mod tests {
 
         assert_eq!(result.text, "fallback text");
         assert_eq!(result.reason, None);
-        assert_eq!(log.calls(), vec!["backup", "send_copy", "read_text"]);
+        assert_eq!(
+            log.calls(),
+            vec!["backup", "send_copy", "wait_for_change", "read_text"]
+        );
         assert!(lifecycle.has_pending());
+    }
+
+    #[test]
+    fn send_copy_failure_restores_immediately_without_waiting_for_a_change() {
+        // Mirrors Linux Wayland: `send_copy` fails outright (key synthesis
+        // is unavailable), so there is nothing to wait for — `capture` must
+        // resolve the pending backup and report `NoSelection` without ever
+        // calling `wait_for_change`.
+        let backend = FakeSelectionBackend::granted(None);
+        let log = CallLog::new();
+        let clipboard = FakeClipboard::with_text(log.clone(), "original");
+        let keyboard = FakeKeyboard::failing(log.clone());
+        let lifecycle = BackupLifecycle::new();
+
+        let result = capture(&backend, &clipboard, &keyboard, &lifecycle);
+
+        assert_eq!(result.text, "");
+        assert_eq!(result.reason, Some(CaptureFailureReason::NoSelection));
+        assert_eq!(log.calls(), vec!["backup", "send_copy", "restore"]);
+        assert!(!log.calls().contains(&"wait_for_change"));
+        assert_eq!(clipboard.current_text(), Some("original".to_string()));
+        assert!(!lifecycle.has_pending());
     }
 
     #[test]

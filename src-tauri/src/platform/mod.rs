@@ -13,13 +13,15 @@ mod linux;
 
 #[cfg(target_os = "macos")]
 pub use macos::{
-    app_activator, clipboard, keyboard, open_permission_settings, platform_info,
-    position_popover, selection_backend, setup, spell_checker,
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
+    open_permission_settings, platform_info, position_popover, selection_backend, setup,
+    spell_checker, tray_open_captures, wants_tray_open_entry,
 };
 #[cfg(target_os = "linux")]
 pub use linux::{
-    app_activator, clipboard, keyboard, open_permission_settings, platform_info,
-    position_popover, selection_backend, setup, spell_checker,
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
+    open_permission_settings, platform_info, position_popover, selection_backend, setup,
+    spell_checker, tray_open_captures, wants_tray_open_entry,
 };
 
 /// Platform metadata surfaced to the frontend via the `get_platform_info`

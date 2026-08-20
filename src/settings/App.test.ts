@@ -405,4 +405,37 @@ describe("settings App", () => {
     expect(screen.queryByRole("button", { name: "Open System Settings" })).not.toBeInTheDocument();
     expect(accessibilityStatus).not.toHaveBeenCalled();
   });
+
+  it("shows the Wayland degraded-mode explanation on the accessibility tab when the session is wayland", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+    });
+
+    render(App);
+    await openAccessibilityTab();
+
+    expect(
+      await screen.findByText(/global shortcut and automatic replace-back aren't available/),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the Wayland explanation on an x11 session", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "x11",
+    });
+
+    render(App);
+    await openAccessibilityTab();
+
+    await screen.findByText("No system permission is needed to capture selections on this platform.");
+    expect(
+      screen.queryByText(/global shortcut and automatic replace-back aren't available/),
+    ).not.toBeInTheDocument();
+  });
 });

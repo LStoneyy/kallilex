@@ -19,6 +19,7 @@ use crate::core::clipboard::BackupLifecycle;
 use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::{POPOVER_WINDOW_LABEL, SETTINGS_WINDOW_LABEL};
 
+const OPEN_MENU_ID: &str = "open";
 const SETTINGS_MENU_ID: &str = "settings";
 const QUIT_MENU_ID: &str = "quit";
 
@@ -125,10 +126,25 @@ pub(crate) fn hide_popover(app: &tauri::AppHandle) {
     }
 }
 
+/// Opens the popover the way a tray interaction should: on platforms/
+/// sessions where `platform::tray_open_captures()` is true (Linux Wayland,
+/// which has no synthetic-copy fallback to fall back on later), this
+/// immediately runs the capture flow instead of just showing an empty
+/// popover — mirroring what the global shortcut does. Elsewhere, it's a
+/// plain `show_popover`. Shared by the tray left-click toggle (when
+/// toggling *open*) and the "Open Kallilex" tray-menu entry.
+fn open_popover_from_tray(app: &tauri::AppHandle) {
+    if platform::tray_open_captures() {
+        trigger_capture(app);
+    } else {
+        show_popover(app);
+    }
+}
+
 fn toggle_popover(app: &tauri::AppHandle) {
     match app.get_webview_window(POPOVER_WINDOW_LABEL) {
         Some(window) if window.is_visible().unwrap_or(false) => hide_popover(app),
-        _ => show_popover(app),
+        _ => open_popover_from_tray(app),
     }
 }
 
@@ -315,13 +331,20 @@ pub fn run() {
 
             let shortcut = resolve_shortcut(app.handle(), &current_settings);
             if let Err(err) = app.global_shortcut().register(shortcut) {
-                show_error_dialog(
-                    app.handle(),
-                    format!(
-                        "Kallilex couldn't register the global shortcut ({err}). \
-                         You can still open Kallilex from the tray icon."
-                    ),
-                );
+                // Registration is still attempted above regardless; on
+                // platforms/sessions where failure is expected (Linux
+                // Wayland has no portal-backed global shortcuts wired up
+                // yet), skip the dialog — the frontend surfaces a one-line
+                // notice instead, so this isn't silent, just not a popup.
+                if !platform::global_shortcut_failure_expected() {
+                    show_error_dialog(
+                        app.handle(),
+                        format!(
+                            "Kallilex couldn't register the global shortcut ({err}). \
+                             You can still open Kallilex from the tray icon."
+                        ),
+                    );
+                }
             }
 
             // First-run permission onboarding: if the platform requires a
@@ -346,6 +369,13 @@ pub fn run() {
                 }
             }
 
+            // SNI trays are menu-oriented and may not deliver left-click
+            // events at all, so platforms that want it (Linux) get an
+            // explicit "Open Kallilex" entry as the first item, guaranteeing
+            // the popover is always reachable from the tray menu.
+            let open_item = platform::wants_tray_open_entry()
+                .then(|| MenuItem::with_id(app, OPEN_MENU_ID, "Open Kallilex", true, None::<&str>))
+                .transpose()?;
             let settings_item =
                 MenuItem::with_id(app, SETTINGS_MENU_ID, "Settings", true, None::<&str>)?;
             let about_metadata = AboutMetadataBuilder::new()
@@ -359,8 +389,16 @@ pub fn run() {
             let separator = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, QUIT_MENU_ID, "Quit", true, None::<&str>)?;
 
-            let tray_menu =
-                Menu::with_items(app, &[&settings_item, &about_item, &separator, &quit_item])?;
+            let mut menu_items: Vec<&dyn tauri::menu::IsMenuItem<_>> = Vec::new();
+            if let Some(open_item) = open_item.as_ref() {
+                menu_items.push(open_item);
+            }
+            menu_items.push(&settings_item);
+            menu_items.push(&about_item);
+            menu_items.push(&separator);
+            menu_items.push(&quit_item);
+
+            let tray_menu = Menu::with_items(app, &menu_items)?;
 
             TrayIconBuilder::new()
                 // Only the @2x raster is embedded: tray-icon builds a single
@@ -374,6 +412,7 @@ pub fn run() {
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
+                    OPEN_MENU_ID => open_popover_from_tray(app),
                     SETTINGS_MENU_ID => show_settings(app),
                     QUIT_MENU_ID => app.exit(0),
                     _ => {}

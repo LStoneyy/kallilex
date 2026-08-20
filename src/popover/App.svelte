@@ -289,6 +289,11 @@
   // loading, so nothing flashes away on platforms where it ends up
   // available (macOS today).
   const showReplace = $derived(platformInfo === null || platformInfo.replaceBackAvailable);
+  // Wayland can't support the global shortcut or automatic replace-back at
+  // all (no cross-app selection/injection APIs) — this is a plain factual
+  // notice, not an error state, so it renders unconditionally rather than
+  // behind any dismiss/error affordance.
+  const showWaylandNotice = $derived(platformInfo?.session === "wayland");
   const canCopy = $derived(text.trim() !== "" && !busy);
   const canRunAction = $derived(text.trim() !== "" && !busy && actionContext !== null);
 
@@ -656,6 +661,13 @@
         Cancel
       </button>
     </div>
+  {/if}
+
+  {#if showWaylandNotice}
+    <p class="wayland-notice">
+      Wayland session: global shortcut and automatic replace are unavailable — open Kallilex from
+      the tray to capture your selection.
+    </p>
   {/if}
 
   <div class="result-row">
@@ -1039,6 +1051,13 @@
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  .wayland-notice {
+    margin: 0;
+    color: var(--color-ash);
+    font-size: 11px;
+    line-height: 1.4;
   }
 
   .result-row {

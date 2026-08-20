@@ -575,6 +575,14 @@
           <p>
             No system permission is needed to capture selections on this platform.
           </p>
+          {#if platformInfo?.session === "wayland"}
+            <p>
+              On Wayland, Kallilex captures your selection through "Open Kallilex" in the tray
+              menu rather than the global shortcut — click it to pull in whatever's currently
+              selected, then copy the result where you need it. The global shortcut and automatic
+              replace-back aren't available under Wayland; X11 sessions support the full flow.
+            </p>
+          {/if}
         {/if}
       </section>
     {/if}

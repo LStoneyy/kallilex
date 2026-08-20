@@ -1,0 +1,3 @@
+# Minimal handmade Hunspell affix file for spec-11 Slice B unit tests.
+# Deliberately tiny: no affix rules, just enough for spellbook to parse an
+# empty rule set and treat the paired .dic file's word list as-is.
