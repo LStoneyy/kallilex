@@ -152,7 +152,45 @@ pub(crate) fn show_settings(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
         let _ = window.show();
         let _ = window.set_focus();
+        resync_frame_extents(&window);
     }
+}
+
+/// Works around a GTK client-side-decoration bug that leaves the Settings
+/// window's title-bar buttons unclickable on GNOME Wayland.
+///
+/// The window is created hidden and shown on demand. On its first map, GTK
+/// reports the shadow-inclusive rectangle (652x499 for a 600x400 window,
+/// i.e. 26px of invisible CSD shadow per side and 23px on top) while the
+/// visible frame is drawn inset by exactly that margin. The result is that
+/// the title bar's input regions sit ~26px off from where the buttons are
+/// painted: clicking Minimise or Close lands on the draggable strip instead
+/// and does nothing, while a *double* click still hits that strip and
+/// maximises. Only a real allocation change re-syncs the two — measured on
+/// GNOME 50 / Ubuntu, where the window then reports 600x447 (shadows gone)
+/// and every button responds.
+///
+/// So this reproduces, deliberately and briefly, the one sequence proven to
+/// fix it: maximise, then restore. The 60ms lead-in lets the initial map
+/// settle first; without it the cycle races the mapping and has no effect.
+/// It is a workaround for a toolkit-level defect, not a design choice — if a
+/// future GTK/tao release fixes the frame-extents handling, this whole
+/// function should go.
+///
+/// Skipped when the window is already maximised: there are no CSD shadows in
+/// that state (so nothing to re-sync), and cycling would throw away a
+/// maximised window the user chose.
+fn resync_frame_extents(window: &tauri::WebviewWindow) {
+    if window.is_maximized().unwrap_or(false) {
+        return;
+    }
+    let window = window.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let _ = window.maximize();
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let _ = window.unmaximize();
+    });
 }
 
 /// Restores any pending clipboard backup and clears the stored capture
