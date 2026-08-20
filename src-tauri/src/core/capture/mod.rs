@@ -45,6 +45,8 @@ impl SourceApp {
     /// window" question is answered later, implicitly, by the Wayland
     /// `AppActivator` hiding the popover so the compositor returns focus to
     /// whatever previously had it.
+    /// Only called from the Linux backend; dead code on other targets.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub fn focus_return() -> Self {
         Self {
             bundle_id: None,
