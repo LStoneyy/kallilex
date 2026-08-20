@@ -11,6 +11,11 @@ use crate::core::clipboard::{BackupLifecycle, Clipboard, Keyboard};
 /// clipboard before giving up.
 const FALLBACK_SETTLE_TIMEOUT: Duration = Duration::from_millis(300);
 
+/// Opaque platform window identifier (X11 window id on Linux). Never sent to
+/// the frontend.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlatformWindowId(pub u64);
+
 /// The application the selection was captured from, remembered for
 /// replace-back and focus restoration (spec-04).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -19,6 +24,11 @@ pub struct SourceApp {
     pub bundle_id: Option<String>,
     pub pid: i32,
     pub name: Option<String>,
+    /// Opaque platform window handle (Slice B: Linux window activation).
+    /// Never serialized to the frontend; macOS never sets it (activation is
+    /// by pid).
+    #[serde(skip)]
+    pub window: Option<PlatformWindowId>,
 }
 
 /// Why `capture()` produced empty text.
@@ -187,6 +197,7 @@ mod tests {
             bundle_id: Some("com.example.app".to_string()),
             pid: 123,
             name: Some("Example".to_string()),
+            window: None,
         }
     }
 

@@ -26,10 +26,11 @@ use std::time::Duration;
 use crate::core::capture::SourceApp;
 use crate::core::clipboard::{BackupLifecycle, Clipboard, Keyboard};
 
-/// Platform seam for bringing another application to the foreground by pid.
+/// Platform seam for bringing another application to the foreground.
 pub trait AppActivator: Send + Sync {
-    /// Brings the app with the given pid to the foreground.
-    fn activate(&self, pid: i32) -> Result<(), String>;
+    /// Brings `app` to the foreground (macOS: by pid; Linux Slice B: by
+    /// window handle).
+    fn activate(&self, app: &SourceApp) -> Result<(), String>;
 }
 
 /// Platform seam for blocking the current thread for the replace-back
@@ -84,7 +85,7 @@ pub fn replace_back(
         .unwrap_or_else(|| clipboard.backup());
     clipboard.write_text(text);
 
-    if let Err(err) = activator.activate(source_app.pid) {
+    if let Err(err) = activator.activate(source_app) {
         clipboard.restore(&backup);
         return Err(err);
     }
@@ -145,7 +146,7 @@ mod tests {
     }
 
     impl AppActivator for FakeActivator {
-        fn activate(&self, _pid: i32) -> Result<(), String> {
+        fn activate(&self, _app: &SourceApp) -> Result<(), String> {
             self.log.record("activate");
             if self.should_fail {
                 Err("activation failed".to_string())
@@ -178,6 +179,7 @@ mod tests {
             bundle_id: Some("com.example.app".to_string()),
             pid: 123,
             name: Some("Example".to_string()),
+            window: None,
         }
     }
 

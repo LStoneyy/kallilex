@@ -10,10 +10,9 @@ use std::sync::Mutex;
 
 use tauri::menu::{AboutMetadataBuilder, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{ActivationPolicy, Emitter, Manager, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-use tauri_plugin_positioner::{Position, WindowExt};
 
 use crate::core::capture::CaptureResult;
 use crate::core::clipboard::BackupLifecycle;
@@ -110,7 +109,7 @@ fn show_popover(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window(POPOVER_WINDOW_LABEL) else {
         return;
     };
-    let _ = window.move_window(Position::TrayBottomCenter);
+    platform::position_popover(&window);
     let _ = window.show();
     let _ = window.set_focus();
 }
@@ -144,12 +143,8 @@ pub(crate) fn show_settings(app: &tauri::AppHandle) {
 /// result. Called on cancel (Escape / focus loss / closing without an
 /// action, all of which route through [`hide_popover`]).
 pub(crate) fn cancel_capture(app: &tauri::AppHandle) {
-    #[cfg(target_os = "macos")]
-    {
-        let lifecycle = app.state::<BackupLifecycle>();
-        let clipboard = crate::platform::MacosClipboard;
-        lifecycle.restore_pending(&clipboard);
-    }
+    let lifecycle = app.state::<BackupLifecycle>();
+    lifecycle.restore_pending(&platform::clipboard());
 
     if let Some(state) = app.try_state::<CaptureState>() {
         let mut captured = state
@@ -196,14 +191,12 @@ fn trigger_capture(app: &tauri::AppHandle) {
         }
     }
 
-    #[cfg(target_os = "macos")]
     {
         use crate::core::capture;
-        use crate::platform::{MacosClipboard, MacosKeyboard, MacosSelectionBackend};
 
-        let backend = MacosSelectionBackend;
-        let clipboard = MacosClipboard;
-        let keyboard = MacosKeyboard;
+        let backend = platform::selection_backend();
+        let clipboard = platform::clipboard();
+        let keyboard = platform::keyboard();
         let lifecycle = app.state::<BackupLifecycle>();
 
         let result = capture::capture(&backend, &clipboard, &keyboard, &lifecycle);
@@ -246,8 +239,9 @@ fn resolve_shortcut(app: &tauri::AppHandle, settings: &Settings) -> Shortcut {
             show_error_dialog(
                 app,
                 format!(
-                    "Kallilex couldn't understand the saved shortcut \"{}\" and will use the default ⌥⌘K instead.",
-                    settings.shortcut
+                    "Kallilex couldn't understand the saved shortcut \"{}\" and will use the default {} instead.",
+                    settings.shortcut,
+                    Settings::default().shortcut
                 ),
             );
             Shortcut::from_str(&Settings::default().shortcut)
@@ -295,6 +289,7 @@ pub fn run() {
             commands::spellcheck,
             commands::replace_back,
             commands::copy_result,
+            commands::get_platform_info,
             commands::run_action,
             commands::cancel_action,
             commands::get_action_context,
@@ -308,8 +303,7 @@ pub fn run() {
         ])
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(ActivationPolicy::Accessory);
+            platform::setup(app);
 
             app.manage(CaptureState::default());
             app.manage(BackupLifecycle::new());
@@ -330,15 +324,19 @@ pub fn run() {
                 );
             }
 
-            // First-run Accessibility onboarding: if permission is missing
-            // and we haven't shown the panel before, open Settings once.
-            #[cfg(target_os = "macos")]
+            // First-run permission onboarding: if the platform requires a
+            // grantable capture permission (macOS Accessibility; none on
+            // Linux) and it's currently missing, and we haven't shown the
+            // panel before, open Settings once.
             {
                 use crate::core::capture::SelectionBackend;
 
-                let permission_granted =
-                    crate::platform::MacosSelectionBackend.permission_granted();
-                if !permission_granted && !current_settings.accessibility_onboarding_shown {
+                let permission_required = platform::platform_info().permission_required;
+                let permission_granted = platform::selection_backend().permission_granted();
+                if permission_required
+                    && !permission_granted
+                    && !current_settings.accessibility_onboarding_shown
+                {
                     show_settings(app.handle());
                     let updated_settings = Settings {
                         accessibility_onboarding_shown: true,

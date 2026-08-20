@@ -15,11 +15,13 @@
     runAction as runActionInvoke,
     spellcheck as spellcheckInvoke,
   } from "../shared/invoke";
+  import { loadPlatformInfo } from "../shared/platform";
   import type {
     Action,
     ActionContext,
     CaptureFailureReason,
     Misspelling,
+    PlatformInfo,
     SourceApp,
   } from "../shared/types";
 
@@ -38,6 +40,10 @@
   let text = $state("");
   let reason = $state<CaptureFailureReason | null>(null);
   let sourceApp = $state<SourceApp | null>(null);
+  // `null` until `loadPlatformInfo()` resolves — treated as "assume the
+  // macOS-default look" (Replace shown) so nothing flashes/disappears once
+  // it resolves on platforms where it's actually available.
+  let platformInfo = $state<PlatformInfo | null>(null);
   let misspellings = $state<Misspelling[]>([]);
   let popup = $state<SuggestionPopup | null>(null);
   let customOpen = $state(false);
@@ -210,6 +216,9 @@
 
   onMount(() => {
     void refreshCapture();
+    void loadPlatformInfo().then((info) => {
+      platformInfo = info;
+    });
 
     void listen("capture:done", () => {
       void refreshCapture();
@@ -275,6 +284,11 @@
   }
 
   const canReplace = $derived(text.trim() !== "" && sourceApp !== null && !busy);
+  // Hidden entirely (not disabled) when the platform doesn't support
+  // Replace at all — defaults to shown while `platformInfo` is still
+  // loading, so nothing flashes away on platforms where it ends up
+  // available (macOS today).
+  const showReplace = $derived(platformInfo === null || platformInfo.replaceBackAvailable);
   const canCopy = $derived(text.trim() !== "" && !busy);
   const canRunAction = $derived(text.trim() !== "" && !busy && actionContext !== null);
 
@@ -645,14 +659,16 @@
   {/if}
 
   <div class="result-row">
-    <button
-      type="button"
-      class="result-button"
-      disabled={!canReplace}
-      onclick={() => void handleReplaceClick()}
-    >
-      Replace
-    </button>
+    {#if showReplace}
+      <button
+        type="button"
+        class="result-button"
+        disabled={!canReplace}
+        onclick={() => void handleReplaceClick()}
+      >
+        Replace
+      </button>
+    {/if}
     <button
       type="button"
       class="result-button"
@@ -698,6 +714,13 @@
       BlinkMacSystemFont,
       "Segoe UI",
       sans-serif;
+  }
+
+  /* X11 has no compositor by default, so the semi-transparent surface color
+     above renders as garbage instead of a blur/blend. Linux gets a fully
+     opaque surface; macOS is untouched. */
+  :global(html.platform-linux) .popover {
+    background-color: var(--color-basalt);
   }
 
   .permission-banner {

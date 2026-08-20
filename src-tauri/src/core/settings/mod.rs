@@ -17,6 +17,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::providers::ProviderProfile;
 
+/// The platform's default global shortcut: ⌥⌘K on macOS, Ctrl+Alt+K
+/// elsewhere.
+pub fn default_shortcut() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Alt+Cmd+K"
+    } else {
+        "Ctrl+Alt+K"
+    }
+}
+
 /// Persisted, non-secret user settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +52,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             active_profile_id: None,
-            shortcut: "Alt+Cmd+K".to_string(),
+            shortcut: default_shortcut().to_string(),
             spellcheck_enabled: true,
             popover_pinned: false,
             accessibility_onboarding_shown: false,
@@ -197,5 +207,17 @@ mod tests {
             "default shortcut string must parse via the global-shortcut plugin: {:?}",
             shortcut.err()
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn default_shortcut_is_the_macos_chord() {
+        assert_eq!(default_shortcut(), "Alt+Cmd+K");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn default_shortcut_is_the_non_macos_chord() {
+        assert_eq!(default_shortcut(), "Ctrl+Alt+K");
     }
 }

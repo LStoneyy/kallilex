@@ -15,7 +15,8 @@
     setSettings,
     testConnection,
   } from "../shared/invoke";
-  import type { HeaderEntry, Preset, ProviderProfile, Settings } from "../shared/types";
+  import { loadPlatformInfo } from "../shared/platform";
+  import type { HeaderEntry, PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
 
   const POLL_INTERVAL_MS = 1000;
 
@@ -24,6 +25,14 @@
   // ---- tabs -----------------------------------------------------------
 
   let activeTab = $state<Tab>("general");
+
+  // ---- platform info ----------------------------------------------------
+
+  // `null` until `loadPlatformInfo()` resolves; the macOS-shaped fallback
+  // below keeps the shortcut hint/placeholder looking right in the
+  // meantime, since macOS is the default look.
+  let platformInfo = $state<PlatformInfo | null>(null);
+  const defaultShortcut = $derived(platformInfo?.defaultShortcut ?? "Alt+Cmd+K");
 
   // ---- shared settings (General + Providers both need it) -------------
 
@@ -287,6 +296,7 @@
 
   let granted = $state(false);
   let intervalId: ReturnType<typeof setInterval> | undefined;
+  let destroyed = false;
 
   async function refreshAccessibilityStatus() {
     granted = await accessibilityStatus();
@@ -296,13 +306,26 @@
     void loadSettings();
     void loadProviders();
     void loadAutostart();
-    void refreshAccessibilityStatus();
-    intervalId = setInterval(() => {
-      void refreshAccessibilityStatus();
-    }, POLL_INTERVAL_MS);
+    void loadPlatformInfo().then((info) => {
+      if (destroyed) {
+        return;
+      }
+      platformInfo = info;
+      // The polling loop below is only meaningful on platforms with a
+      // grantable permission to poll for; starting it before `platformInfo`
+      // resolves would have already begun on platforms where it should
+      // never run, so it's started here instead of unconditionally at mount.
+      if (info.permissionRequired) {
+        void refreshAccessibilityStatus();
+        intervalId = setInterval(() => {
+          void refreshAccessibilityStatus();
+        }, POLL_INTERVAL_MS);
+      }
+    });
   });
 
   onDestroy(() => {
+    destroyed = true;
     if (intervalId !== undefined) {
       clearInterval(intervalId);
     }
@@ -344,14 +367,14 @@
       <section class="general">
         <h2>Shortcut</h2>
         <p class="hint">
-          The global shortcut that opens Kallilex from anywhere, e.g. <code>Alt+Cmd+K</code>.
+          The global shortcut that opens Kallilex from anywhere, e.g. <code>{defaultShortcut}</code>.
         </p>
         <div class="row">
           <input
             class="text-input"
             type="text"
             bind:value={shortcutDraft}
-            placeholder="Alt+Cmd+K"
+            placeholder={defaultShortcut}
           />
           <button type="button" disabled={shortcutSaving} onclick={() => void handleSaveShortcut()}>
             {shortcutSaving ? "Saving…" : "Save"}
@@ -529,24 +552,30 @@
     {:else if activeTab === "accessibility"}
       <section class="accessibility">
         <h2>Accessibility permission</h2>
-        <p>
-          Kallilex reads the text you've selected in whatever app you're writing in, so pressing
-          the shortcut captures it instantly instead of asking you to copy it first. Capture
-          happens entirely on this Mac — nothing leaves your machine until you choose to process
-          it.
-        </p>
+        {#if platformInfo === null || platformInfo.permissionRequired}
+          <p>
+            Kallilex reads the text you've selected in whatever app you're writing in, so pressing
+            the shortcut captures it instantly instead of asking you to copy it first. Capture
+            happens entirely on this Mac — nothing leaves your machine until you choose to process
+            it.
+          </p>
 
-        <p class="status" class:granted class:not-granted={!granted}>
-          {granted ? "Granted" : "Not granted"}
-        </p>
+          <p class="status" class:granted class:not-granted={!granted}>
+            {granted ? "Granted" : "Not granted"}
+          </p>
 
-        <button type="button" onclick={() => void openAccessibilitySettings()}>
-          Open System Settings
-        </button>
+          <button type="button" onclick={() => void openAccessibilitySettings()}>
+            Open System Settings
+          </button>
 
-        <p class="hint">
-          If macOS doesn't pick up the change right away, quit and reopen Kallilex.
-        </p>
+          <p class="hint">
+            If macOS doesn't pick up the change right away, quit and reopen Kallilex.
+          </p>
+        {:else}
+          <p>
+            No system permission is needed to capture selections on this platform.
+          </p>
+        {/if}
       </section>
     {/if}
   </div>

@@ -32,7 +32,6 @@ thiserror = "2"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["sync", "time", "macros"] }
 url = "2"
-keyring = { version = "3", features = ["apple-native"] }
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -46,6 +45,10 @@ accessibility-sys = "0.2"
 # `libc::pid_t` parameter (gated behind objc2-app-kit's "libc" feature above);
 # already present in the dependency graph transitively.
 libc = "0.2"
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service"] }
 
 [dev-dependencies]
 wiremock = "0.6"

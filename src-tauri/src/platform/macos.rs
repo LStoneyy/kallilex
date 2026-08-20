@@ -86,6 +86,7 @@ impl SelectionBackend for MacosSelectionBackend {
             bundle_id: app.bundleIdentifier().map(|s| s.to_string()),
             pid: app.processIdentifier(),
             name: app.localizedName().map(|s| s.to_string()),
+            window: None,
         })
     }
 
@@ -404,7 +405,8 @@ impl MacosAppActivator {
 }
 
 impl AppActivator for MacosAppActivator {
-    fn activate(&self, pid: i32) -> Result<(), String> {
+    fn activate(&self, app: &SourceApp) -> Result<(), String> {
+        let pid = app.pid;
         let (tx, rx) = mpsc::channel();
 
         self.app
@@ -446,7 +448,7 @@ fn activate_on_main_thread(pid: i32) -> Result<(), String> {
 }
 
 /// Opens System Settings directly at Privacy & Security -> Accessibility.
-pub fn open_accessibility_settings() -> Result<(), String> {
+pub fn open_permission_settings() -> Result<(), String> {
     let status = std::process::Command::new("open")
         .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         .status()
@@ -456,5 +458,56 @@ pub fn open_accessibility_settings() -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("`open` exited with status {status}"))
+    }
+}
+
+/// Constructs the macOS `SelectionBackend`: Accessibility API selection
+/// reading.
+pub fn selection_backend() -> MacosSelectionBackend {
+    MacosSelectionBackend
+}
+
+/// Constructs the macOS `Clipboard`: `NSPasteboard.generalPasteboard()`.
+pub fn clipboard() -> MacosClipboard {
+    MacosClipboard
+}
+
+/// Constructs the macOS `Keyboard`: synthetic ⌘C/⌘V via `CGEvent`.
+pub fn keyboard() -> MacosKeyboard {
+    MacosKeyboard
+}
+
+/// Constructs the macOS `AppActivator`: `NSRunningApplication` activation by
+/// pid.
+pub fn app_activator(app: AppHandle) -> MacosAppActivator {
+    MacosAppActivator::new(app)
+}
+
+/// Constructs the macOS `SpellChecker`: the shared `NSSpellChecker`.
+pub fn spell_checker(app: AppHandle) -> MacosSpellChecker {
+    MacosSpellChecker::new(app)
+}
+
+/// Menu-bar-only app: no Dock icon, no app switcher entry.
+pub fn setup(app: &mut tauri::App) {
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+}
+
+/// Positions the popover window under the tray icon.
+pub fn position_popover(window: &tauri::WebviewWindow) {
+    use tauri_plugin_positioner::{Position, WindowExt};
+
+    let _ = window.move_window(Position::TrayBottomCenter);
+}
+
+/// macOS platform metadata: Accessibility is a grantable permission and
+/// Replace (write-back into the source app) is available.
+pub fn platform_info() -> crate::platform::PlatformInfo {
+    crate::platform::PlatformInfo {
+        os: "macos",
+        session: None,
+        replace_back_available: true,
+        permission_required: true,
+        default_shortcut: crate::core::settings::default_shortcut().to_string(),
     }
 }

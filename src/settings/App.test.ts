@@ -1,7 +1,8 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
-import type { Preset, ProviderProfile, Settings } from "../shared/types";
+import { resetPlatformInfoForTests } from "../shared/platform";
+import type { PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
 
 const {
   accessibilityStatus,
@@ -17,6 +18,7 @@ const {
   isAutostartEnabled,
   enableAutostart,
   disableAutostart,
+  getPlatformInfo,
 } = vi.hoisted(() => ({
   accessibilityStatus: vi.fn(),
   openAccessibilitySettings: vi.fn(),
@@ -31,6 +33,7 @@ const {
   isAutostartEnabled: vi.fn(),
   enableAutostart: vi.fn(),
   disableAutostart: vi.fn(),
+  getPlatformInfo: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -47,6 +50,7 @@ vi.mock("../shared/invoke", () => ({
   isAutostartEnabled,
   enableAutostart,
   disableAutostart,
+  getPlatformInfo,
 }));
 
 function defaultSettings(): Settings {
@@ -69,6 +73,16 @@ function defaultPresets(): Preset[] {
   ];
 }
 
+function macosPlatformInfo(): PlatformInfo {
+  return {
+    os: "macos",
+    session: null,
+    replaceBackAvailable: true,
+    permissionRequired: true,
+    defaultShortcut: "Alt+Cmd+K",
+  };
+}
+
 function sampleProfile(overrides: Partial<ProviderProfile> = {}): ProviderProfile {
   return {
     id: "profile-1",
@@ -85,6 +99,7 @@ function sampleProfile(overrides: Partial<ProviderProfile> = {}): ProviderProfil
 
 describe("settings App", () => {
   beforeEach(() => {
+    resetPlatformInfoForTests();
     accessibilityStatus.mockClear();
     openAccessibilitySettings.mockClear();
     getSettings.mockClear();
@@ -98,6 +113,7 @@ describe("settings App", () => {
     isAutostartEnabled.mockClear();
     enableAutostart.mockClear();
     disableAutostart.mockClear();
+    getPlatformInfo.mockClear();
 
     accessibilityStatus.mockResolvedValue(false);
     getSettings.mockResolvedValue(defaultSettings());
@@ -107,6 +123,7 @@ describe("settings App", () => {
     isAutostartEnabled.mockResolvedValue(false);
     enableAutostart.mockResolvedValue(undefined);
     disableAutostart.mockResolvedValue(undefined);
+    getPlatformInfo.mockResolvedValue(macosPlatformInfo());
   });
 
   afterEach(() => {
@@ -151,6 +168,24 @@ describe("settings App", () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(screen.getByText("Granted")).toBeInTheDocument();
+  });
+
+  it("does not start accessibility polling if the component is unmounted before platform info resolves", async () => {
+    vi.useFakeTimers();
+    let resolvePlatformInfo!: (info: PlatformInfo) => void;
+    getPlatformInfo.mockReturnValue(
+      new Promise<PlatformInfo>((resolve) => {
+        resolvePlatformInfo = resolve;
+      }),
+    );
+
+    const { unmount } = render(App);
+    unmount();
+
+    resolvePlatformInfo(macosPlatformInfo());
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(accessibilityStatus).not.toHaveBeenCalled();
   });
 
   it("invokes openAccessibilitySettings when the deep-link button is clicked", async () => {
@@ -337,5 +372,37 @@ describe("settings App", () => {
     await waitFor(() => {
       expect(disableAutostart).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("reflects the platform's default shortcut in the hint and input placeholder", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      defaultShortcut: "Ctrl+Alt+K",
+    });
+
+    render(App);
+
+    const shortcutInput = await screen.findByPlaceholderText("Ctrl+Alt+K");
+    expect(shortcutInput).toBeInTheDocument();
+    expect(await screen.findByText("Ctrl+Alt+K", { selector: "code" })).toBeInTheDocument();
+  });
+
+  it("replaces the Accessibility grant UI with a platform note when no permission is required", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+    });
+
+    render(App);
+    await openAccessibilityTab();
+
+    expect(
+      await screen.findByText("No system permission is needed to capture selections on this platform."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not granted")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open System Settings" })).not.toBeInTheDocument();
+    expect(accessibilityStatus).not.toHaveBeenCalled();
   });
 });

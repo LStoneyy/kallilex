@@ -12,16 +12,15 @@ use crate::core::providers::{
 use crate::core::secrets::{KeyringSecretStore, SecretStore};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::spellcheck::SpellcheckResult;
+use crate::platform::{self, PlatformInfo};
 use crate::{ActionInFlight, CaptureState, ReplaceInFlight};
 
 /// RAII guard clearing [`ReplaceInFlight`] on drop, so every exit path out
 /// of `replace_back` — success, error, or an unexpected panic — releases the
 /// guard the global-shortcut trigger checks. See `ReplaceInFlight`'s doc
 /// comment in `lib.rs` for why this guard exists.
-#[cfg(target_os = "macos")]
 struct InFlightGuard<'a>(&'a ReplaceInFlight);
 
-#[cfg(target_os = "macos")]
 impl Drop for InFlightGuard<'_> {
     fn drop(&mut self) {
         self.0 .0.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -99,31 +98,20 @@ pub fn capture_selection(app: AppHandle) -> Result<CaptureResult, String> {
     Ok(captured.clone().unwrap_or_else(CaptureResult::empty))
 }
 
-/// Whether Kallilex currently holds the macOS Accessibility permission.
+/// Whether Kallilex currently holds the platform's capture permission
+/// (macOS Accessibility). Always `true` on platforms with no grantable
+/// permission (Linux).
 #[tauri::command]
 pub fn accessibility_status() -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        use crate::core::capture::SelectionBackend;
-        Ok(crate::platform::MacosSelectionBackend.permission_granted())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(false)
-    }
+    use crate::core::capture::SelectionBackend;
+    Ok(platform::selection_backend().permission_granted())
 }
 
-/// Deep-links into System Settings -> Privacy & Security -> Accessibility.
+/// Deep-links into System Settings -> Privacy & Security -> Accessibility
+/// (macOS). A no-op on platforms with no grantable permission (Linux).
 #[tauri::command]
 pub fn open_accessibility_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        crate::platform::open_accessibility_settings()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(())
-    }
+    platform::open_permission_settings()
 }
 
 /// Runs a local, offline spell check over `text` via the platform
@@ -134,19 +122,10 @@ pub fn open_accessibility_settings() -> Result<(), String> {
 /// synchronously would deadlock.
 #[tauri::command]
 pub async fn spellcheck(app: AppHandle, text: String) -> Result<SpellcheckResult, String> {
-    #[cfg(target_os = "macos")]
-    {
-        use crate::core::spellcheck::run_spellcheck;
-        use crate::platform::MacosSpellChecker;
+    use crate::core::spellcheck::run_spellcheck;
 
-        let checker = MacosSpellChecker::new(app);
-        run_spellcheck(&checker, &text).map_err(|e| e.to_string())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, text);
-        Ok(SpellcheckResult::default())
-    }
+    let checker = platform::spell_checker(app);
+    run_spellcheck(&checker, &text).map_err(|e| e.to_string())
 }
 
 /// Writes `text` back into the remembered source app: clipboard backup ->
@@ -157,69 +136,60 @@ pub async fn spellcheck(app: AppHandle, text: String) -> Result<SpellcheckResult
 /// block the main thread.
 #[tauri::command]
 pub async fn replace_back(app: AppHandle, text: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        use crate::core::clipboard::BackupLifecycle;
-        use crate::core::replace::{self, StdSleeper};
-        use crate::platform::{MacosAppActivator, MacosClipboard, MacosKeyboard};
+    use crate::core::clipboard::BackupLifecycle;
+    use crate::core::replace::{self, StdSleeper};
 
-        let source_app = {
-            let state = app.state::<CaptureState>();
-            let captured = state
-                .0
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            captured
-                .as_ref()
-                .and_then(|result| result.source_app.clone())
-        };
+    let source_app = {
+        let state = app.state::<CaptureState>();
+        let captured = state
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        captured
+            .as_ref()
+            .and_then(|result| result.source_app.clone())
+    };
 
-        let clipboard = MacosClipboard;
-        let keyboard = MacosKeyboard;
-        let activator = MacosAppActivator::new(app.clone());
-        let lifecycle = app.state::<BackupLifecycle>();
-        let sleeper = StdSleeper;
+    let clipboard = platform::clipboard();
+    let keyboard = platform::keyboard();
+    let activator = platform::app_activator(app.clone());
+    let lifecycle = app.state::<BackupLifecycle>();
+    let sleeper = StdSleeper;
 
-        // Guard against a global-shortcut capture racing this in-flight
-        // replace (see `ReplaceInFlight`'s doc comment in lib.rs). The guard
-        // clears the flag on every exit path, including an unexpected panic.
-        let in_flight = app.state::<ReplaceInFlight>();
-        in_flight.0.store(true, std::sync::atomic::Ordering::SeqCst);
-        let _guard = InFlightGuard(in_flight.inner());
+    // Guard against a global-shortcut capture racing this in-flight
+    // replace (see `ReplaceInFlight`'s doc comment in lib.rs). The guard
+    // clears the flag on every exit path, including an unexpected panic.
+    let in_flight = app.state::<ReplaceInFlight>();
+    in_flight.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    let _guard = InFlightGuard(in_flight.inner());
 
-        let result = replace::replace_back(
-            &text,
-            source_app.as_ref(),
-            &clipboard,
-            &keyboard,
-            &activator,
-            &lifecycle,
-            &sleeper,
-        );
+    let result = replace::replace_back(
+        &text,
+        source_app.as_ref(),
+        &clipboard,
+        &keyboard,
+        &activator,
+        &lifecycle,
+        &sleeper,
+    );
 
-        if let Err(ref err) = result {
-            // Activating the source app (a step that can succeed even when a
-            // later step, e.g. the synthetic paste, fails) steals focus from
-            // the popover, which blurs and hides it. The frontend's inline
-            // `actionError` would then render into an invisible, hidden
-            // webview and the user would never learn the replace failed — so
-            // when that's happened, surface the error via a dialog instead.
-            let popover_visible = app
-                .get_webview_window(crate::core::POPOVER_WINDOW_LABEL)
-                .map(|window| window.is_visible().unwrap_or(false))
-                .unwrap_or(false);
-            if !popover_visible {
-                crate::show_error_dialog(&app, format!("Replace failed: {err}"));
-            }
+    if let Err(ref err) = result {
+        // Activating the source app (a step that can succeed even when a
+        // later step, e.g. the synthetic paste, fails) steals focus from
+        // the popover, which blurs and hides it. The frontend's inline
+        // `actionError` would then render into an invisible, hidden
+        // webview and the user would never learn the replace failed — so
+        // when that's happened, surface the error via a dialog instead.
+        let popover_visible = app
+            .get_webview_window(crate::core::POPOVER_WINDOW_LABEL)
+            .map(|window| window.is_visible().unwrap_or(false))
+            .unwrap_or(false);
+        if !popover_visible {
+            crate::show_error_dialog(&app, format!("Replace failed: {err}"));
         }
+    }
 
-        result
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, text);
-        Ok(())
-    }
+    result
 }
 
 /// Copies `text` to the clipboard (overwriting it, no restore) and discards
@@ -227,21 +197,20 @@ pub async fn replace_back(app: AppHandle, text: String) -> Result<(), String> {
 /// after the popover's close/cancel path runs.
 #[tauri::command]
 pub fn copy_result(app: AppHandle, text: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        use crate::core::clipboard::BackupLifecycle;
-        use crate::core::replace;
-        use crate::platform::MacosClipboard;
+    use crate::core::clipboard::BackupLifecycle;
+    use crate::core::replace;
 
-        let clipboard = MacosClipboard;
-        let lifecycle = app.state::<BackupLifecycle>();
-        replace::copy_result(&text, &clipboard, &lifecycle)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, text);
-        Ok(())
-    }
+    let clipboard = platform::clipboard();
+    let lifecycle = app.state::<BackupLifecycle>();
+    replace::copy_result(&text, &clipboard, &lifecycle)
+}
+
+/// Platform metadata for the frontend: OS, display-server session,
+/// feature availability (Replace, permission model), and the default
+/// global shortcut for UI labels/placeholders.
+#[tauri::command]
+pub fn get_platform_info() -> Result<PlatformInfo, String> {
+    Ok(platform::platform_info())
 }
 
 /// Runs an AI action (Rewrite/Shorten/ImproveClarity/Custom) against the

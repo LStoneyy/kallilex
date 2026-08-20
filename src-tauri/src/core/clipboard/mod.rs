@@ -13,6 +13,9 @@ use std::time::Duration;
 /// pair. Unreadable types are skipped on a best-effort basis.
 #[derive(Debug, Clone)]
 pub struct ClipboardItem {
+    // Linux: the Slice A stub clipboard never reads backups; spec-11
+    // Slice B's real implementation does — drop the allow then.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub formats: Vec<(String, Vec<u8>)>,
 }
 
@@ -21,7 +24,10 @@ pub struct ClipboardItem {
 /// [`Clipboard::restore`] or [`BackupLifecycle`] — the contents are not
 /// meant to be inspected outside this module and the `platform` backend.
 #[derive(Debug, Clone, Default)]
-pub struct ClipboardBackup(pub Vec<ClipboardItem>);
+pub struct ClipboardBackup(
+    // Linux: see `ClipboardItem::formats` — unread only until Slice B.
+    #[cfg_attr(target_os = "linux", allow(dead_code))] pub Vec<ClipboardItem>,
+);
 
 /// Platform seam for reading/writing the system clipboard.
 pub trait Clipboard: Send + Sync {

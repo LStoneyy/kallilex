@@ -136,3 +136,15 @@ export interface Preset {
   baseUrl: string;
   needsApiKey: boolean;
 }
+
+/**
+ * Mirrors `PlatformInfo` in `src-tauri/src/platform/mod.rs`: platform
+ * metadata surfaced to the frontend by the `get_platform_info` command.
+ */
+export interface PlatformInfo {
+  os: "macos" | "linux";
+  session: string | null;
+  replaceBackAvailable: boolean;
+  permissionRequired: boolean;
+  defaultShortcut: string;
+}

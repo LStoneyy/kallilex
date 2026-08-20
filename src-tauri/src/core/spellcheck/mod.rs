@@ -40,6 +40,9 @@ impl SpellcheckResult {
 #[derive(Debug, thiserror::Error)]
 pub enum SpellcheckError {
     #[error("spell-check backend failed: {0}")]
+    // Linux: the Slice A stub checker never fails; spec-11 Slice B's
+    // spellbook-backed checker constructs this — drop the allow then.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     Backend(String),
 }
 

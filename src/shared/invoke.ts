@@ -8,6 +8,7 @@ import type {
   Action,
   ActionContext,
   CaptureResult,
+  PlatformInfo,
   Preset,
   ProviderProfile,
   RunActionOutcome,
@@ -97,6 +98,10 @@ export async function testConnection(id: string): Promise<number> {
 
 export async function openSettings(): Promise<void> {
   return invoke<void>("open_settings");
+}
+
+export async function getPlatformInfo(): Promise<PlatformInfo> {
+  return invoke<PlatformInfo>("get_platform_info");
 }
 
 /**

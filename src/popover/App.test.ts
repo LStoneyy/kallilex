@@ -1,10 +1,12 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
+import { resetPlatformInfoForTests } from "../shared/platform";
 import type {
   ActionContext,
   CaptureResult,
   Misspelling,
+  PlatformInfo,
   Settings,
   SpellcheckResult,
 } from "../shared/types";
@@ -21,6 +23,7 @@ const {
   runAction,
   cancelAction,
   openSettings,
+  getPlatformInfo,
 } = vi.hoisted(() => ({
   hidePopover: vi.fn(),
   captureSelection: vi.fn(),
@@ -33,6 +36,7 @@ const {
   runAction: vi.fn(),
   cancelAction: vi.fn(),
   openSettings: vi.fn(),
+  getPlatformInfo: vi.fn(),
 }));
 
 const { listen } = vi.hoisted(() => ({
@@ -55,6 +59,7 @@ vi.mock("../shared/invoke", () => ({
   runAction,
   cancelAction,
   openSettings,
+  getPlatformInfo,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -88,6 +93,16 @@ function notConfiguredContext(): ActionContext {
   return { configured: false, profileName: null, privacy: null };
 }
 
+function macosPlatformInfo(): PlatformInfo {
+  return {
+    os: "macos",
+    session: null,
+    replaceBackAvailable: true,
+    permissionRequired: true,
+    defaultShortcut: "Alt+Cmd+K",
+  };
+}
+
 const misspelledText = "I halp you";
 const halpMisspelling: Misspelling = {
   start: 2,
@@ -98,6 +113,7 @@ const halpMisspelling: Misspelling = {
 
 describe("popover App", () => {
   beforeEach(() => {
+    resetPlatformInfoForTests();
     hidePopover.mockClear();
     captureSelection.mockClear();
     openAccessibilitySettings.mockClear();
@@ -109,6 +125,7 @@ describe("popover App", () => {
     runAction.mockClear();
     cancelAction.mockClear();
     openSettings.mockClear();
+    getPlatformInfo.mockClear();
     listen.mockClear();
     onFocusChanged.mockClear();
     captureSelection.mockResolvedValue(emptyResult());
@@ -120,6 +137,7 @@ describe("popover App", () => {
     runAction.mockResolvedValue({ status: "ok", text: "" });
     cancelAction.mockResolvedValue(undefined);
     openSettings.mockResolvedValue(undefined);
+    getPlatformInfo.mockResolvedValue(macosPlatformInfo());
     listen.mockResolvedValue(() => {});
     onFocusChanged.mockResolvedValue(() => {});
   });
@@ -511,6 +529,30 @@ describe("popover App", () => {
       expect(replaceBack).toHaveBeenCalledWith("edited text");
     });
     expect(hidePopover).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the Replace button entirely when the platform doesn't support replace-back", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      replaceBackAvailable: false,
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(getPlatformInfo).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Replace" })).not.toBeInTheDocument();
+    });
+    // Copy is unaffected — still rendered and eventually enabled.
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
 
   it("clicking Copy invokes copy_result with the current text and does not hide the popover", async () => {
