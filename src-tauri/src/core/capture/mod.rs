@@ -31,6 +31,30 @@ pub struct SourceApp {
     pub window: Option<PlatformWindowId>,
 }
 
+impl SourceApp {
+    /// A documented placeholder meaning "replace targets whatever window
+    /// regains focus when the popover hides" (Wayland focus-return replace,
+    /// spec-12 Slice C). Wayland has no cross-client window query protocol,
+    /// so `frontmost_app()` can never identify the actual focused
+    /// application there the way X11/macOS do — but the core `replace_back`
+    /// contract ("no source app -> error, touch nothing") and the
+    /// frontend's `canReplace` gating both key off `source_app` being
+    /// `Some`, so this placeholder exists purely to keep that contract
+    /// satisfied without pretending to know a real identity. It carries no
+    /// usable pid, bundle id, name, or window handle; the actual "which
+    /// window" question is answered later, implicitly, by the Wayland
+    /// `AppActivator` hiding the popover so the compositor returns focus to
+    /// whatever previously had it.
+    pub fn focus_return() -> Self {
+        Self {
+            bundle_id: None,
+            pid: 0,
+            name: None,
+            window: None,
+        }
+    }
+}
+
 /// Why `capture()` produced empty text.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

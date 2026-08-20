@@ -8,6 +8,7 @@ use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
 use crate::core::capture::{PlatformWindowId, SelectionBackend, SourceApp};
 use crate::platform::linux::clipboard::LinuxClipboard;
 use crate::platform::linux::session::{self, SessionType};
+use crate::platform::linux::wayland;
 
 /// Linux selection capture. Unlike macOS's Accessibility-permission model,
 /// Linux has no grantable capture permission at all — `permission_granted`
@@ -19,15 +20,28 @@ impl SelectionBackend for LinuxSelectionBackend {
         true
     }
 
-    /// X11 only: reads `_NET_ACTIVE_WINDOW` off the root window and the
-    /// standard EWMH/ICCCM properties of that window. `None` on Wayland
-    /// (no cross-client window query protocol) or on any X11 protocol
-    /// error.
+    /// X11: reads `_NET_ACTIVE_WINDOW` off the root window and the
+    /// standard EWMH/ICCCM properties of that window; `None` on any X11
+    /// protocol error. Wayland has no cross-client window query protocol at
+    /// all, so the real identity can never be read there; instead, when
+    /// (and only when) the RemoteDesktop portal's input-synthesis
+    /// capability is live, this returns the documented
+    /// [`SourceApp::focus_return`] placeholder so replace-back stays
+    /// available (spec-12 Slice C). Without input synthesis there is
+    /// nothing useful replace-back could do with any source app identity
+    /// anyway, so this stays `None` (spec-11 behavior) and Replace stays
+    /// hidden.
     fn frontmost_app(&self) -> Option<SourceApp> {
-        if session::current() == SessionType::Wayland {
-            return None;
+        match session::current() {
+            SessionType::X11 => frontmost_app_x11().ok().flatten(),
+            SessionType::Wayland => {
+                if wayland::capabilities().input_synthesis {
+                    Some(SourceApp::focus_return())
+                } else {
+                    None
+                }
+            }
         }
-        frontmost_app_x11().ok().flatten()
     }
 
     /// Maps onto the spec's "capture order: primary selection first,

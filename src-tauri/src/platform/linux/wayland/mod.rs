@@ -14,9 +14,16 @@
 //! proxies and reads their `version` D-Bus property, which never shows a
 //! permission dialog. Actually *using* a capability — binding a shortcut
 //! ([`shortcut::run_portal_shortcut`]), starting a remote-desktop session
-//! (a later slice) — is the only place a dialog can appear.
+//! ([`remote_desktop::send_chord`]) — is the only place a dialog can
+//! appear, and even then only in direct response to a user-initiated
+//! action (the first fallback-copy or Replace), never at startup.
+//!
+//! [`remote_desktop`] (spec-12 Slice C) layers input synthesis (synthetic
+//! Ctrl+C/Ctrl+V via `NotifyKeyboardKeycode`) and the restore-token session
+//! lifecycle on top of the `RemoteDesktop` capability probed here.
 
 mod probe;
+mod remote_desktop;
 mod shortcut;
 
 use std::sync::OnceLock;
@@ -61,6 +68,7 @@ pub fn init(caps: WaylandCapabilities) {
 }
 
 pub use probe::probe;
+pub use remote_desktop::{send_chord, Chord};
 pub use shortcut::run_portal_shortcut;
 
 #[cfg(test)]

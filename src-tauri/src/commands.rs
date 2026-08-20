@@ -176,7 +176,7 @@ pub async fn replace_back(app: AppHandle, text: String) -> Result<(), String> {
     };
 
     let clipboard = platform::clipboard();
-    let keyboard = platform::keyboard();
+    let keyboard = platform::keyboard(app.clone());
     let activator = platform::app_activator(app.clone());
     let lifecycle = app.state::<BackupLifecycle>();
     let sleeper = StdSleeper;

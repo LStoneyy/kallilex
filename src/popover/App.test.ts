@@ -1262,6 +1262,34 @@ describe("popover App", () => {
     expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
   });
 
+  it("Replace is enabled on Wayland with input synthesis, using the focus-return source app placeholder", async () => {
+    // spec-12 Slice C: on Wayland with the RemoteDesktop portal's
+    // input-synthesis capability live, `frontmost_app()` returns the
+    // documented focus-return placeholder (`bundleId: null, pid: 0,
+    // name: null`) instead of `null`, so the same `canReplace` gating that
+    // already requires text + a non-null `sourceApp` keeps working
+    // unchanged — Replace should be enabled exactly as it is with a real
+    // source app on X11/macOS.
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      session: "wayland",
+      replaceBackAvailable: true,
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: false },
+    });
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: null, pid: 0, name: null },
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+  });
+
   it("shows the combined notice when the compositor offers neither portal", async () => {
     getPlatformInfo.mockResolvedValue({
       ...macosPlatformInfo(),

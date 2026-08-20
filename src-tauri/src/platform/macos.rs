@@ -478,7 +478,11 @@ pub fn clipboard() -> MacosClipboard {
 }
 
 /// Constructs the macOS `Keyboard`: synthetic ⌘C/⌘V via `CGEvent`.
-pub fn keyboard() -> MacosKeyboard {
+/// The `AppHandle` parameter exists only for signature parity with the
+/// Linux constructor (spec-12 Slice C, where the Wayland path needs a
+/// handle to reach its portal session manager) — `CGEvent` posting has no
+/// main-thread affinity or app-handle dependency, so it's unused here.
+pub fn keyboard(_app: AppHandle) -> MacosKeyboard {
     MacosKeyboard
 }
 

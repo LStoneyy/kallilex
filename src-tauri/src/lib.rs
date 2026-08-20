@@ -212,7 +212,7 @@ fn trigger_capture(app: &tauri::AppHandle) {
 
         let backend = platform::selection_backend();
         let clipboard = platform::clipboard();
-        let keyboard = platform::keyboard();
+        let keyboard = platform::keyboard(app.clone());
         let lifecycle = app.state::<BackupLifecycle>();
 
         let result = capture::capture(&backend, &clipboard, &keyboard, &lifecycle);

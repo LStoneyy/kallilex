@@ -27,9 +27,13 @@ pub fn clipboard() -> LinuxClipboard {
     LinuxClipboard
 }
 
-/// Constructs the Linux `Keyboard`.
-pub fn keyboard() -> LinuxKeyboard {
-    LinuxKeyboard
+/// Constructs the Linux `Keyboard`. Takes an `AppHandle` (spec-12 Slice C):
+/// on Wayland with input synthesis live, `LinuxKeyboard` routes through the
+/// process-wide RemoteDesktop portal session manager
+/// ([`wayland::send_chord`]), which needs the handle to lazily spawn its
+/// manager task and read settings; the X11/enigo path ignores it.
+pub fn keyboard(app: tauri::AppHandle) -> LinuxKeyboard {
+    LinuxKeyboard::new(app)
 }
 
 /// No-op: Linux has no grantable permission to deep-link into.
