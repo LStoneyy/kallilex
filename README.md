@@ -45,7 +45,7 @@ Install:
 
 - **Debian/Ubuntu:** `sudo apt install ./Kallilex-*.deb`
 - **Fedora:** `sudo dnf install ./Kallilex-*.rpm`
-- **AppImage:** download it, `chmod +x Kallilex-*.AppImage`, then run it directly.
+- **AppImage:** download it, `chmod +x Kallilex-*.AppImage`, then run it directly. On Wayland, prefer the `.deb`/`.rpm`: the portal-bound global shortcut requires an installed desktop entry whose basename matches the bundle identifier, which only those packages ship — an AppImage run under Wayland falls back to opening Kallilex from the tray for capture. On X11 the AppImage is fully equivalent to the other packages.
 
 On GNOME, the tray icon requires the AppIndicator extension (`gnome-shell-extension-appindicator`) — without it, the icon simply won't show up; that's the extension missing, not the app being broken.
 
@@ -53,16 +53,18 @@ Kallilex picks up system Hunspell dictionaries from `/usr/share/hunspell` and `/
 
 ## Capture
 
-Capture is automatic — there is no manual paste step:
+Capture is automatic — there is no manual paste step. On macOS:
 
 - **Primary path:** the macOS Accessibility API reads the current selection directly from the frontmost app. This requires the one-time Accessibility permission above.
 - **Fallback:** for apps that don't expose their selection through Accessibility, Kallilex falls back to a clipboard-based capture (a synthetic ⌘C). The clipboard is backed up before the fallback runs and restored afterwards, so your existing clipboard contents are never lost.
+
+See [Linux](#linux) for the Linux capture paths.
 
 ## Popover
 
 The popover shows the captured text as editable content, plus:
 
-- local spell check, powered by macOS's native `NSSpellChecker` — fully offline;
+- local spell check, powered by macOS's native `NSSpellChecker` (a Hunspell-compatible engine on Linux) — fully offline;
 - action buttons: **Rewrite**, **Shorten**, **Improve clarity**, and **Custom prompt**;
 - a privacy badge showing whether the active AI provider is **Local**, **LAN**, or **Cloud**, derived from its base URL before any request is sent.
 
@@ -73,13 +75,13 @@ There is no diff view in v1 — running an action replaces the editable text in 
 Once you're happy with the result:
 
 - **Copy** leaves the result on the clipboard for you to paste manually.
-- **Replace** pastes the result back into the app you captured it from (via a synthetic ⌘V), then restores your original clipboard contents afterwards.
+- **Replace** pastes the result back into the app you captured it from (via a synthetic ⌘V on macOS, Ctrl+V on Linux), then restores your original clipboard contents afterwards. On Linux, Replace needs X11, or a Wayland compositor with the RemoteDesktop portal and "Use automatic paste-back" left on — see [Linux](#linux).
 
 ## Privacy
 
-- **Local-first spell check.** Spell checking uses macOS's native, fully offline `NSSpellChecker` and works without an AI provider or network access.
+- **Local-first spell check.** Spell checking is fully offline and works without an AI provider or network access — macOS's native `NSSpellChecker`, or on Linux a Hunspell-compatible engine.
 - **Local / LAN / Cloud badge.** Before any AI request, the popover classifies the active provider from its base URL and shows whether it's local, on your LAN, or a cloud endpoint — so you always know where your text is about to go.
-- **Keychain-only API keys.** Provider API keys are stored in the macOS Keychain and are never written to config files.
+- **System-keychain-only API keys.** Provider API keys are stored in the macOS Keychain or, on Linux, the Secret Service (gnome-keyring / KWallet) — never written to config files.
 - **No accounts, no telemetry, no analytics.** Kallilex has no cloud backend and does not phone home.
 - **No logs of your text.** The app does not log the content you select or edit.
 - Text only leaves your machine when you explicitly invoke an AI action against a provider configured with a remote base URL.
@@ -137,13 +139,15 @@ Kallilex uses Tauri's desktop capabilities for:
 
 On macOS, selected-text capture and replacement live behind a platform abstraction backed by the Accessibility APIs, with a clipboard-based fallback for applications that don't expose their selection cleanly.
 
+On Linux, the same abstraction has two backends. On X11, it's fully supported: `x11rb` queries the active window for frontmost-app identity, and key synthesis (for the clipboard fallback and Replace) and window activation both work directly. On Wayland, it runs through XDG desktop portals: the GlobalShortcuts portal binds the global shortcut, and the RemoteDesktop portal synthesizes the copy/paste keystrokes Replace needs, both only where the compositor supports them; primary-selection reads go through `arboard`'s data-control backend. Wayland has no cross-client window query protocol, so there is no way to read another app's window identity there.
+
 ### Spell checking
 
 Spell checking is independent from AI.
 
 On macOS, Kallilex uses the native spell-checking facilities so it benefits from the user's installed/preferred languages without loading a model.
 
-The core API is abstracted so future Linux/Windows builds can plug in another local checker.
+On Linux, the same `SpellChecker` seam is backed by `spellbook` — a pure-Rust Hunspell-compatible engine — reading system Hunspell/MySpell dictionaries with bundled `en_US`/`de_DE` fallbacks (see [Linux](#linux) for the dictionary lookup). A future Windows build plugs into the same seam.
 
 ### AI provider layer
 
@@ -165,7 +169,7 @@ Each provider profile is configured with:
 - model;
 - timeout;
 - optional custom headers;
-- optional API key (stored in the Keychain, never in config files).
+- optional API key (stored in the macOS Keychain or, on Linux, the Secret Service via gnome-keyring/KWallet — never in config files).
 
 Ollama and LM Studio expose OpenAI-compatible APIs, so they reuse the generic adapter rather than getting separate hard-coded implementations.
 
@@ -240,7 +244,7 @@ The first macOS release stays intentionally small:
 - Developer-ID signing and notarization;
 - Homebrew cask;
 - auto-updater;
-- Linux and Windows builds;
+- Windows build;
 - richer diff view and one-click suggestion acceptance;
 - user-defined rewrite presets;
 - per-app presets;
