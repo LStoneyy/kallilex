@@ -43,6 +43,21 @@
     platformInfo?.session === "wayland" && (platformInfo.wayland?.globalShortcut ?? false),
   );
 
+  // The input-synthesis opt-out (spec-13 Slice A) is only meaningful on
+  // Wayland — macOS and X11 synthetic input needs no permission, so there is
+  // nothing to opt out of there. It also requires the probed RemoteDesktop
+  // capability (like `portalManagedShortcut` above combines session +
+  // GlobalShortcuts capability): with no RemoteDesktop portal (e.g. Sway,
+  // Hyprland) `caps.input_synthesis` and thus `replace_back_available` are
+  // always `false` regardless of this setting, so the toggle would be inert
+  // and its hint would promise a permission dialog that compositor can never
+  // show. The setting itself stays persisted and untouched either way — only
+  // its surfacing here is gated, so a user who later moves to a
+  // portal-capable compositor keeps whatever they chose.
+  const showInputSynthesisToggle = $derived(
+    platformInfo?.session === "wayland" && (platformInfo.wayland?.inputSynthesis ?? false),
+  );
+
   // ---- shared settings (General + Providers both need it) -------------
 
   let settings = $state<Settings | null>(null);
@@ -102,6 +117,37 @@
       settings = await setSettings(updated);
     } catch (error) {
       spellcheckError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  // ---- General: results (input synthesis + auto-copy, spec-13 Slice C) --
+
+  let inputSynthesisError = $state<string | null>(null);
+
+  async function handleInputSynthesisToggle(event: Event) {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    inputSynthesisError = null;
+    try {
+      // Re-fetch immediately before mutating — see `handleSpellcheckToggle`.
+      const fresh = await getSettings();
+      const updated: Settings = { ...fresh, inputSynthesisEnabled: checked };
+      settings = await setSettings(updated);
+    } catch (error) {
+      inputSynthesisError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  let autoCopyError = $state<string | null>(null);
+
+  async function handleAutoCopyToggle(event: Event) {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    autoCopyError = null;
+    try {
+      const fresh = await getSettings();
+      const updated: Settings = { ...fresh, autoCopyResult: checked };
+      settings = await setSettings(updated);
+    } catch (error) {
+      autoCopyError = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -470,6 +516,47 @@
         {#if spellcheckError}
           <p class="error">{spellcheckError}</p>
         {/if}
+
+        <h2>Results</h2>
+        {#if showInputSynthesisToggle}
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              checked={settings?.inputSynthesisEnabled ?? true}
+              onchange={(event) => void handleInputSynthesisToggle(event)}
+            />
+            Use automatic paste-back
+          </label>
+          <p class="hint">
+            Lets Kallilex press Ctrl+C and Ctrl+V for you so Replace can put the result straight
+            back where you were. Your desktop asks for input permission once. Turn it off and
+            Kallilex never asks: capture then uses only the text you have selected, and results
+            are copied instead.
+          </p>
+          <p class="hint">
+            Turning this off doesn't revoke the permission itself — that stays something you do
+            in your desktop's own settings.
+          </p>
+          {#if inputSynthesisError}
+            <p class="error">{inputSynthesisError}</p>
+          {/if}
+        {/if}
+        <label class="toggle-row">
+          <input
+            type="checkbox"
+            checked={settings?.autoCopyResult ?? false}
+            onchange={(event) => void handleAutoCopyToggle(event)}
+          />
+          Copy the result automatically
+        </label>
+        <p class="hint">
+          Puts the result on the clipboard as soon as Kallilex changes the text, so you can close
+          the popover and paste. This replaces what was on the clipboard; edits you type yourself
+          afterwards still need the Copy button.
+        </p>
+        {#if autoCopyError}
+          <p class="error">{autoCopyError}</p>
+        {/if}
       </section>
     {:else if activeTab === "providers"}
       <section class="providers">
@@ -643,11 +730,14 @@
             </p>
             <p>
               <strong>Replace:</strong>
-              {#if platformInfo.wayland?.inputSynthesis}
-                Available (RemoteDesktop portal).
-              {:else}
+              {#if !platformInfo.wayland?.inputSynthesis}
                 Unavailable — your compositor doesn't offer the RemoteDesktop portal. Results can
                 still be copied.
+              {:else if settings?.inputSynthesisEnabled === false}
+                Available, but switched off in Settings → General ("Use automatic paste-back").
+                Results can still be copied.
+              {:else}
+                Available (RemoteDesktop portal).
               {/if}
             </p>
           {/if}

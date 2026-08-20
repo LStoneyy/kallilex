@@ -70,6 +70,15 @@ portals are active in Settings → Accessibility.
       resolve the app id it requires. An uninstalled dev run (`pnpm tauri dev`)
       has no app id and logs "An app id is required"; that is expected, not a
       release blocker.
+- [ ] Input-synthesis opt-out: on a portal-capable Wayland compositor
+      (GNOME/KDE), turn "Use automatic paste-back" off in Settings → General
+      *before* the first Replace — the remote-desktop permission dialog never
+      appears, capture still works from the current selection, Copy still
+      works, Replace is absent, and the popover shows no notice claiming a
+      missing portal.
+- [ ] Auto-copy: with "Copy the result automatically" on, both a successful AI
+      action and an applied spellcheck suggestion leave the result on the
+      clipboard ready to paste, without clicking Copy.
 
 ## 4. Clean-Mac smoke run
 

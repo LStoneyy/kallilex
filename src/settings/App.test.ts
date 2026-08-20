@@ -548,4 +548,180 @@ describe("settings App", () => {
     expect(await screen.findByPlaceholderText("Alt+Cmd+K")).toBeInTheDocument();
     expect(getWaylandShortcutTrigger).not.toHaveBeenCalled();
   });
+
+  it("does not render the input-synthesis opt-out on macOS", async () => {
+    render(App);
+
+    await screen.findByLabelText("Automatically check spelling in the popover");
+    expect(screen.queryByLabelText("Use automatic paste-back")).not.toBeInTheDocument();
+  });
+
+  it("does not render the input-synthesis opt-out on an X11 session", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "x11",
+    });
+
+    render(App);
+
+    await screen.findByLabelText("Automatically check spelling in the popover");
+    expect(screen.queryByLabelText("Use automatic paste-back")).not.toBeInTheDocument();
+  });
+
+  it("does not render the input-synthesis opt-out on a Wayland session whose compositor offers no RemoteDesktop portal", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: false, canPersistSession: false },
+    });
+
+    render(App);
+
+    await screen.findByLabelText("Automatically check spelling in the popover");
+    expect(screen.queryByLabelText("Use automatic paste-back")).not.toBeInTheDocument();
+  });
+
+  it("renders the input-synthesis opt-out on a Wayland session, reflecting the persisted value", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: true },
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), inputSynthesisEnabled: false });
+
+    render(App);
+
+    const checkbox = await screen.findByLabelText("Use automatic paste-back");
+    await waitFor(() => {
+      expect(checkbox).not.toBeChecked();
+    });
+  });
+
+  it("toggling the input-synthesis opt-out re-fetches settings and saves only the flipped field", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: true },
+    });
+    const initial: Settings = { ...defaultSettings(), shortcut: "Ctrl+Alt+K", inputSynthesisEnabled: true };
+    const changedElsewhere: Settings = {
+      ...defaultSettings(),
+      shortcut: "Ctrl+Alt+K",
+      inputSynthesisEnabled: true,
+      activeProfileId: "profile-from-another-tab",
+      profiles: [
+        {
+          id: "profile-from-another-tab",
+          name: "Added elsewhere",
+          baseUrl: "http://localhost:5555/v1",
+          model: "phi3",
+          timeoutSecs: 20,
+          customHeaders: [],
+          enabled: true,
+          hasApiKey: false,
+        },
+      ],
+    };
+    getSettings.mockResolvedValueOnce(initial).mockResolvedValueOnce(changedElsewhere);
+
+    render(App);
+
+    const checkbox = await screen.findByLabelText("Use automatic paste-back");
+    await waitFor(() => {
+      expect(checkbox).toBeChecked();
+    });
+
+    await fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect(setSettings).toHaveBeenCalledWith({
+        ...changedElsewhere,
+        inputSynthesisEnabled: false,
+      });
+    });
+  });
+
+  it("renders the auto-copy checkbox on macOS and toggling it re-fetches settings and saves only the flipped field", async () => {
+    const initial: Settings = { ...defaultSettings(), shortcut: "Ctrl+Alt+K" };
+    const changedElsewhere: Settings = {
+      ...defaultSettings(),
+      shortcut: "Ctrl+Alt+K",
+      activeProfileId: "profile-from-another-tab",
+      profiles: [
+        {
+          id: "profile-from-another-tab",
+          name: "Added elsewhere",
+          baseUrl: "http://localhost:5555/v1",
+          model: "phi3",
+          timeoutSecs: 20,
+          customHeaders: [],
+          enabled: true,
+          hasApiKey: false,
+        },
+      ],
+    };
+    getSettings.mockResolvedValueOnce(initial).mockResolvedValueOnce(changedElsewhere);
+
+    render(App);
+
+    const checkbox = await screen.findByLabelText("Copy the result automatically");
+    expect(checkbox).not.toBeChecked();
+
+    await fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect(setSettings).toHaveBeenCalledWith({
+        ...changedElsewhere,
+        autoCopyResult: true,
+      });
+    });
+  });
+
+  it("Accessibility tab reads Replace as switched off in Settings when the capability is present but the setting is off", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: true, canPersistSession: true },
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), inputSynthesisEnabled: false });
+
+    render(App);
+    await openAccessibilityTab();
+
+    expect(
+      await screen.findByText(/switched off in Settings/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/doesn't offer the RemoteDesktop portal/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("Accessibility tab still reads Replace as unavailable when the compositor genuinely lacks the portal", async () => {
+    getPlatformInfo.mockResolvedValue({
+      ...macosPlatformInfo(),
+      os: "linux",
+      permissionRequired: false,
+      session: "wayland",
+      wayland: { globalShortcut: true, inputSynthesis: false, canPersistSession: false },
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), inputSynthesisEnabled: true });
+
+    render(App);
+    await openAccessibilityTab();
+
+    expect(
+      await screen.findByText(/doesn't offer the RemoteDesktop portal/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/switched off in Settings/)).not.toBeInTheDocument();
+  });
 });

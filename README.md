@@ -37,7 +37,7 @@ Support depends on your session type:
 
 - **X11 sessions** — full functionality: global shortcut, automatic capture, and Replace all work as on macOS.
 - **Wayland sessions** — support depends on which XDG desktop portals your compositor provides; Kallilex detects this at startup and enables each feature independently. Settings → Accessibility shows which capabilities are live.
-  - KDE Plasma and GNOME 48+: the full loop — global shortcut (bound through the system; rebind it in your desktop's keyboard settings) and automatic Replace. The first Replace asks for the remote-desktop input permission once via your desktop's own dialog; the grant persists until you revoke it in system settings.
+  - KDE Plasma and GNOME 48+: the full loop — global shortcut (bound through the system; rebind it in your desktop's keyboard settings) and automatic Replace. The first Replace asks for the remote-desktop input permission once via your desktop's own dialog; the grant persists until you revoke it in system settings. That permission is optional: turn "Use automatic paste-back" off in Settings → General and Kallilex never asks for it — capture keeps working from your current selection, and results are copied instead, automatically if you also turn on "Copy the result automatically".
   - Hyprland: global shortcut works; Replace is unavailable (no RemoteDesktop portal) — use Copy.
   - Sway and other wlroots compositors: degraded mode — open Kallilex from the tray ("Open Kallilex") to capture the primary selection, use Copy.
 
