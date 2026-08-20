@@ -60,6 +60,10 @@
   // first `refreshContext()` resolves, matching `spellcheckEnabled`'s
   // convention above.
   let inputSynthesisEnabled = $state(true);
+  // The user's spec-13 Slice B auto-copy preference. Defaults to `false`
+  // (permissive-in-the-other-direction: no clipboard write happens until
+  // this loads), matching the setting's own default.
+  let autoCopyResult = $state(false);
   // True only while an AI action (`run_action`) is specifically in flight —
   // as opposed to `busy`, which is also true during Replace/Copy. Gates the
   // Cancel affordance and the Escape-cancels-first-then-closes behavior.
@@ -145,6 +149,44 @@
   }
 
   /**
+   * Puts `value` on the clipboard when the user has asked for results to be
+   * copied automatically (spec-13 Slice B). Called only where *Kallilex
+   * itself* changed the text — a successful AI action, or an applied
+   * spellcheck suggestion — never per keystroke while the user types:
+   * firing on every edit would clobber the clipboard mid-edit, and a rule
+   * the user cannot predict is worse than one extra Copy click. The last
+   * such change wins.
+   *
+   * Deliberately NOT called on the Replace path: `replace_back` owns the
+   * clipboard for its whole backup -> write -> paste -> restore sequence,
+   * and a copy landing inside that window would defeat the restore. The two
+   * settings are usable together, so this is an ordering rule, not a mutual
+   * exclusion.
+   */
+  async function autoCopyIfEnabled(value: string) {
+    if (!autoCopyResult) return;
+    // Both call sites fire this synchronously right after changing `text`,
+    // so reading the generation here is equivalent to capturing it at the
+    // call site — and it keeps the staleness rule in one place.
+    const generation = captureGeneration;
+    try {
+      await copyResult(value);
+    } catch (error) {
+      console.error("auto-copy failed", error);
+      if (generation !== captureGeneration) {
+        // A fresh capture superseded this session while the copy was in
+        // flight. `refreshCapture` already cleared `actionError` for the new
+        // session; surfacing this one now would pin a failure that belongs
+        // to an abandoned capture onto text the user is only just looking
+        // at. Logged above either way, matching `runSpellcheck`'s
+        // console-only failure handling.
+        return;
+      }
+      actionError = "The result couldn't be copied automatically — use Copy.";
+    }
+  }
+
+  /**
    * Fetches the AI-action context (whether a provider is configured, which
    * one, and its privacy class) and the spellcheck-enabled flag. Both can
    * change while the user was away in Settings, so this runs on mount, on
@@ -155,6 +197,7 @@
     const [settings, context] = await Promise.all([getSettings(), getActionContext()]);
     spellcheckEnabled = settings.spellcheckEnabled;
     inputSynthesisEnabled = settings.inputSynthesisEnabled;
+    autoCopyResult = settings.autoCopyResult;
     actionContext = context;
     if (context.configured) {
       showConfiguredHint = false;
@@ -400,6 +443,9 @@
         misspellings = [];
         popup = null;
         clearCopied();
+        // Fire-and-forget: does not extend the `busy`/`aiRunning` window the
+        // `finally` block below controls.
+        void autoCopyIfEnabled(outcome.text);
         if (spellcheckEnabled) {
           void runSpellcheck(outcome.text);
         }
@@ -516,6 +562,7 @@
     misspellings = [];
     text = corrected;
     clearCopied();
+    void autoCopyIfEnabled(corrected);
     void runSpellcheck(corrected);
     void tick().then(updateScrollShadows);
   }

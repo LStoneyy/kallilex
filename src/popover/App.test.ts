@@ -88,6 +88,7 @@ function defaultSettings(): Settings {
     profiles: [],
     waylandRestoreToken: null,
     inputSynthesisEnabled: true,
+    autoCopyResult: false,
   };
 }
 
@@ -1408,5 +1409,206 @@ describe("popover App", () => {
     expect(await screen.findByText(waylandNoticeNoGlobalShortcutText)).toBeInTheDocument();
     expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
     expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
+  });
+
+  // spec-13 Slice B: auto-copying results.
+
+  it("copies the result automatically after a successful AI action when auto-copy is enabled", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "some rewritten text" });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalledWith("some rewritten text");
+    });
+  });
+
+  it("does not copy the result automatically after a successful AI action when auto-copy is disabled (the default)", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "some rewritten text" });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some rewritten text");
+    });
+
+    expect(copyResult).not.toHaveBeenCalled();
+  });
+
+  it("copies the corrected text automatically when applying a spellcheck suggestion and auto-copy is enabled", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });
+    captureSelection.mockResolvedValue({
+      text: misspelledText,
+      reason: null,
+      sourceApp: null,
+    });
+    spellcheck.mockResolvedValueOnce({ misspellings: [halpMisspelling] });
+
+    const { container } = render(App);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll(".mark")).toHaveLength(1);
+    });
+
+    const mark = container.querySelector(".mark") as HTMLElement;
+    await fireEvent.click(mark);
+    const helpButton = await screen.findByRole("button", { name: "help" });
+
+    spellcheck.mockResolvedValueOnce({ misspellings: [] });
+    await fireEvent.click(helpButton);
+
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalledWith("I help you");
+    });
+  });
+
+  it("does not copy automatically on the Replace path even when auto-copy is enabled", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });
+    captureSelection.mockResolvedValue({
+      text: "original text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+    });
+
+    const replaceButton = screen.getByRole("button", { name: "Replace" });
+    await fireEvent.click(replaceButton);
+
+    await waitFor(() => {
+      expect(replaceBack).toHaveBeenCalledWith("original text");
+    });
+    expect(copyResult).not.toHaveBeenCalled();
+  });
+
+  it("does not surface an automatic-copy failure that belongs to a superseded capture", async () => {
+    let capturedHandler: ((event: unknown) => void) | undefined;
+    listen.mockImplementation((_event: string, handler: (event: unknown) => void) => {
+      capturedHandler = handler;
+      return Promise.resolve(() => {});
+    });
+    getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "some rewritten text" });
+
+    // Hold the auto-copy open so a fresh capture can supersede the session
+    // while it is still in flight.
+    let rejectCopy: ((reason: unknown) => void) | undefined;
+    copyResult.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectCopy = reject;
+      }),
+    );
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Rewrite" }));
+
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalledWith("some rewritten text");
+    });
+
+    captureSelection.mockResolvedValue({
+      text: "a newer capture",
+      reason: null,
+      sourceApp: null,
+    });
+    capturedHandler?.({});
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("a newer capture");
+    });
+
+    rejectCopy?.(new Error("clipboard write failed"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("a newer capture");
+    });
+    expect(
+      screen.queryByText("The result couldn't be copied automatically — use Copy."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("surfaces a failure of the automatic copy instead of swallowing it silently", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });
+    copyResult.mockRejectedValueOnce(new Error("clipboard write failed"));
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "some rewritten text" });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("The result couldn't be copied automatically — use Copy."),
+      ).toBeInTheDocument();
+    });
   });
 });

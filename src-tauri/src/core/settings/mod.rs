@@ -71,6 +71,17 @@ pub struct Settings {
     /// session on the same machine (e.g. a laptop that runs both).
     #[serde(default = "default_input_synthesis_enabled")]
     pub input_synthesis_enabled: bool,
+    /// Whether Kallilex puts the result on the clipboard as soon as it
+    /// changes the text itself — a successful AI action or an applied
+    /// spellcheck suggestion — so the copy-only flow needs no Copy click
+    /// (spec-13 Slice B). Plain `#[serde(default)]` (`false`) is correct
+    /// here, unlike [`Settings::input_synthesis_enabled`] above: this is a
+    /// new opt-in convenience, so "no opinion persisted" must mean "nothing
+    /// changes for anyone who didn't ask for it". Cross-platform: it has the
+    /// same value on macOS, X11 and Wayland, unlike the Wayland-only
+    /// opt-out above.
+    #[serde(default)]
+    pub auto_copy_result: bool,
 }
 
 /// See [`Settings::input_synthesis_enabled`]'s doc comment for why this is a
@@ -90,6 +101,7 @@ impl Default for Settings {
             profiles: Vec::new(),
             wayland_restore_token: None,
             input_synthesis_enabled: true,
+            auto_copy_result: false,
         }
     }
 }
@@ -159,6 +171,7 @@ mod tests {
             }],
             wayland_restore_token: Some("restore-token-abc".to_string()),
             input_synthesis_enabled: false,
+            auto_copy_result: true,
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -230,6 +243,13 @@ mod tests {
         };
         set_settings(&store, with_input_synthesis_disabled.clone()).unwrap();
         assert!(!get_settings(&store).unwrap().input_synthesis_enabled);
+
+        let with_auto_copy_result = Settings {
+            auto_copy_result: true,
+            ..with_input_synthesis_disabled.clone()
+        };
+        set_settings(&store, with_auto_copy_result.clone()).unwrap();
+        assert!(get_settings(&store).unwrap().auto_copy_result);
     }
 
     #[test]
@@ -249,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_spec_13_persisted_json_without_input_synthesis_enabled_still_deserializes() {
+    fn pre_spec_13_persisted_json_without_the_new_fields_still_deserializes() {
         let json = r#"{
             "activeProfileId": null,
             "shortcut": "Alt+Cmd+K",
@@ -262,7 +282,13 @@ mod tests {
 
         let settings: Settings = serde_json::from_str(json).expect("should deserialize");
 
+        // `input_synthesis_enabled` keeps today's behavior (Replace working)
+        // for existing installs; `auto_copy_result` is a new opt-in
+        // convenience that must not turn itself on for anyone who never
+        // asked for it. "No opinion persisted" reads differently for each
+        // field, by design — see their doc comments on `Settings`.
         assert!(settings.input_synthesis_enabled);
+        assert!(!settings.auto_copy_result);
     }
 
     #[test]

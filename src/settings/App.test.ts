@@ -66,6 +66,7 @@ function defaultSettings(): Settings {
     profiles: [],
     waylandRestoreToken: null,
     inputSynthesisEnabled: true,
+    autoCopyResult: false,
   };
 }
 

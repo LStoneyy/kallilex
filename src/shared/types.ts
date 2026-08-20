@@ -12,6 +12,8 @@ export interface Settings {
   waylandRestoreToken: string | null;
   /** Wayland-only opt-out (spec-13 Slice A) from RemoteDesktop-portal input synthesis. */
   inputSynthesisEnabled: boolean;
+  /** Auto-copy results to the clipboard (spec-13 Slice B), cross-platform. */
+  autoCopyResult: boolean;
 }
 
 /**
