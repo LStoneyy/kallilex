@@ -154,7 +154,7 @@
         </div>
 
         <p class="trust-line">Free &amp; open source · Apache-2.0 · No accounts, no telemetry</p>
-        <p class="req-note">macOS · Apple Silicon &amp; Intel (universal) · Linux · x86_64 (.deb, .rpm, AppImage) · Windows 10/11 · x86_64 (.exe)</p>
+        <p class="req-note">macOS · Apple Silicon &amp; Intel (universal) · Linux · x86_64 (.deb, .rpm, AppImage) · Windows 10 (21H2+)/11 · x86_64 (.exe)</p>
       </div>
     </section>
 
@@ -351,10 +351,11 @@
               <a href="https://github.com/LStoneyy/kallilex/releases">All releases →</a>
             </div>
             <div class="gatekeeper-note">
-              <strong>Note on Gatekeeper:</strong> Kallilex is ad-hoc signed (no Apple Developer certificate yet).
-              On first launch macOS will show "Kallilex was not opened" — click Done, then
+              <strong>Note on Gatekeeper:</strong> Kallilex is signed with a stable self-signed certificate, not notarized by Apple.
+              On first launch macOS says the app could not be verified — click Done, then
               System Settings → Privacy &amp; Security → Open Anyway. One time only.
             </div>
+            <p class="muted-note">Updating from v0.4.0 or earlier? Those builds were ad-hoc signed, so the old Accessibility grant is stale — run <code>tccutil reset Accessibility com.webcommits.kallilex</code> once, then grant the permission again.</p>
           </div>
           <div class="install-card">
             <h3>Linux packages</h3>

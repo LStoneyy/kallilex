@@ -4,14 +4,18 @@
 
 > A tiny, local-first writing utility for spelling, rewriting, and polishing text from anywhere on your desktop.
 
+**Website:** [kallilex.webcommits.info](https://kallilex.webcommits.info/)
+
+![Kallilex in action: select text, press the shortcut, fix or rewrite, replace](assets/demo.gif)
+
 ## Idea
 
-Kallilex lives quietly in the macOS menu bar. Instead of opening a browser, switching to a chatbot, or installing a large writing suite, you select some text, press a shortcut, and Kallilex captures it automatically, edits it in a small popover, and puts the result straight back where it came from.
+Kallilex lives quietly in the macOS menu bar, the Linux tray, or the Windows notification area. Instead of opening a browser, switching to a chatbot, or installing a large writing suite, you select some text, press a shortcut, and Kallilex captures it automatically, edits it in a small popover, and puts the result straight back where it came from.
 
 The workflow is:
 
 1. Select text in any application.
-2. Press the global shortcut (**⌥⌘K** by default, configurable in Settings).
+2. Press the global shortcut (**⌥⌘K** on macOS, **Ctrl+Alt+K** on Linux and Windows; configurable in Settings).
 3. Kallilex captures the selection automatically and opens a popover with that text.
 4. Run a local spell check or an AI action: **Rewrite**, **Shorten**, **Improve clarity**, or a custom prompt.
 5. **Copy** the result to the clipboard, or **Replace** it back into the app you started from.
@@ -110,68 +114,27 @@ Once you're happy with the result:
 
 ## Name
 
-**Kallilex** is the working project name.
-
-It is inspired by Greek *kalli-* ("beautiful") and *lexis* ("word / expression"), with a nod to the ancient term *kallilexia* for elegant expression.
-
-A preliminary web/package/app search did not reveal an obvious existing software project named Kallilex. This is not a trademark clearance, so a proper trademark and domain check should happen before a public launch.
-
-## Visual identity — “Attic Oxide”
-
-The UI avoids the usual pastel developer palettes. The direction combines dark basalt, oxidized bronze, Attic pottery, marble, and restrained purple.
-
-| Token | Color | Use |
-| --- | --- | --- |
-| Basalt | `#17161A` | Main dark background |
-| Marble | `#F2EEE6` | Primary light text / light surface |
-| Verdigris | `#2FAF9B` | Primary accent, active states |
-| Attic Clay | `#E46846` | Main action / emphasis |
-| Tyrian | `#7D5778` | Secondary accent |
-| Electrum | `#D7B45B` | Warnings, highlights |
-| Ash | `#9C989F` | Muted text |
-
-Design principles:
-
-- compact rather than dashboard-like;
-- typography and spacing do most of the work;
-- almost no decorative gradients;
-- one strong accent per state;
-- dark mode first, with a marble-based light theme later.
+**Kallilex** combines Greek *kalli-* ("beautiful") and *lexis* ("word / expression"), with a nod to the ancient term *kallilexia* for elegant expression.
 
 ## Tech stack
 
-### Desktop shell
+- **Tauri 2** — the desktop shell: system tray / menu bar icon, configurable global shortcut, clipboard access, opt-in autostart (off by default), single-instance behavior, and persistent non-secret settings
+- **Rust** — native integrations, provider calls, clipboard/selection logic, and local checking
+- **Svelte + TypeScript** — the popover and settings UI
 
-- **Tauri 2**
-- **Rust** for native integrations, provider calls, clipboard/selection logic, and local checking
-- **Svelte + TypeScript** for the small popover and settings UI
+### Native integrations
 
-Tauri keeps the desktop shell small while leaving a realistic path to macOS, Linux, and Windows.
+Selected-text capture and replacement live behind one platform abstraction with three backends:
 
-### Native desktop features
+- **macOS** — the Accessibility APIs, with a clipboard-based fallback for applications that don't expose their selection cleanly.
+- **Linux** — on X11, `x11rb` queries frontmost-app identity, and key synthesis and window activation work directly. On Wayland, the GlobalShortcuts portal binds the shortcut and the RemoteDesktop portal synthesizes the keystrokes Replace needs, each only where the compositor supports it; primary-selection reads go through `arboard`. Wayland has no cross-client window query protocol, so frontmost-app identity is unavailable there.
+- **Windows** — UI Automation (`IUIAutomation`/`TextPattern`) reads the selection, `GetForegroundWindow` provides app identity, and Replace works via `SetForegroundWindow` plus `SendInput`.
 
-Kallilex uses Tauri's desktop capabilities for:
-
-- system tray / menu bar icon;
-- a configurable global shortcut;
-- clipboard access;
-- opt-in autostart (launch at login, off by default);
-- single-instance behavior;
-- persistent non-secret settings.
-
-On macOS, selected-text capture and replacement live behind a platform abstraction backed by the Accessibility APIs, with a clipboard-based fallback for applications that don't expose their selection cleanly.
-
-On Linux, the same abstraction has two backends. On X11, it's fully supported: `x11rb` queries the active window for frontmost-app identity, and key synthesis (for the clipboard fallback and Replace) and window activation both work directly. On Wayland, it runs through XDG desktop portals: the GlobalShortcuts portal binds the global shortcut, and the RemoteDesktop portal synthesizes the copy/paste keystrokes Replace needs, both only where the compositor supports them; primary-selection reads go through `arboard`'s data-control backend. Wayland has no cross-client window query protocol, so there is no way to read another app's window identity there.
-
-On Windows, capture uses UI Automation (`IUIAutomation`/`TextPattern`) to read the current selection from the focused element directly, with a synthetic Ctrl+C clipboard fallback for apps that expose no accessible text; frontmost-app identity comes from `GetForegroundWindow`. Replace activates the remembered source window with `SetForegroundWindow` and pastes via `SendInput` (synthetic Ctrl+V). Both capture and Replace are blocked by Windows' User Interface Privilege Isolation (UIPI) against apps running at a higher integrity level (elevated/administrator), which is reported as a clear failure rather than silent no-ops.
+The user-facing consequences of these backends are described under [Capture](#capture), [Linux](#linux), and [Windows](#windows).
 
 ### Spell checking
 
-Spell checking is independent from AI.
-
-On macOS, Kallilex uses the native spell-checking facilities so it benefits from the user's installed/preferred languages without loading a model.
-
-On Linux, the same `SpellChecker` seam is backed by `spellbook` — a pure-Rust Hunspell-compatible engine — reading system Hunspell/MySpell dictionaries with bundled `en_US`/`de_DE` fallbacks (see [Linux](#linux) for the dictionary lookup). On Windows, the same seam is backed by the native Windows Spell Checking API, using the spell-check languages installed for your display languages — no bundled dictionaries needed.
+Spell checking is independent from AI and sits behind one `SpellChecker` seam: the native spell-checking facilities on macOS, `spellbook` (a pure-Rust Hunspell-compatible engine) with system dictionaries on Linux, and the Windows Spell Checking API on Windows.
 
 ### AI provider layer
 
@@ -204,32 +167,6 @@ Rust pieces involved:
 - `tokio` — async work
 - Tauri Store — non-secret preferences
 
-## Suggested architecture
-
-```text
-src/
-  ui/
-    popover
-    settings
-
-src-tauri/
-  core/
-    actions.rs
-    providers/
-    spellcheck/
-    selection/
-    clipboard/
-    secrets/
-    settings/
-
-  platform/
-    macos/
-    linux/
-    windows/
-```
-
-Keep UI commands independent from provider implementation. A command such as `rewrite(text, preset, provider)` should not care whether the request goes to OpenAI, Ollama, LM Studio, or another compatible endpoint.
-
 ## Building from source
 
 Prerequisites:
@@ -245,23 +182,6 @@ pnpm tauri build   # build a release app bundle
 ```
 
 CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck), `pnpm test` (frontend tests), `cargo clippy` and `cargo test` for the Rust side, and a full `tauri build`, on macOS, Linux, and Windows.
-
-## v1 feature set
-
-The first macOS release stays intentionally small:
-
-- menu bar application;
-- configurable global shortcut (default ⌥⌘K);
-- automatic capture of the current selection via the Accessibility API, with a clipboard-based fallback (clipboard is backed up and restored);
-- local, offline spelling suggestions;
-- Rewrite / Shorten / Improve clarity actions;
-- custom prompt;
-- OpenAI-compatible provider configuration, with presets for OpenAI, Ollama, and LM Studio;
-- a Local/LAN/Cloud privacy badge for the active provider;
-- copy result to clipboard;
-- replace result back into the previous app (no diff view — the result replaces the editable text in the popover);
-- opt-in launch-at-login, off by default;
-- no accounts, telemetry, subscriptions, or cloud backend.
 
 ## Later
 
