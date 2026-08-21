@@ -35,7 +35,7 @@
   let platformInfo = $state<PlatformInfo | null>(null);
   const defaultShortcut = $derived(platformInfo?.defaultShortcut ?? "Alt+Cmd+K");
 
-  // The Wayland GlobalShortcuts portal (spec-12 Slice B), when the running
+  // The Wayland GlobalShortcuts portal, when the running
   // compositor offers it, is the sole owner of the "capture" shortcut: the
   // General tab's shortcut field switches to a read-only display of
   // whatever the portal reports instead of the free-text input/Save flow.
@@ -43,7 +43,7 @@
     platformInfo?.session === "wayland" && (platformInfo.wayland?.globalShortcut ?? false),
   );
 
-  // The input-synthesis opt-out (spec-13 Slice A) is only meaningful on
+  // The input-synthesis opt-out is only meaningful on
   // Wayland — macOS and X11 synthetic input needs no permission, so there is
   // nothing to opt out of there. It also requires the probed RemoteDesktop
   // capability (like `portalManagedShortcut` above combines session +
@@ -120,7 +120,7 @@
     }
   }
 
-  // ---- General: results (input synthesis + auto-copy, spec-13 Slice C) --
+  // ---- General: results (input synthesis + auto-copy) -------------------
 
   let inputSynthesisError = $state<string | null>(null);
 

@@ -60,7 +60,7 @@ portals are active in Settings → Accessibility.
       app restart (portal identifies the app id correctly).
 - [ ] Hyprland: global shortcut works; Replace is absent/copy-only; the notice
       names the missing RemoteDesktop portal.
-- [ ] Sway (wlroots): spec-11 degraded-mode regression — tray capture works,
+- [ ] Sway (wlroots): degraded-mode regression — tray capture works,
       copy-only, notice names both missing portals; no permission dialogs ever
       appear.
 - [ ] Token revocation: revoke Kallilex's remote-desktop permission in system

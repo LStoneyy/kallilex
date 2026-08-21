@@ -1,5 +1,5 @@
-//! Wayland XDG-portal capability probing (spec-12 Slice A) and the
-//! GlobalShortcuts portal binding built on top of it (spec-12 Slice B).
+//! Wayland XDG-portal capability probing and the GlobalShortcuts portal
+//! binding built on top of it.
 //!
 //! Wayland has no single API surface for global shortcuts or input
 //! synthesis the way X11 does; instead, compositors *optionally* implement
@@ -18,9 +18,9 @@
 //! appear, and even then only in direct response to a user-initiated
 //! action (the first fallback-copy or Replace), never at startup.
 //!
-//! [`remote_desktop`] (spec-12 Slice C) layers input synthesis (synthetic
-//! Ctrl+C/Ctrl+V via `NotifyKeyboardKeycode`) and the restore-token session
-//! lifecycle on top of the `RemoteDesktop` capability probed here.
+//! [`remote_desktop`] layers input synthesis (synthetic Ctrl+C/Ctrl+V via
+//! `NotifyKeyboardKeycode`) and the restore-token session lifecycle on top
+//! of the `RemoteDesktop` capability probed here.
 
 mod probe;
 mod remote_desktop;
@@ -107,14 +107,14 @@ pub use probe::probe;
 pub use remote_desktop::{send_chord, Chord};
 pub use shortcut::run_portal_shortcut;
 
-/// Process-wide, user-controlled opt-out from input synthesis (spec-13 Slice
-/// A): whether the user currently allows Kallilex to synthesize Ctrl+C /
-/// Ctrl+V through the RemoteDesktop portal. Defaults to `true` so a process
-/// that hasn't yet loaded settings (or is running on X11/macOS, where this
-/// is never consulted) behaves exactly as it did before this setting
-/// existed. Kept separate from [`CAPABILITIES`]: that describes what the
-/// compositor offers and never changes after the startup probe, while this
-/// is a live user choice that can flip at any time from Settings.
+/// Process-wide, user-controlled opt-out from input synthesis: whether the
+/// user currently allows Kallilex to synthesize Ctrl+C / Ctrl+V through the
+/// RemoteDesktop portal. Defaults to `true` so a process that hasn't yet
+/// loaded settings (or is running on X11/macOS, where this is never
+/// consulted) behaves as if input synthesis were allowed. Kept separate
+/// from [`CAPABILITIES`]: that describes what the compositor offers and
+/// never changes after the startup probe, while this is a live user choice
+/// that can flip at any time from Settings.
 static INPUT_SYNTHESIS_ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// Updates the user's input-synthesis opt-out flag. When `enabled` is

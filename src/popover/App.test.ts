@@ -1277,7 +1277,7 @@ describe("popover App", () => {
   });
 
   it("Replace is enabled on Wayland with input synthesis, using the focus-return source app placeholder", async () => {
-    // spec-12 Slice C: on Wayland with the RemoteDesktop portal's
+    // On Wayland with the RemoteDesktop portal's
     // input-synthesis capability live, `frontmost_app()` returns the
     // documented focus-return placeholder (`bundleId: null, pid: 0,
     // name: null`) instead of `null`, so the same `canReplace` gating that
@@ -1358,9 +1358,9 @@ describe("popover App", () => {
   });
 
   it("offers Replace and shows no Wayland notice on Windows platform info", async () => {
-    // spec-15 Slice A: Windows has no session/portal concept at all, so
+    // Windows has no session/portal concept at all, so
     // Replace is offered purely off `replaceBackAvailable` (true, a final
-    // platform capability, not a Slice A placeholder) and no Wayland notice
+    // platform capability) and no Wayland notice
     // should ever render regardless of session.
     getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
     captureSelection.mockResolvedValue({
@@ -1379,7 +1379,7 @@ describe("popover App", () => {
     expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
   });
 
-  // spec-13 Slice A: the input-synthesis opt-out.
+  // The input-synthesis opt-out.
 
   it("hides Replace on Wayland when the compositor is capable but the user switched input synthesis off", async () => {
     // `replaceBackAvailable: true` here simulates `loadPlatformInfo()`'s
@@ -1445,7 +1445,7 @@ describe("popover App", () => {
     expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
   });
 
-  // spec-13 Slice B: auto-copying results.
+  // Auto-copying results.
 
   it("copies the result automatically after a successful AI action when auto-copy is enabled", async () => {
     getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });

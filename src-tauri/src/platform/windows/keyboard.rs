@@ -1,7 +1,7 @@
-//! Windows key synthesis (spec-15 Slice B): `SendInput` with virtual-key
-//! codes for synthetic Ctrl+C/Ctrl+V, including the modifier-hygiene cleanup
-//! the default `Ctrl+Alt+K` shortcut requires — see [`send_ctrl_chord`]'s doc
-//! comment for the "Modifier hygiene" hazard this exists to handle.
+//! Windows key synthesis: `SendInput` with virtual-key codes for synthetic
+//! Ctrl+C/Ctrl+V, including the modifier-hygiene cleanup the default
+//! `Ctrl+Alt+K` shortcut requires — see [`send_ctrl_chord`]'s doc comment for
+//! the "Modifier hygiene" hazard this exists to handle.
 
 use std::thread;
 use std::time::Duration;
@@ -51,7 +51,7 @@ impl Keyboard for WindowsKeyboard {
 /// (unlike scan codes, which are physical-position-based and vary with the
 /// user's keyboard layout).
 ///
-/// **Modifier hygiene** (the Windows-specific hazard spec-15 calls out): the
+/// **Modifier hygiene** (the Windows-specific hazard): the
 /// default shortcut is `Ctrl+Alt+K`, so Alt is almost always still physically
 /// held when this runs — and `Ctrl+Alt` is AltGr on Windows, so an
 /// un-cleaned Ctrl+C is not a copy in many apps. Before synthesizing the

@@ -1,7 +1,7 @@
 //! Clipboard seam: abstracts pasteboard access plus a synthetic-copy
 //! keyboard trigger, and owns the single source of truth for the pending
 //! fallback backup (shared between capture's cancel path here and the
-//! Copy/Replace actions added in spec-04).
+//! Copy/Replace actions).
 
 #[cfg(test)]
 pub mod fakes;
@@ -40,7 +40,7 @@ pub trait Clipboard: Send + Sync {
 }
 
 /// Platform seam for synthesizing the ⌘C fallback keystroke and the ⌘V
-/// paste used by replace-back (spec-04).
+/// paste used by replace-back.
 pub trait Keyboard: Send + Sync {
     /// Sends a synthetic Cmd+C to the frontmost app.
     fn send_copy(&self) -> Result<(), String>;
@@ -109,7 +109,7 @@ impl BackupLifecycle {
     }
 
     /// Removes and returns the pending backup without restoring it. This is
-    /// replace-back's (spec-04) race guard: once replace-back has taken the
+    /// replace-back's race guard: once replace-back has taken the
     /// pending backup, the popover's focus-loss cancel path
     /// (`cancel_capture` -> `restore_pending`) becomes a no-op and cannot
     /// restore the clipboard mid-replace — which matters because the
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn take_pending_removes_the_backup_and_makes_a_later_restore_a_no_op() {
-        // The replace-back race guard (spec-04): once `take_pending` has
+        // The replace-back race guard: once `take_pending` has
         // removed the pending backup, a concurrent `restore_pending` call
         // (the popover's focus-loss cancel path) must not touch the
         // clipboard at all.

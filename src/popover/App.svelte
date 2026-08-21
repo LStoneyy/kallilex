@@ -55,12 +55,11 @@
   let actionError = $state<string | null>(null);
   let actionContext = $state<ActionContext | null>(null);
   let spellcheckEnabled = $state(true);
-  // The user's spec-13 Slice A opt-out from Wayland input synthesis.
-  // Defaults to `true` (permissive) so nothing flashes away before the
+  // The user's opt-out from Wayland input synthesis. Defaults to `true` (permissive) so nothing flashes away before the
   // first `refreshContext()` resolves, matching `spellcheckEnabled`'s
   // convention above.
   let inputSynthesisEnabled = $state(true);
-  // The user's spec-13 Slice B auto-copy preference. Defaults to `false`
+  // The user's auto-copy preference. Defaults to `false`
   // (permissive-in-the-other-direction: no clipboard write happens until
   // this loads), matching the setting's own default.
   let autoCopyResult = $state(false);
@@ -150,7 +149,7 @@
 
   /**
    * Puts `value` on the clipboard when the user has asked for results to be
-   * copied automatically (spec-13 Slice B). Called only where *Kallilex
+   * copied automatically. Called only where *Kallilex
    * itself* changed the text — a successful AI action, or an applied
    * spellcheck suggestion — never per keystroke while the user types:
    * firing on every edit would clobber the clipboard mid-edit, and a rule
@@ -333,8 +332,7 @@
   }
 
   const canReplace = $derived(text.trim() !== "" && sourceApp !== null && !busy);
-  // True when the user has switched input synthesis off (spec-13 Slice A)
-  // on a Wayland session — the only session type the setting is honored on.
+  // True when the user has switched input synthesis off on a Wayland session — the only session type the setting is honored on.
   // Needed on top of `platformInfo.replaceBackAvailable` because
   // `loadPlatformInfo()` caches its result per window, so a toggle in
   // Settings while the popover is already open wouldn't otherwise be
@@ -350,14 +348,14 @@
     platformInfo === null || (platformInfo.replaceBackAvailable && !inputSynthesisOffByChoice),
   );
   // Wayland's global shortcut and automatic replace-back availability
-  // depend on which XDG portals the running compositor implements (spec-12)
+  // depend on which XDG portals the running compositor implements
   // — this is a plain factual notice about what's missing, not an error
   // state, so it renders unconditionally (when anything is missing) rather
   // than behind any dismiss/error affordance. Replace being off is a
   // separate case: when it's off because the *user* switched input
   // synthesis off, that's a deliberate choice, not something wrong with the
   // session, so it is never reported here at all — only the shortcut
-  // dimension still matters in that case (spec-13 Slice A).
+  // dimension still matters in that case.
   const waylandNoticeText = $derived.by(() => {
     if (platformInfo?.session !== "wayland") return null;
     const wayland = platformInfo.wayland;

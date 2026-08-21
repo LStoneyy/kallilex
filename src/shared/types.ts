@@ -10,9 +10,9 @@ export interface Settings {
   accessibilityOnboardingShown: boolean;
   profiles: ProviderProfile[];
   waylandRestoreToken: string | null;
-  /** Wayland-only opt-out (spec-13 Slice A) from RemoteDesktop-portal input synthesis. */
+  /** Wayland-only opt-out from RemoteDesktop-portal input synthesis. */
   inputSynthesisEnabled: boolean;
-  /** Auto-copy results to the clipboard (spec-13 Slice B), cross-platform. */
+  /** Auto-copy results to the clipboard, cross-platform. */
   autoCopyResult: boolean;
   /** Whether the first-run onboarding window has been completed (or
    * auto-completed for an already-set-up install). */

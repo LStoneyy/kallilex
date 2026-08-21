@@ -1,4 +1,4 @@
-//! Desktop integration tests for spec-15 Slice B's Windows capture path
+//! Desktop integration tests for the Windows capture path
 //! (`WindowsSelectionBackend`, `WindowsClipboard`, `WindowsKeyboard`).
 //!
 //! These need an interactive Windows desktop session: they open Notepad and
@@ -113,16 +113,12 @@ impl Drop for ClipboardRestoreGuard {
 /// behind on the desktop.
 ///
 /// Cleanup is unconditional and lives entirely here, not as an explicit step
-/// at the end of a passing test body: a prior version of this module cleared
-/// the typed marker text only after all assertions had already run, so a
-/// failing assertion (as `ax_selected_text()`'s did, before the observation
-/// documented on [`notepad_uia_selection_probe`] was understood) skipped that
-/// step entirely, and the subsequent unconditional `TerminateProcess` then
-/// killed Notepad while it still held the marker text. Combined with Windows
-/// 11 Notepad's session-restore feature, that is what left junk like
-/// `"kallilex eeeeeeeeeakallilex ..."` sitting in Notepad's session across
-/// runs. Putting the clear-and-close sequence in `Drop` means it always runs,
-/// panic or not.
+/// at the end of a passing test body: the clear-and-close sequence must run
+/// even when an assertion panics partway through — a failing assertion must
+/// not leave Notepad holding the typed marker text when `TerminateProcess`
+/// runs, because Windows 11 Notepad's session-restore feature would then
+/// resurrect leftover probe text the next time Notepad opens. Putting the
+/// sequence in `Drop` means it always runs, panic or not.
 ///
 /// The close itself prefers a graceful Alt+F4 (with the document already
 /// cleared, no save prompt appears) over an immediate `TerminateProcess`,
@@ -469,32 +465,23 @@ fn notepad_document_text_reflects_typed_marker() {
 /// Exercises the production `WindowsSelectionBackend::ax_selected_text()`
 /// instant-selection path, but deliberately does **not** assert `Some`:
 /// Windows 11 Notepad's (`RichEditD2DPT`) `TextPattern::GetSelection()`
-/// behavior has been observed to vary. An earlier independent cross-check
-/// against a Windows 11 Notepad build with the .NET `UIAutomationClient`
-/// library (outside this test suite) found `GetSelection()` returning a
-/// single, non-degenerate range whose `GetText(-1)` was an empty string, even
-/// though that same document's `DocumentRange().GetText(-1)` (see
-/// [`notepad_document_text_reflects_typed_marker`]) read back the full text
-/// correctly — which would make `ax_selected_text()`'s `None` the correct,
-/// expected result of `selection.rs`'s existing "empty selection text is
-/// `None`" contract (see `selection.rs::read_selected_text`), not a bug.
-/// However, empirical runs of *this* test (2026-08-21, same machine) instead
-/// consistently got the full marker text back as `Some`. Whether that
-/// difference comes from Notepad build/version, timing (this test settles
-/// 300ms after `select_all()` before reading), or something else observed
-/// only in the standalone .NET check is unresolved — which is exactly why
-/// this probe does not hard-assert either way: either result is treated as
-/// acceptable here, and `selection.rs` itself is out of scope for this test
-/// and stays unchanged regardless. If `ax_selected_text()` does return
-/// `None` on a given app/build, capture legitimately falls through to the
-/// synthetic-Ctrl+C clipboard path exercised by
-/// [`notepad_synthetic_copy_round_trip`] instead.
+/// behavior varies by Notepad build and timing — `GetSelection()` has been
+/// observed returning a single, non-degenerate range whose `GetText(-1)` is
+/// an empty string even when the same document's `DocumentRange().GetText(-1)`
+/// (see [`notepad_document_text_reflects_typed_marker`]) reads back the full
+/// text correctly. Under `selection.rs`'s "empty selection text is `None`"
+/// contract (see `selection.rs::read_selected_text`), that makes `None` a
+/// correct, expected result of this path rather than a bug — and other
+/// builds/timings instead return the full marker text as `Some`. Either
+/// result is treated as acceptable here, so the probe does not hard-assert
+/// either way. If `ax_selected_text()` does return `None` on a given
+/// app/build, capture legitimately falls through to the synthetic-Ctrl+C
+/// clipboard path exercised by [`notepad_synthetic_copy_round_trip`] instead.
 ///
-/// This probe still exists, and is still run with `--nocapture`, purely so a
-/// maintainer can see at a glance — via the `eprintln!` below — which
-/// behavior the UIA instant path exhibits against a given app/build, without
-/// that being baked into a hard assertion that would otherwise fail this
-/// whole module depending on which behavior a given Notepad build shows.
+/// The probe is still run with `--nocapture` so a maintainer can see at a
+/// glance — via the `eprintln!` below — which behavior the UIA instant path
+/// exhibits against a given app/build, without that being baked into a hard
+/// assertion that would fail this whole module depending on the build.
 #[test]
 #[ignore]
 fn notepad_uia_selection_probe() {

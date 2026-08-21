@@ -1,6 +1,6 @@
 //! Binding the "capture" shortcut through the `org.freedesktop.portal.GlobalShortcuts`
 //! interface, and translating Kallilex's stored shortcut string into the hint
-//! that portal accepts (spec-12 Slice B).
+//! that portal accepts.
 //!
 //! The compositor — not Kallilex — owns everything about how this shortcut
 //! is actually presented and remembered: whether/how it's shown to the user

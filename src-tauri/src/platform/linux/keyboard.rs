@@ -1,11 +1,11 @@
 //! Synthetic Ctrl+C/Ctrl+V key synthesis: `enigo`'s X11 (XTest) backend on
-//! X11, and the RemoteDesktop portal's `NotifyKeyboardKeycode` (spec-12
-//! Slice C, [`wayland::send_chord`]) on Wayland sessions where input
-//! synthesis is live — the compositor offers the portal *and* the user
-//! hasn't switched it off (spec-13 Slice A). Wayland sessions where it
-//! isn't live, for either reason, keep reporting the unconditional `Err`
-//! from spec-11 — there is no synthetic-input mechanism to fall back to on
-//! those compositors, and none the user has agreed to use on this one.
+//! X11, and the RemoteDesktop portal's `NotifyKeyboardKeycode`
+//! ([`wayland::send_chord`]) on Wayland sessions where input synthesis is
+//! live — the compositor offers the portal *and* the user hasn't switched
+//! it off. Wayland sessions where it isn't live, for either reason, keep
+//! reporting the unconditional `Err` — there is no synthetic-input
+//! mechanism to fall back to on those compositors, and none the user has
+//! agreed to use on this one.
 
 use enigo::{Direction, Enigo, Key, Keyboard as EnigoKeyboard, Settings};
 use tauri::AppHandle;

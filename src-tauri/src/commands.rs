@@ -51,7 +51,7 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 /// string is still persisted as-is — it remains the default the same
 /// on-disk settings would use on an X11 session on the same machine.
 ///
-/// When `input_synthesis_enabled` changes (spec-13 Slice A), the new value
+/// When `input_synthesis_enabled` changes, the new value
 /// is pushed to [`platform::set_input_synthesis_enabled`] right after the
 /// save succeeds, so a live toggle takes effect immediately — no restart,
 /// and (when switched off) any already-open RemoteDesktop session is
@@ -98,7 +98,7 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, Stri
 }
 
 /// The GlobalShortcuts portal-reported human-readable trigger for the
-/// "capture" shortcut (spec-12 Slice B), or `None` when unbound — the portal
+/// "capture" shortcut, or `None` when unbound — the portal
 /// declined/hasn't confirmed a bind, or this isn't a portal-managed session
 /// at all (the state is `manage`d unconditionally but only ever written to
 /// from the portal task). Used by the Settings window's General tab to show

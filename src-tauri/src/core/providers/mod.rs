@@ -1,4 +1,4 @@
-//! AI provider layer (spec-05): named provider profiles talking to any
+//! AI provider layer: named provider profiles talking to any
 //! OpenAI-compatible Chat Completions endpoint (see [`openai`]), prompt
 //! assembly for the bundled actions, a privacy classification of the
 //! endpoint host, and the [`run_action`] orchestration the `run_action`

@@ -52,8 +52,7 @@ pub use windows::{
 pub struct PlatformInfo {
     /// "macos" | "linux" | "windows"
     pub os: &'static str,
-    /// Display-server session: `None` on macOS; Slice B fills in
-    /// "x11"/"wayland" on Linux.
+    /// Display-server session: `None` on macOS; "x11"/"wayland" on Linux.
     pub session: Option<String>,
     /// Whether Replace (write-back into the source app) is available.
     pub replace_back_available: bool,
@@ -62,10 +61,10 @@ pub struct PlatformInfo {
     pub permission_required: bool,
     /// The platform's default global shortcut, for UI labels/placeholders.
     pub default_shortcut: String,
-    /// XDG-portal capability probe results (spec-12). `None` on macOS and on
-    /// X11 sessions, where portals aren't consulted at all; `Some` on
-    /// Wayland sessions, reflecting whatever the running compositor's
-    /// desktop portal backend actually implements.
+    /// XDG-portal capability probe results. `None` on macOS and on X11
+    /// sessions, where portals aren't consulted at all; `Some` on Wayland
+    /// sessions, reflecting whatever the running compositor's desktop
+    /// portal backend actually implements.
     pub wayland: Option<WaylandCapabilitiesInfo>,
 }
 
@@ -82,12 +81,12 @@ pub struct WaylandCapabilitiesInfo {
 }
 
 /// The portal-reported, human-readable trigger description for the single
-/// "capture" shortcut bound through the Wayland GlobalShortcuts portal
-/// (spec-12 Slice B) — e.g. what the compositor's own shortcut-binding UI
-/// showed the user, not necessarily the `preferred_trigger` hint Kallilex
-/// requested. `None` until a successful bind stores a value: before the
-/// portal task has run, when the bind failed or was declined, or on any
-/// platform/session where `use_portal_global_shortcut()` is false (the
-/// state is still `manage`d there, just never written to).
+/// "capture" shortcut bound through the Wayland GlobalShortcuts portal —
+/// e.g. what the compositor's own shortcut-binding UI showed the user, not
+/// necessarily the `preferred_trigger` hint Kallilex requested. `None`
+/// until a successful bind stores a value: before the portal task has run,
+/// when the bind failed or was declined, or on any platform/session where
+/// `use_portal_global_shortcut()` is false (the state is still `manage`d
+/// there, just never written to).
 #[derive(Default)]
 pub struct PortalShortcutTrigger(pub std::sync::Mutex<Option<String>>);

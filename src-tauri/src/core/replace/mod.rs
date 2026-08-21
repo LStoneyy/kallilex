@@ -1,4 +1,4 @@
-//! Replace-back orchestration (spec-04): writes the popover's result text
+//! Replace-back orchestration: writes the popover's result text
 //! into the remembered source application via clipboard + synthetic ⌘V, and
 //! the plain "copy to clipboard" alternative.
 //!
@@ -13,7 +13,7 @@
 //! once taken, there is nothing left pending for `restore_pending` to act
 //! on, so a concurrent cancel becomes a no-op.
 //!
-//! Fallback coordination: when a fallback backup from capture (spec-02) is
+//! Fallback coordination: when a fallback backup from capture is
 //! still pending, it *is* the restore target for replace — at that moment
 //! the clipboard holds the intermediate captured selection (from capture's
 //! own synthetic ⌘C), not the user's original clipboard content, so it must
@@ -28,7 +28,7 @@ use crate::core::clipboard::{BackupLifecycle, Clipboard, Keyboard};
 
 /// Platform seam for bringing another application to the foreground.
 pub trait AppActivator: Send + Sync {
-    /// Brings `app` to the foreground (macOS: by pid; Linux Slice B: by
+    /// Brings `app` to the foreground (macOS: by pid; Linux: by
     /// window handle).
     fn activate(&self, app: &SourceApp) -> Result<(), String>;
 }
@@ -226,7 +226,7 @@ mod tests {
         let clipboard = FakeClipboard::with_text(log.clone(), "original");
         let lifecycle = BackupLifecycle::new();
 
-        // Simulate spec-02's fallback: the pending backup holds the user's
+        // Simulate fallback capture: the pending backup holds the user's
         // real original clipboard content, taken before the intermediate
         // captured selection landed.
         lifecycle.store(clipboard.backup());

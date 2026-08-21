@@ -1,4 +1,4 @@
-//! Windows spell checking (spec-15 Slice C): the Windows Spell Checking API
+//! Windows spell checking: the Windows Spell Checking API
 //! (`ISpellCheckerFactory`/`ISpellChecker`, Windows 8+), which already ships
 //! with every Windows install and already knows the user's installed display
 //! languages.
@@ -7,9 +7,7 @@
 //! Linux backend uses) plus bundled `en_US`/`de_DE` dictionaries. It would
 //! work and would be less code, but it would ship ~10 MB of dictionaries
 //! Windows already has, ignore the user's actual installed display
-//! languages, and duplicate a solved problem. If `ISpellChecker` ever proves
-//! unusable in practice, the spec-11 crate-choice rule applies: escalate to
-//! the orchestrator rather than swapping unilaterally.
+//! languages, and duplicate a solved problem.
 //!
 //! **The offset contract lines up exactly**: `ISpellingError::StartIndex`/
 //! `Length` are UTF-16 code-unit offsets, which is precisely what

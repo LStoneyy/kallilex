@@ -41,8 +41,7 @@ pub(crate) struct CaptureState(pub(crate) Mutex<Option<CaptureResult>>);
 #[derive(Default)]
 pub(crate) struct ReplaceInFlight(pub(crate) std::sync::atomic::AtomicBool);
 
-/// Cancel handle for the (at most one) in-flight AI action request
-/// (spec-05's `run_action` command).
+/// Cancel handle for the (at most one) in-flight AI action request.
 ///
 /// Only one action can be in flight at a time: starting a new one replaces
 /// whatever `Sender` was previously stored here. Dropping a
@@ -435,8 +434,8 @@ pub fn run() {
             let settings_store = TauriStoreSettings::new(app.handle().clone());
             let current_settings = settings::get_settings(&settings_store).unwrap_or_default();
 
-            // spec-13 Slice A: apply the persisted input-synthesis opt-out
-            // before anything below consults `platform::platform_info()` (or
+            // Apply the persisted input-synthesis opt-out before anything
+            // below consults `platform::platform_info()` (or
             // any other reader of `wayland::input_synthesis_live()`), so the
             // very first capability report already reflects the user's
             // choice instead of the all-permissive process-wide default.

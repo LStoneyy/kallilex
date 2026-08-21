@@ -1,5 +1,5 @@
-//! Linux platform implementation (spec-11 Slice B): X11 is the fully
-//! supported tier (clipboard, key synthesis, window activation, frontmost-
+//! Linux platform implementation: X11 is the fully supported tier
+//! (clipboard, key synthesis, window activation, frontmost-
 //! app lookup), Wayland gets an honest degraded mode (primary-selection
 //! capture and clipboard still work via `arboard`'s `wayland-data-control`
 //! backend; key synthesis and window activation are unavailable and report
@@ -27,11 +27,11 @@ pub fn clipboard() -> LinuxClipboard {
     LinuxClipboard
 }
 
-/// Constructs the Linux `Keyboard`. Takes an `AppHandle` (spec-12 Slice C):
-/// on Wayland with input synthesis live, `LinuxKeyboard` routes through the
-/// process-wide RemoteDesktop portal session manager
-/// ([`wayland::send_chord`]), which needs the handle to lazily spawn its
-/// manager task and read settings; the X11/enigo path ignores it.
+/// Constructs the Linux `Keyboard`. Takes an `AppHandle`: on Wayland with
+/// input synthesis live, `LinuxKeyboard` routes through the process-wide
+/// RemoteDesktop portal session manager ([`wayland::send_chord`]), which
+/// needs the handle to lazily spawn its manager task and read settings; the
+/// X11/enigo path ignores it.
 pub fn keyboard(app: tauri::AppHandle) -> LinuxKeyboard {
     LinuxKeyboard::new(app)
 }
@@ -44,8 +44,8 @@ pub fn open_permission_settings() -> Result<(), String> {
 /// Tray-only behavior is achieved simply by never showing a Dock-equivalent
 /// window, with no activation-policy API to call — so on X11 this is still a
 /// no-op. On Wayland it registers the app id with the portal's host
-/// Registry and then runs the read-only portal capability probe (spec-12)
-/// once, synchronously, before the rest of startup consults
+/// Registry and then runs the read-only portal capability probe once,
+/// synchronously, before the rest of startup consults
 /// `platform_info()`: this runs on Tauri's main-thread `setup` hook, not
 /// inside the tokio runtime, so blocking on the async work here is safe
 /// and doesn't risk a nested-runtime panic.
@@ -79,7 +79,7 @@ pub fn position_popover(window: &tauri::WebviewWindow) {
 
 /// Linux platform metadata: session-aware. Replace (write-back into the
 /// source app) needs either `_NET_ACTIVE_WINDOW` activation (X11) or the
-/// `RemoteDesktop` portal's input-synthesis capability (Wayland, spec-12).
+/// `RemoteDesktop` portal's input-synthesis capability (Wayland).
 pub fn platform_info() -> crate::platform::PlatformInfo {
     platform_info_for(
         session::current(),
@@ -93,9 +93,9 @@ pub fn platform_info() -> crate::platform::PlatformInfo {
 /// unit-tested directly against injected values instead of the real
 /// session/portal/settings state.
 ///
-/// `input_synthesis_enabled` is the user's spec-13 Slice A opt-out, passed
-/// in rather than read from global state so this stays a pure function.
-/// It's threaded into exactly one field, `replace_back_available` — Replace
+/// `input_synthesis_enabled` is the user's opt-out, passed in rather than
+/// read from global state so this stays a pure function. It's threaded into
+/// exactly one field, `replace_back_available` — Replace
 /// needs input synthesis to be both offered *and* wanted — while
 /// `wayland.input_synthesis` (inside `WaylandCapabilitiesInfo`) stays
 /// unaffected by it on purpose: `PlatformInfo.wayland` reports what the
@@ -132,8 +132,8 @@ fn platform_info_for(
     }
 }
 
-/// Updates the user's input-synthesis opt-out (spec-13 Slice A). Delegates
-/// straight to [`wayland::set_input_synthesis_enabled`], whose flag is only
+/// Updates the user's input-synthesis opt-out. Delegates straight to
+/// [`wayland::set_input_synthesis_enabled`], whose flag is only
 /// ever consulted from Wayland-only branches (`platform_info_for`'s
 /// `SessionType::Wayland` arm, and the `wayland::input_synthesis_live()`
 /// call sites in `keyboard.rs`/`activation.rs`/`selection.rs`) — that, not
@@ -161,9 +161,9 @@ pub fn tray_open_captures() -> bool {
 }
 
 /// On Wayland, global shortcut registration commonly fails or is
-/// unsupported depending on the compositor (no portal-backed global
-/// shortcuts wired up yet — spec-12+). Registration is still attempted, but
-/// a failure there is expected, not a real error worth an error dialog.
+/// unsupported depending on the compositor (the GlobalShortcuts portal is
+/// often absent). Registration is still attempted, but a failure there is
+/// expected, not a real error worth an error dialog.
 pub fn global_shortcut_failure_expected() -> bool {
     session::current() == SessionType::Wayland
 }
@@ -286,10 +286,10 @@ mod tests {
 
     #[test]
     fn wayland_input_synthesis_disabled_by_user_hides_replace_but_not_the_capability_report() {
-        // spec-13 Slice A: `replace_back_available` reports what's actually
-        // usable (capability AND user choice); `wayland.input_synthesis`
-        // keeps reporting what the compositor offers, unaffected by the
-        // user's choice — the two answer different questions.
+        // `replace_back_available` reports what's actually usable
+        // (capability AND user choice); `wayland.input_synthesis` keeps
+        // reporting what the compositor offers, unaffected by the user's
+        // choice — the two answer different questions.
         let caps = WaylandCapabilities {
             global_shortcut: false,
             input_synthesis: true,

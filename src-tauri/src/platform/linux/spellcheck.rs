@@ -116,8 +116,7 @@ pub struct LinuxSpellChecker {
 }
 
 impl LinuxSpellChecker {
-    /// `app` is finally used here (Slice A's placeholder ignored it):
-    /// resolving the bundled dictionaries' location requires
+    /// `app` is needed to resolve the bundled dictionaries' location:
     /// `app.path().resource_dir()`.
     pub fn new(app: AppHandle) -> Self {
         let mut search_dirs: Vec<PathBuf> =

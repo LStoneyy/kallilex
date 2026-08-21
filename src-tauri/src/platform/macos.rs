@@ -478,10 +478,8 @@ pub fn clipboard() -> MacosClipboard {
 }
 
 /// Constructs the macOS `Keyboard`: synthetic ⌘C/⌘V via `CGEvent`.
-/// The `AppHandle` parameter exists only for signature parity with the
-/// Linux constructor (spec-12 Slice C, where the Wayland path needs a
-/// handle to reach its portal session manager) — `CGEvent` posting has no
-/// main-thread affinity or app-handle dependency, so it's unused here.
+/// `CGEvent` posting has no main-thread affinity or app-handle dependency,
+/// so the `AppHandle` parameter is unused here.
 pub fn keyboard(_app: AppHandle) -> MacosKeyboard {
     MacosKeyboard
 }
@@ -523,28 +521,27 @@ pub fn platform_info() -> crate::platform::PlatformInfo {
 }
 
 /// No-op: macOS's synthetic ⌘C/⌘V (via `CGEvent`, see `send_cmd_key`) needs
-/// no grantable permission at all, so there is nothing on this platform for
-/// the spec-13 Slice A opt-out to actually gate. The setting is still
-/// persisted (cross-platform, in `Settings`) but never surfaced or
-/// consulted here.
+/// no grantable permission at all, so there is nothing here to gate. The
+/// setting is still persisted cross-platform in `Settings` but never
+/// surfaced or consulted on macOS.
 pub fn set_input_synthesis_enabled(_enabled: bool) {}
 
 /// macOS's menu bar already reliably delivers tray left-clicks, so no extra
-/// "Open Kallilex" menu entry is needed (spec-11 Slice B, Linux-only).
+/// "Open Kallilex" menu entry is needed; that entry is Linux-only.
 pub fn wants_tray_open_entry() -> bool {
     false
 }
 
 /// macOS always has a working Accessibility-backed synthetic-copy fallback,
-/// so opening the popover never needs to eagerly trigger a capture
-/// (spec-11 Slice B, Linux Wayland-only).
+/// so opening the popover never needs to eagerly trigger a capture; eager
+/// capture is Linux Wayland-only.
 pub fn tray_open_captures() -> bool {
     false
 }
 
 /// macOS's global shortcut registration is expected to succeed (or fail for
 /// a genuine, worth-reporting reason), unlike Linux Wayland's compositor-
-/// dependent support (spec-11 Slice B, Linux-only).
+/// dependent support.
 pub fn global_shortcut_failure_expected() -> bool {
     false
 }
@@ -570,11 +567,8 @@ pub fn use_portal_global_shortcut() -> bool {
     false
 }
 
-/// Never actually called: `use_portal_global_shortcut` always returns
-/// `false` on macOS, so `lib.rs` never takes the portal-shortcut branch that
-/// would call this. Kept as a no-op purely so the cross-platform seam
-/// surface (`platform::spawn_portal_shortcut`) exists identically on both
-/// platforms.
+/// No-op: `use_portal_global_shortcut` always returns `false` on macOS, so
+/// this is never invoked. Portal shortcuts are Wayland-only.
 pub fn spawn_portal_shortcut(
     _app: tauri::AppHandle,
     _preferred_shortcut: String,

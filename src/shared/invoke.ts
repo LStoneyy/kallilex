@@ -106,7 +106,7 @@ export async function getPlatformInfo(): Promise<PlatformInfo> {
 
 /**
  * The Wayland GlobalShortcuts portal's reported trigger for the "capture"
- * shortcut (spec-12 Slice B), or `null` when unbound. Only meaningful on
+ * shortcut, or `null` when unbound. Only meaningful on
  * sessions where `PlatformInfo.wayland?.globalShortcut` is true.
  */
 export async function getWaylandShortcutTrigger(): Promise<string | null> {
@@ -141,7 +141,7 @@ export async function completeOnboarding(): Promise<void> {
 }
 
 /**
- * Persists `inputSynthesisEnabled` and pushes it live (spec-13 Slice A),
+ * Persists `inputSynthesisEnabled` and pushes it live,
  * mirroring what `setSettings` does for the same field — the onboarding
  * window's Wayland paste-back toggle calls this instead of `setSettings` so
  * it never clobbers the (hidden but live) Settings window's in-memory state.

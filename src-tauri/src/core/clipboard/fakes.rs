@@ -124,7 +124,7 @@ enum KeyboardAction {
 }
 
 /// The `send_paste` half of a `FakeKeyboard`, kept separate from
-/// `KeyboardAction` since replace-back (spec-04) only ever needs paste to
+/// `KeyboardAction` since replace-back only ever needs paste to
 /// fail or succeed as a no-op — never the "lands external text" variant
 /// `send_copy` needs for the capture fallback.
 enum PasteAction {

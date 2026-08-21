@@ -4,12 +4,11 @@
 //! menu bar via `tauri_plugin_positioner::Position::TrayBottomCenter`
 //! instead, so it never needs this at all).
 //!
-//! [`clamp_to_work_area`] is the pure arithmetic, extracted unchanged from
-//! the Linux `position_popover` body (spec-11 Slice B) so it can be unit
-//! tested with injected geometry instead of a real window/monitor.
-//! [`position_popover`] is the thin, platform-shared wrapper that does the
-//! actual tauri I/O (monitor lookup, window size, cursor position) and hands
-//! the pure numbers to [`clamp_to_work_area`].
+//! [`clamp_to_work_area`] is the pure arithmetic, unit tested with injected
+//! geometry instead of a real window/monitor. [`position_popover`] is the
+//! thin, platform-shared wrapper that does the actual tauri I/O (monitor
+//! lookup, window size, cursor position) and hands the pure numbers to
+//! [`clamp_to_work_area`].
 
 use tauri::{PhysicalPosition, PhysicalSize};
 
@@ -46,12 +45,10 @@ pub struct Rect {
     pub height: u32,
 }
 
-/// Pure cursor-anchored, work-area-clamped position calculation. Bit-
-/// identical to the arithmetic the Linux `position_popover` used before this
-/// extraction (spec-11 Slice B): the min/max bounds are computed the same
-/// way (`.max(min_x)`/`.max(min_y)` guards against a window larger than the
-/// work area), and the final position is clamped into `[min, max]` on both
-/// axes.
+/// Pure cursor-anchored, work-area-clamped position calculation. The
+/// min/max bounds use `.max(min_x)`/`.max(min_y)` to guard against a window
+/// larger than the work area, and the final position is clamped into
+/// `[min, max]` on both axes.
 ///
 /// `cursor` is `None` when the platform couldn't read the current cursor
 /// position; in that case the popover anchors at `fallback` instead of

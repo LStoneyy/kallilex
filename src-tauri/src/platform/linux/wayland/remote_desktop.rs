@@ -1,5 +1,5 @@
 //! Synthetic Ctrl+C/Ctrl+V input synthesis via the
-//! `org.freedesktop.portal.RemoteDesktop` portal (spec-12 Slice C).
+//! `org.freedesktop.portal.RemoteDesktop` portal.
 //!
 //! Three concerns, kept in separate layers so the orchestration — the part
 //! that actually has interesting logic — is unit-testable without a real
@@ -15,19 +15,18 @@
 //! 3. [`AshpdBackend`]: the real portal calls, plus the process-wide
 //!    [`send_chord`] entry point that lazily starts a single manager task
 //!    owning the one live session (see that function's doc comment for the
-//!    threading rationale), and [`drop_session`] (spec-13 Slice A), which
-//!    tells that same manager to release the session without starting one
-//!    that didn't already exist.
+//!    threading rationale), and [`drop_session`], which tells that same
+//!    manager to release the session without starting one that didn't
+//!    already exist.
 //!
-//! **Keycode caveat (accepted for v1):** `NotifyKeyboardKeycode` takes Linux
+//! **Keycode caveat:** `NotifyKeyboardKeycode` takes Linux
 //! evdev keycodes, which are *positional* (they identify a physical key,
 //! not a character) — on non-QWERTY layouts where the keys physically in
 //! the C/V positions produce different characters, this can mistype. A
 //! keymap-aware lookup (translating the character to whatever keycode the
-//! active layout actually maps it to) is an explicit follow-up, out of
-//! scope for this spec. This is the same class of caveat `LinuxKeyboard`'s
-//! X11/enigo path has historically accepted for non-`Key::Unicode` input,
-//! just via a different mechanism.
+//! active layout actually maps it to) would fix that. This is the same
+//! class of caveat `LinuxKeyboard`'s X11/enigo path has for
+//! non-`Key::Unicode` input, just via a different mechanism.
 
 use std::sync::OnceLock;
 
@@ -363,8 +362,8 @@ impl RemoteDesktopBackend for AshpdBackend {
 }
 
 /// A single message routed through the manager task's request channel:
-/// either "send this chord" (spec-12) or "drop the live session" (spec-13
-/// Slice A, the input-synthesis opt-out).
+/// either "send this chord" or "drop the live session" (the input-synthesis
+/// opt-out).
 enum ManagerMessage {
     /// Send `chord`, replying exactly once with the outcome. Preserving
     /// "exactly one reply per `SendChord`" is what makes [`send_chord`]'s
@@ -434,8 +433,8 @@ async fn run_manager(app: tauri::AppHandle, mut requests: mpsc::UnboundedReceive
 
 /// Drops the manager's live RemoteDesktop session (if any), so Kallilex
 /// never sits holding an open remote-input session it has decided not to
-/// use (spec-13 Slice A, called when the user switches input synthesis
-/// off). Deliberately never spawns the manager: a manager that was never
+/// use (called when the user switches input synthesis off). Deliberately
+/// never spawns the manager: a manager that was never
 /// created has no session to drop, so starting one here just to immediately
 /// idle it would be pure overhead with no observable effect. Send failure
 /// (the manager thread having died) is ignored — there's nothing left to

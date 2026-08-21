@@ -1,17 +1,11 @@
-//! Windows platform implementation. Slice A got the crate building, testing,
-//! and running on Windows with a tray icon, popover, Settings, a registered
-//! global shortcut, and clipboard-fallback capture. Slice B added the native
-//! capture/replace loop: `selection_backend()` reads the current selection
-//! instantly via UI Automation (`IUIAutomation` + `TextPattern`), falling
-//! back through `core::capture`'s existing clipboard + synthetic-Ctrl+C
-//! path — `keyboard()`'s `SendInput`-based `send_copy`/`send_paste` — when
-//! UI Automation finds nothing usable; `app_activator()` brings the source
-//! application back to the foreground via `SetForegroundWindow` (plus the
-//! documented `AttachThreadInput` fallback) for Replace. Slice C (this
-//! state) adds native spell check: `spell_checker()` is backed by the
-//! Windows Spell Checking API (`ISpellCheckerFactory`/`ISpellChecker`),
-//! whose UTF-16 code-unit offsets line up exactly with what
-//! `core::spellcheck::Misspelling` already documents.
+//! Windows platform implementation: a tray icon with popover and Settings, a
+//! registered global shortcut, native capture via UI Automation
+//! (`IUIAutomation` + `TextPattern`) with the clipboard + synthetic-Ctrl+C
+//! fallback (`SendInput`-based `send_copy`/`send_paste`), replace-back via
+//! `SetForegroundWindow` (plus the documented `AttachThreadInput` fallback),
+//! and native spell check via the Windows Spell Checking API
+//! (`ISpellCheckerFactory`/`ISpellChecker`), whose UTF-16 code-unit offsets
+//! line up exactly with what `core::spellcheck::Misspelling` documents.
 
 mod activation;
 mod clipboard;
@@ -36,10 +30,9 @@ pub fn clipboard() -> WindowsClipboard {
 
 /// Constructs the Windows `Keyboard`: synthetic Ctrl+C/Ctrl+V via
 /// `SendInput`. Takes an `AppHandle` only for signature parity with the
-/// Linux constructor (spec-12 Slice C) — `SendInput` has no main-thread
-/// affinity or app-handle dependency, so it's unused here (unlike Linux's
-/// Wayland portal path, which needs a handle to reach its portal session
-/// manager).
+/// Linux constructor — `SendInput` has no main-thread affinity or
+/// app-handle dependency, so it's unused here (unlike Linux's Wayland
+/// portal path, which needs a handle to reach its portal session manager).
 pub fn keyboard(_app: tauri::AppHandle) -> WindowsKeyboard {
     WindowsKeyboard
 }
@@ -94,11 +87,11 @@ pub fn position_popover(window: &tauri::WebviewWindow) {
 }
 
 /// Windows platform metadata: no session concept, no grantable permission,
-/// and `replace_back_available: true` — backed, as of Slice B, by
-/// `WindowsSelectionBackend::frontmost_app`'s real `GetForegroundWindow`-based
-/// identity and `WindowsAppActivator`'s `SetForegroundWindow` activation, so
-/// the frontend's `canReplace` gating now reflects an actually-working
-/// Replace button whenever a source app was recorded.
+/// and `replace_back_available: true`, backed by
+/// `WindowsSelectionBackend::frontmost_app`'s `GetForegroundWindow`-based
+/// identity and `WindowsAppActivator`'s `SetForegroundWindow` activation —
+/// the frontend's `canReplace` gating reflects an actually-working Replace
+/// button whenever a source app was recorded.
 pub fn platform_info() -> crate::platform::PlatformInfo {
     crate::platform::PlatformInfo {
         os: "windows",
@@ -111,25 +104,22 @@ pub fn platform_info() -> crate::platform::PlatformInfo {
 }
 
 /// No-op, like macOS: `SendInput` needs no grantable permission, so there is
-/// nothing on this platform for the spec-13 Slice A opt-out to actually
-/// gate. The setting is still persisted (cross-platform, in `Settings`) but
-/// never surfaced or consulted here.
+/// nothing on this platform for this opt-out to actually gate. The setting
+/// is still persisted (cross-platform, in `Settings`) but never surfaced or
+/// consulted here.
 pub fn set_input_synthesis_enabled(_enabled: bool) {}
 
 /// The Windows notification area delivers left-click reliably, and
 /// `show_menu_on_left_click(false)` (set in `lib.rs`) already gives the
 /// conventional left-opens / right-menus behavior, so no extra "Open
-/// Kallilex" tray-menu entry is needed. If the Slice D manual matrix finds
-/// click-delivery problems in the notification-area overflow flyout,
-/// flipping this to `true` is a one-line follow-up.
+/// Kallilex" tray-menu entry is needed.
 pub fn wants_tray_open_entry() -> bool {
     false
 }
 
 /// `false`: Windows always has the synthetic-copy clipboard fallback
-/// (manual Ctrl+C in Slice A, `SendInput` Ctrl+C in Slice B), so opening the
-/// popover from the tray never needs to eagerly trigger a capture the way
-/// Linux Wayland's tray-open path does.
+/// (`SendInput` Ctrl+C), so opening the popover from the tray never needs to
+/// eagerly trigger a capture the way Linux Wayland's tray-open path does.
 pub fn tray_open_captures() -> bool {
     false
 }
@@ -149,11 +139,9 @@ pub fn use_portal_global_shortcut() -> bool {
     false
 }
 
-/// Never actually called: `use_portal_global_shortcut` always returns
-/// `false` on Windows, so `lib.rs` never takes the portal-shortcut branch
-/// that would call this. Kept as a no-op purely so the cross-platform seam
-/// surface (`platform::spawn_portal_shortcut`) exists identically on every
-/// platform.
+/// No-op: portals are a Linux/XDG concept with no Windows equivalent, and
+/// `use_portal_global_shortcut` always returns `false` here, so `lib.rs`
+/// never calls this.
 pub fn spawn_portal_shortcut(
     _app: tauri::AppHandle,
     _preferred_shortcut: String,
@@ -176,8 +164,7 @@ pub fn tray_icon_bytes() -> &'static [u8] {
     include_bytes!("../../../icons/tray-windows@2x.png")
 }
 
-/// `false`: this is the one shared-code behavior edit in spec-15 Slice A —
-/// the Settings-window maximise/restore workaround (see
+/// `false`: the Settings-window maximise/restore workaround (see
 /// `lib.rs::resync_frame_extents`) fixes a GTK client-side-decoration
 /// defect that Windows's native title bar doesn't have; running it here
 /// would just produce a visible, wrong flicker on every Settings open.

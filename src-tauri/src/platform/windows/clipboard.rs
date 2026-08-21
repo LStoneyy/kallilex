@@ -39,13 +39,11 @@ impl Clipboard for WindowsClipboard {
         }
     }
 
-    /// **Documented Windows limitation: text-only**, matching Linux (spec-15
-    /// Out of Scope: multi-format clipboard backup via `EnumClipboardFormats`
-    /// over HGLOBAL formats). `arboard` has no cross-backend API for
-    /// enumerating/reading arbitrary clipboard formats on Windows either, so
-    /// only the plain-text contents are backed up. Non-text clipboard
-    /// contents (images, rich text, files) are silently not restored by
-    /// [`Self::restore`].
+    /// **Documented Windows limitation: text-only**, matching Linux: only the
+    /// plain-text contents are backed up. `arboard` has no cross-backend API
+    /// for enumerating/reading arbitrary clipboard formats on Windows either,
+    /// so non-text clipboard contents (images, rich text, files) are silently
+    /// not restored by [`Self::restore`].
     fn backup(&self) -> ClipboardBackup {
         match self.read_text() {
             Some(text) => ClipboardBackup(vec![ClipboardItem {

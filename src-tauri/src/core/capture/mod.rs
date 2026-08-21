@@ -17,14 +17,14 @@ const FALLBACK_SETTLE_TIMEOUT: Duration = Duration::from_millis(300);
 pub struct PlatformWindowId(pub u64);
 
 /// The application the selection was captured from, remembered for
-/// replace-back and focus restoration (spec-04).
+/// replace-back and focus restoration.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceApp {
     pub bundle_id: Option<String>,
     pub pid: i32,
     pub name: Option<String>,
-    /// Opaque platform window handle (Slice B: Linux window activation).
+    /// Opaque platform window handle (Linux window activation).
     /// Never serialized to the frontend; macOS never sets it (activation is
     /// by pid).
     #[serde(skip)]
@@ -34,7 +34,8 @@ pub struct SourceApp {
 impl SourceApp {
     /// A documented placeholder meaning "replace targets whatever window
     /// regains focus when the popover hides" (Wayland focus-return replace,
-    /// spec-12 Slice C). Wayland has no cross-client window query protocol,
+    /// for the XDG `RemoteDesktop` portal's input synthesis). Wayland has no
+    /// cross-client window query protocol,
     /// so `frontmost_app()` can never identify the actual focused
     /// application there the way X11/macOS do — but the core `replace_back`
     /// contract ("no source app -> error, touch nothing") and the
@@ -175,7 +176,7 @@ pub fn capture(
         if let Some(text) = clipboard.read_text() {
             if !text.is_empty() {
                 // The backup stays pending: it is restored on cancel or
-                // after Replace settles, and discarded on Copy (spec-04).
+                // after Replace settles, and discarded on Copy.
                 return CaptureResult {
                     text,
                     reason: None,

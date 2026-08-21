@@ -1,7 +1,7 @@
 //! Window activation: the EWMH `_NET_ACTIVE_WINDOW` client message on X11,
-//! and a Wayland "focus-return" activation built on hiding the popover
-//! (spec-12 Slice C) — see [`LinuxAppActivator::activate`]'s doc comment for
-//! why that's the correct (and only possible) Wayland equivalent.
+//! and a Wayland "focus-return" activation built on hiding the popover —
+//! see [`LinuxAppActivator::activate`]'s doc comment for why that's the
+//! correct (and only possible) Wayland equivalent.
 
 use tauri::{AppHandle, Manager};
 use x11rb::connection::Connection;
@@ -41,21 +41,20 @@ impl AppActivator for LinuxAppActivator {
     /// needed. `app.window` (the remembered X11 window handle) is required
     /// and this fails without one.
     ///
-    /// Wayland (spec-12 Slice C): there is no cross-client activation
-    /// protocol at all — a Wayland compositor deliberately gives no client
-    /// the ability to raise/focus *another* client's window, unlike X11's
-    /// EWMH pager convention. The only activation Kallilex itself can
-    /// perform is negative: hide its own popover window and let the
-    /// compositor's normal focus-follows-visibility behavior return focus
-    /// to whatever surface previously had it — which, in the shortcut/tray
-    /// capture flow, is exactly the app the user captured from. `app`
-    /// itself (the [`SourceApp`] parameter) carries no usable identity on
-    /// this path — see [`SourceApp::focus_return`] — this is intentional,
-    /// not a partial implementation: there is nothing more specific to
-    /// activate by. This whole path is only reached when
-    /// `wayland::input_synthesis_live()` is true — the RemoteDesktop
-    /// portal's input-synthesis capability being available is not enough on
-    /// its own (spec-13 Slice A): the user may also have switched input
+    /// Wayland: there is no cross-client activation protocol at all — a
+    /// Wayland compositor deliberately gives no client the ability to
+    /// raise/focus *another* client's window, unlike X11's EWMH pager
+    /// convention. The only activation Kallilex itself can perform is
+    /// negative: hide its own popover window and let the compositor's
+    /// normal focus-follows-visibility behavior return focus to whatever
+    /// surface previously had it — which, in the shortcut/tray capture
+    /// flow, is exactly the app the user captured from. `app` itself (the
+    /// [`SourceApp`] parameter) carries no usable identity on this path —
+    /// see [`SourceApp::focus_return`] — this is intentional: there is
+    /// nothing more specific to activate by. This whole path is only
+    /// reached when `wayland::input_synthesis_live()` is true — the
+    /// RemoteDesktop portal's input-synthesis capability being available is
+    /// not enough on its own: the user may also have switched input
     /// synthesis off in Settings, in which case this returns the same `Err`
     /// as a compositor without the portal at all, by choice rather than by
     /// limitation.
@@ -68,7 +67,7 @@ impl AppActivator for LinuxAppActivator {
     /// running. Hiding the popover triggers the same focus-loss ->
     /// `cancel_capture` -> `restore_pending` path a manual Escape/click-away
     /// would; that's already a harmless no-op mid-replace thanks to
-    /// `BackupLifecycle::take_pending` (the spec-04 race guard replace_back
+    /// `BackupLifecycle::take_pending` (the race guard replace_back
     /// applies before ever calling into this activator) — no core changes
     /// needed here. Plain `window.hide()` is used rather than the crate's
     /// `hide_popover` helper, which also eagerly clears capture state; that

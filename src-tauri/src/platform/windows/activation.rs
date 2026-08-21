@@ -1,7 +1,7 @@
-//! Windows window activation (spec-15 Slice B): `SetForegroundWindow` on the
-//! remembered `HWND`, plus the documented `AttachThreadInput` fallback,
-//! marshalled onto the main (message-loop) thread the same way
-//! `MacosAppActivator` marshals onto AppKit's main thread.
+//! Windows window activation: `SetForegroundWindow` on the remembered `HWND`,
+//! plus the documented `AttachThreadInput` fallback, marshalled onto the main
+//! (message-loop) thread the same way `MacosAppActivator` marshals onto
+//! AppKit's main thread.
 
 use std::ffi::c_void;
 use std::sync::mpsc;

@@ -43,26 +43,29 @@ pub struct Settings {
     /// existing macOS installs as already set up (see `core::onboarding`).
     #[serde(default)]
     pub accessibility_onboarding_shown: bool,
-    /// AI provider profiles (spec-05). Defaults to empty (and to empty when
-    /// absent from settings persisted before spec-05) so existing installs
+    /// AI provider profiles. Defaults to empty (and to empty when
+    /// absent from settings written before this field was introduced) so
+    /// existing installs
     /// upgrade cleanly with no profiles configured.
     #[serde(default)]
     pub profiles: Vec<ProviderProfile>,
-    /// An XDG `RemoteDesktop` portal *session restore token* (spec-12), not
+    /// An XDG `RemoteDesktop` portal *session restore token*, not
     /// a credential: storing it in the Tauri Store is correct because it
     /// only lets this app skip re-prompting the user for the
     /// input-synthesis permission on future launches, and the compositor
     /// can revoke it at any time (in which case the next session request
     /// simply re-prompts, same as never having had a token). Defaults to
-    /// `None` (and to `None` when absent from settings persisted before
-    /// spec-12) so existing installs upgrade cleanly with no stored token.
+    /// `None` (and to `None` when absent from settings written before this
+    /// field was introduced) so existing installs upgrade cleanly with no
+    /// stored token.
     #[serde(default)]
     pub wayland_restore_token: Option<String>,
     /// Whether Kallilex may synthesize keystrokes (Ctrl+C / Ctrl+V) through
-    /// the Wayland `RemoteDesktop` portal (spec-13 Slice A). Defaults to
+    /// the Wayland `RemoteDesktop` portal. Defaults to
     /// `true` via [`default_input_synthesis_enabled`] rather than a bare
     /// `#[serde(default)]` (which would be `false` for a `bool`): settings
-    /// persisted before spec-13 have no opinion on this field at all, and
+    /// written before this field was introduced have no opinion on it at
+    /// all, and
     /// the correct reading of "no opinion" is "keep today's behavior" —
     /// Replace kept working before this setting existed, so it must keep
     /// working after upgrading, not silently disappear because a missing
@@ -75,8 +78,8 @@ pub struct Settings {
     pub input_synthesis_enabled: bool,
     /// Whether Kallilex puts the result on the clipboard as soon as it
     /// changes the text itself — a successful AI action or an applied
-    /// spellcheck suggestion — so the copy-only flow needs no Copy click
-    /// (spec-13 Slice B). Plain `#[serde(default)]` (`false`) is correct
+    /// spellcheck suggestion — so the copy-only flow needs no Copy click.
+    /// Plain `#[serde(default)]` (`false`) is correct
     /// here, unlike [`Settings::input_synthesis_enabled`] above: this is a
     /// new opt-in convenience, so "no opinion persisted" must mean "nothing
     /// changes for anyone who didn't ask for it". Cross-platform: it has the

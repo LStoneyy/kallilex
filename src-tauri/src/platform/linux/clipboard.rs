@@ -95,8 +95,8 @@ impl Clipboard for LinuxClipboard {
     /// and Wayland have no equivalent of `NSPasteboard.changeCount`, so this
     /// hashes the current clipboard text instead. A consequence: copying
     /// identical content twice in a row is indistinguishable from no change
-    /// at all. Accepted for spec-11 — the fallback capture path only cares
-    /// whether *some* change landed after the synthetic Ctrl+C.
+    /// at all. The fallback capture path only cares whether *some* change
+    /// landed after the synthetic Ctrl+C.
     fn change_count(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.read_text().hash(&mut hasher);

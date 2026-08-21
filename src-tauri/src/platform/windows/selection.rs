@@ -1,7 +1,7 @@
-//! Windows selection reading (spec-15 Slice B): UI Automation
-//! (`IUIAutomation` + `TextPattern`) for instant selection text, and
-//! `GetForegroundWindow` + `GetWindowThreadProcessId` +
-//! `QueryFullProcessImageNameW` for frontmost-app identity.
+//! Windows selection reading: UI Automation (`IUIAutomation` + `TextPattern`)
+//! for instant selection text, and `GetForegroundWindow` +
+//! `GetWindowThreadProcessId` + `QueryFullProcessImageNameW` for
+//! frontmost-app identity.
 
 use std::sync::mpsc;
 use std::thread;
@@ -40,8 +40,9 @@ const UIA_TIMEOUT: Duration = Duration::from_millis(400);
 
 /// Selection capture via UI Automation and the foreground window. Unlike
 /// macOS's Accessibility-permission model, Windows has no grantable capture
-/// permission at all — `permission_granted` always returning `true` is the
-/// *final* contract, not a placeholder.
+/// permission, so `permission_granted` always returns `true`; capture reads
+/// the focused selection via UI Automation, falling back to the clipboard +
+/// synthetic-Ctrl+C path when nothing usable is found.
 pub struct WindowsSelectionBackend;
 
 impl SelectionBackend for WindowsSelectionBackend {
@@ -247,8 +248,7 @@ fn ax_selected_text_on_worker() -> Option<String> {
 
 /// The actual `IUIAutomation` -> focused element -> `TextPattern` ->
 /// selection -> text walk. `TextPattern` only — no `ValuePattern` or legacy
-/// `IAccessible` fallback (spec-15 Out of Scope). Empty or absent at any
-/// step is `None`.
+/// `IAccessible` fallback. Empty or absent at any step is `None`.
 fn read_selected_text() -> Option<String> {
     // SAFETY: `CUIAutomation` is a standard, documented in-process COM
     // server; COM was just initialized (or already usable) on this thread.

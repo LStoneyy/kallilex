@@ -11,8 +11,9 @@ use crate::platform::linux::session::{self, SessionType};
 use crate::platform::linux::wayland;
 
 /// Linux selection capture. Unlike macOS's Accessibility-permission model,
-/// Linux has no grantable capture permission at all — `permission_granted`
-/// always returning `true` is the *final* contract, not a placeholder.
+/// Linux has no grantable capture permission: reading the primary selection
+/// and querying X11 window properties require no privileged OS API, so
+/// `permission_granted` is unconditionally `true`.
 pub struct LinuxSelectionBackend;
 
 impl SelectionBackend for LinuxSelectionBackend {
@@ -26,13 +27,12 @@ impl SelectionBackend for LinuxSelectionBackend {
     /// all, so the real identity can never be read there; instead, when
     /// (and only when) input synthesis is live — the RemoteDesktop portal's
     /// capability is present *and* the user hasn't switched it off in
-    /// Settings (spec-13 Slice A) — this returns the documented
-    /// [`SourceApp::focus_return`] placeholder so replace-back stays
-    /// available (spec-12 Slice C). Without live input synthesis, whether
-    /// because the compositor lacks the portal or because the user opted
-    /// out, there is nothing useful replace-back could do with any source
-    /// app identity anyway, so this stays `None` (spec-11 behavior) and
-    /// Replace stays hidden.
+    /// Settings — this returns [`SourceApp::focus_return`], the documented
+    /// focus-return sentinel, so replace-back stays available. Without live
+    /// input synthesis, whether because the compositor lacks the portal or
+    /// because the user opted out, there is nothing useful replace-back
+    /// could do with any source app identity anyway, so this stays `None`
+    /// and Replace stays hidden.
     fn frontmost_app(&self) -> Option<SourceApp> {
         match session::current() {
             SessionType::X11 => frontmost_app_x11().ok().flatten(),
