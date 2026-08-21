@@ -1,18 +1,20 @@
-//! Windows platform implementation (spec-15 Slice A): the crate builds,
-//! tests, and runs on Windows with a tray icon, popover, Settings, a
-//! registered global shortcut, and clipboard-fallback capture. Native
-//! selection reading (UI Automation), key synthesis (`SendInput`), and
-//! window activation (`SetForegroundWindow`) land in Slice B; native spell
-//! check (the Windows Spell Checking API) lands in Slice C. Until then,
-//! `keyboard()`, `selection_backend()`, and `app_activator()` are honest
-//! stubs: capture never finds a selection automatically (no `SendInput`,
-//! no UI Automation), so the popover opens empty for the user to paste
-//! into, and Replace stays visible-but-disabled because `SelectionBackend::
-//! frontmost_app` never records a source app — see `platform_info()`'s doc
-//! comment.
+//! Windows platform implementation. Slice A got the crate building, testing,
+//! and running on Windows with a tray icon, popover, Settings, a registered
+//! global shortcut, and clipboard-fallback capture. Slice B (this state)
+//! adds the native capture/replace loop: `selection_backend()` reads the
+//! current selection instantly via UI Automation (`IUIAutomation` +
+//! `TextPattern`), falling back through `core::capture`'s existing
+//! clipboard + synthetic-Ctrl+C path — `keyboard()`'s `SendInput`-based
+//! `send_copy`/`send_paste` — when UI Automation finds nothing usable;
+//! `app_activator()` brings the source application back to the foreground
+//! via `SetForegroundWindow` (plus the documented `AttachThreadInput`
+//! fallback) for Replace. Native spell check (the Windows Spell Checking
+//! API) is still a Slice C stub — see `spell_checker()`.
 
 mod activation;
 mod clipboard;
+#[cfg(test)]
+mod desktop_tests;
 mod keyboard;
 mod selection;
 mod spellcheck;
@@ -30,25 +32,27 @@ pub fn clipboard() -> WindowsClipboard {
     WindowsClipboard
 }
 
-/// Constructs the Windows `Keyboard`. Takes an `AppHandle` only for
-/// signature parity with the Linux constructor (spec-12 Slice C) — Slice A's
-/// stub ignores it, and Slice B's `SendInput` implementation won't need it
-/// either (unlike Linux's Wayland portal path, `SendInput` has no app-handle
-/// dependency).
+/// Constructs the Windows `Keyboard`: synthetic Ctrl+C/Ctrl+V via
+/// `SendInput`. Takes an `AppHandle` only for signature parity with the
+/// Linux constructor (spec-12 Slice C) — `SendInput` has no main-thread
+/// affinity or app-handle dependency, so it's unused here (unlike Linux's
+/// Wayland portal path, which needs a handle to reach its portal session
+/// manager).
 pub fn keyboard(_app: tauri::AppHandle) -> WindowsKeyboard {
     WindowsKeyboard
 }
 
-/// Constructs the Windows `SelectionBackend`. Slice A stub — see the module
-/// doc comment.
+/// Constructs the Windows `SelectionBackend`: UI Automation `TextPattern`
+/// selection reading plus `GetForegroundWindow`-based frontmost-app
+/// identity.
 pub fn selection_backend() -> WindowsSelectionBackend {
     WindowsSelectionBackend
 }
 
-/// Constructs the Windows `AppActivator`. Stores the `AppHandle` now even
-/// though Slice A's stub `activate` never uses it: Slice B marshals the
-/// actual `SetForegroundWindow` call onto the main (message-loop) thread the
-/// same way `MacosAppActivator`/`MacosSpellChecker` marshal onto AppKit's
+/// Constructs the Windows `AppActivator`: `SetForegroundWindow` activation
+/// by remembered `HWND`. Stores the `AppHandle` because `activate` marshals
+/// the actual `SetForegroundWindow` call onto the main (message-loop) thread
+/// the same way `MacosAppActivator`/`MacosSpellChecker` marshal onto AppKit's
 /// main thread, and that marshalling needs the handle.
 pub fn app_activator(app: tauri::AppHandle) -> WindowsAppActivator {
     WindowsAppActivator::new(app)
@@ -85,13 +89,11 @@ pub fn position_popover(window: &tauri::WebviewWindow) {
 }
 
 /// Windows platform metadata: no session concept, no grantable permission,
-/// and `replace_back_available: true` — this is the platform's final
-/// capability, not a Slice A placeholder; Slice B fills in the native
-/// implementation behind it. In Slice A, `WindowsSelectionBackend::
-/// frontmost_app` always returns `None`, so `SourceApp` is never recorded
-/// and `canReplace`'s frontend gating (which requires a non-null source
-/// app) keeps the Replace button visible-but-disabled the whole slice,
-/// rather than hiding it outright.
+/// and `replace_back_available: true` — backed, as of Slice B, by
+/// `WindowsSelectionBackend::frontmost_app`'s real `GetForegroundWindow`-based
+/// identity and `WindowsAppActivator`'s `SetForegroundWindow` activation, so
+/// the frontend's `canReplace` gating now reflects an actually-working
+/// Replace button whenever a source app was recorded.
 pub fn platform_info() -> crate::platform::PlatformInfo {
     crate::platform::PlatformInfo {
         os: "windows",
