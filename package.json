@@ -1,6 +1,6 @@
 {
   "name": "kallilex",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Kallilex menu-bar writing utility",
   "type": "module",
   "scripts": {
