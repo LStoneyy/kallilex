@@ -33,6 +33,7 @@ export default defineConfig(async () => ({
       input: {
         popover: "index.html",
         settings: "settings.html",
+        onboarding: "onboarding.html",
       },
     },
   },

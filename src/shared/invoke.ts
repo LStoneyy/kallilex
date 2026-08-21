@@ -129,3 +129,23 @@ export async function enableAutostart(): Promise<void> {
 export async function disableAutostart(): Promise<void> {
   return autostartDisable();
 }
+
+/**
+ * Persists `onboardingCompleted = true` and closes the onboarding window
+ * (Rust-side, via `complete_onboarding_core` + `window.close()`) — see
+ * `src/onboarding/App.svelte`'s "Done" handler for why a lost IPC response
+ * during that close is expected and harmless.
+ */
+export async function completeOnboarding(): Promise<void> {
+  return invoke<void>("complete_onboarding");
+}
+
+/**
+ * Persists `inputSynthesisEnabled` and pushes it live (spec-13 Slice A),
+ * mirroring what `setSettings` does for the same field — the onboarding
+ * window's Wayland paste-back toggle calls this instead of `setSettings` so
+ * it never clobbers the (hidden but live) Settings window's in-memory state.
+ */
+export async function setInputSynthesis(enabled: boolean): Promise<void> {
+  return invoke<void>("set_input_synthesis", { enabled });
+}

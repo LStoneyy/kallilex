@@ -5,6 +5,7 @@
 use tauri::{AppHandle, Manager};
 
 use crate::core::capture::CaptureResult;
+use crate::core::onboarding;
 use crate::core::providers::openai::{self, OpenAiCompatibleAdapter};
 use crate::core::providers::{
     self, Action, ActionContext, Preset, ProviderProfile, RunActionOutcome,
@@ -12,6 +13,7 @@ use crate::core::providers::{
 use crate::core::secrets::{KeyringSecretStore, SecretStore};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::spellcheck::SpellcheckResult;
+use crate::core::ONBOARDING_WINDOW_LABEL;
 use crate::platform::{self, PlatformInfo};
 use crate::{ActionInFlight, CaptureState, ReplaceInFlight};
 
@@ -381,4 +383,33 @@ pub async fn test_connection(app: AppHandle, id: String) -> Result<u128, String>
     openai::test_connection(&profile, api_key.as_deref())
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Persists `onboarding_completed = true`, then closes the onboarding
+/// window. `window.close()` posts the close to the event loop rather than
+/// tearing the webview down synchronously, so this command's IPC response is
+/// still sent to the (about to be destroyed) frontend before the window
+/// actually goes away.
+#[tauri::command]
+pub fn complete_onboarding(app: AppHandle) -> Result<(), String> {
+    let store = TauriStoreSettings::new(app.clone());
+    onboarding::complete_onboarding_core(&store).map_err(|e| e.to_string())?;
+
+    if let Some(window) = app.get_webview_window(ONBOARDING_WINDOW_LABEL) {
+        let _ = window.close();
+    }
+
+    Ok(())
+}
+
+/// Persists `input_synthesis_enabled`, then pushes the new value via
+/// [`platform::set_input_synthesis_enabled`] — the same push `set_settings`
+/// does (see its doc comment) — so the choice the onboarding window's
+/// Wayland paste-back toggle makes takes effect immediately.
+#[tauri::command]
+pub fn set_input_synthesis(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let store = TauriStoreSettings::new(app);
+    onboarding::set_input_synthesis_core(&store, enabled).map_err(|e| e.to_string())?;
+    platform::set_input_synthesis_enabled(enabled);
+    Ok(())
 }

@@ -14,6 +14,9 @@ export interface Settings {
   inputSynthesisEnabled: boolean;
   /** Auto-copy results to the clipboard (spec-13 Slice B), cross-platform. */
   autoCopyResult: boolean;
+  /** Whether the first-run onboarding window has been completed (or
+   * auto-completed for an already-set-up install). */
+  onboardingCompleted: boolean;
 }
 
 /**

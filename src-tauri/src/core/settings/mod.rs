@@ -35,10 +35,12 @@ pub struct Settings {
     pub shortcut: String,
     pub spellcheck_enabled: bool,
     pub popover_pinned: bool,
-    /// Whether the first-run Accessibility permission onboarding panel has
-    /// already been shown. Defaults to `false` (and to `false` when absent
-    /// from previously-persisted settings) so existing installs still see
-    /// onboarding once after upgrading.
+    /// Legacy (pre-onboarding-feature) flag: whether the old first-run
+    /// Settings-window prompt for the Accessibility permission had been
+    /// shown. No longer written by anything — [`Settings::onboarding_completed`]
+    /// is the current first-run signal — but it stays in the struct because
+    /// `evaluate_onboarding` reads it as the migration signal that recognizes
+    /// existing macOS installs as already set up (see `core::onboarding`).
     #[serde(default)]
     pub accessibility_onboarding_shown: bool,
     /// AI provider profiles (spec-05). Defaults to empty (and to empty when
@@ -82,6 +84,16 @@ pub struct Settings {
     /// opt-out above.
     #[serde(default)]
     pub auto_copy_result: bool,
+    /// Whether the first-run onboarding window has been completed (or
+    /// auto-completed for a recognizably-already-set-up install — see
+    /// `core::onboarding::evaluate_onboarding`). Plain `#[serde(default)]`
+    /// (`false`) is correct: settings persisted before this field existed
+    /// belong to installs that never saw the onboarding window, so "no
+    /// opinion persisted" must mean "still show it" — `evaluate_onboarding`
+    /// then decides whether that's a real first run or a migration that
+    /// auto-completes without ever showing the window.
+    #[serde(default)]
+    pub onboarding_completed: bool,
 }
 
 /// See [`Settings::input_synthesis_enabled`]'s doc comment for why this is a
@@ -102,6 +114,7 @@ impl Default for Settings {
             wayland_restore_token: None,
             input_synthesis_enabled: true,
             auto_copy_result: false,
+            onboarding_completed: false,
         }
     }
 }
@@ -172,6 +185,7 @@ mod tests {
             wayland_restore_token: Some("restore-token-abc".to_string()),
             input_synthesis_enabled: false,
             auto_copy_result: true,
+            onboarding_completed: true,
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -250,6 +264,32 @@ mod tests {
         };
         set_settings(&store, with_auto_copy_result.clone()).unwrap();
         assert!(get_settings(&store).unwrap().auto_copy_result);
+
+        let with_onboarding_completed = Settings {
+            onboarding_completed: true,
+            ..with_auto_copy_result.clone()
+        };
+        set_settings(&store, with_onboarding_completed.clone()).unwrap();
+        assert!(get_settings(&store).unwrap().onboarding_completed);
+    }
+
+    #[test]
+    fn pre_onboarding_feature_persisted_json_without_onboarding_completed_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null,
+            "inputSynthesisEnabled": true,
+            "autoCopyResult": false
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        assert!(!settings.onboarding_completed);
     }
 
     #[test]

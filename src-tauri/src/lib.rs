@@ -10,14 +10,15 @@ use std::sync::Mutex;
 
 use tauri::menu::{AboutMetadataBuilder, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::core::capture::CaptureResult;
 use crate::core::clipboard::BackupLifecycle;
+use crate::core::onboarding::{evaluate_onboarding, OnboardingDisposition};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
-use crate::core::{POPOVER_WINDOW_LABEL, SETTINGS_WINDOW_LABEL};
+use crate::core::{ONBOARDING_WINDOW_LABEL, POPOVER_WINDOW_LABEL, SETTINGS_WINDOW_LABEL};
 
 const OPEN_MENU_ID: &str = "open";
 const SETTINGS_MENU_ID: &str = "settings";
@@ -155,6 +156,56 @@ pub(crate) fn show_settings(app: &tauri::AppHandle) {
         if platform::needs_frame_extents_resync() {
             resync_frame_extents(&window);
         }
+    }
+}
+
+/// Creates and shows the one-shot onboarding window. Created at runtime
+/// (unlike the popover/settings windows, which `tauri.conf.json` declares
+/// statically) rather than as a static entry: most launches never show it —
+/// an existing, recognizably-set-up install auto-completes onboarding
+/// without ever creating the webview — so a static entry would pay its
+/// (small but permanent) webview cost on every launch for no benefit.
+/// Creating it here, from inside `setup` after `Builder::manage` has already
+/// registered all app state, also structurally avoids the WebView2
+/// early-IPC hazard described in the comment above `.manage(...)` further
+/// down: a static window's webview can start dispatching IPC before
+/// `setup` runs, but nothing here exists before `setup` does.
+///
+/// No `CloseRequested` intercept, unlike the Settings window: closing this
+/// window is meant to destroy it — the wizard is one-shot, and closing
+/// without finishing simply means onboarding shows again next launch (see
+/// `evaluate_onboarding`).
+fn show_onboarding(app: &tauri::AppHandle) {
+    let window = match WebviewWindowBuilder::new(
+        app,
+        ONBOARDING_WINDOW_LABEL,
+        WebviewUrl::App("onboarding.html".into()),
+    )
+    .title("Welcome to Kallilex")
+    .inner_size(640.0, 560.0)
+    // Resizable (with a floor at the design size) rather than fixed: the
+    // GTK frame-extents workaround below re-syncs via a maximize/restore
+    // cycle, and window managers refuse to maximize non-resizable windows,
+    // which would leave the workaround a silent no-op exactly where it's
+    // needed.
+    .min_inner_size(640.0, 560.0)
+    .center()
+    .focused(true)
+    .build()
+    {
+        Ok(window) => window,
+        Err(_) => return,
+    };
+    // Accessory apps (no Dock icon) don't always auto-activate a freshly
+    // created window, exactly the same reason `show_settings` needs the
+    // matching call — see its callers.
+    let _ = window.set_focus();
+    // Same GTK client-side-decoration bug as the Settings window (see
+    // `resync_frame_extents`): on its first map the title-bar Close button
+    // can be unclickable, which here would break the "close without
+    // finishing → onboarding shows again next launch" contract.
+    if platform::needs_frame_extents_resync() {
+        resync_frame_extents(&window);
     }
 }
 
@@ -357,6 +408,8 @@ pub fn run() {
             commands::test_connection,
             commands::open_settings,
             commands::get_wayland_shortcut_trigger,
+            commands::complete_onboarding,
+            commands::set_input_synthesis,
         ])
         // Registered on the builder, not inside `.setup()`: the windows
         // declared in `tauri.conf.json` are created while `Builder::build`
@@ -421,26 +474,13 @@ pub fn run() {
                 }
             }
 
-            // First-run permission onboarding: if the platform requires a
-            // grantable capture permission (macOS Accessibility; none on
-            // Linux) and it's currently missing, and we haven't shown the
-            // panel before, open Settings once.
-            {
-                use crate::core::capture::SelectionBackend;
-
-                let permission_required = platform::platform_info().permission_required;
-                let permission_granted = platform::selection_backend().permission_granted();
-                if permission_required
-                    && !permission_granted
-                    && !current_settings.accessibility_onboarding_shown
-                {
-                    show_settings(app.handle());
-                    let updated_settings = Settings {
-                        accessibility_onboarding_shown: true,
-                        ..current_settings.clone()
-                    };
-                    let _ = settings::set_settings(&settings_store, updated_settings);
-                }
+            // First-run onboarding: shown only for a genuine first run —
+            // `evaluate_onboarding` auto-completes (without showing
+            // anything) any install it can recognize as already set up.
+            // Store errors are swallowed, same as every other `setup` step
+            // here: a broken settings read must not fail the whole launch.
+            if let Ok(OnboardingDisposition::Show) = evaluate_onboarding(&settings_store) {
+                show_onboarding(app.handle());
             }
 
             // SNI trays are menu-oriented and may not deliver left-click

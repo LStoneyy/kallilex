@@ -89,6 +89,7 @@ function defaultSettings(): Settings {
     waylandRestoreToken: null,
     inputSynthesisEnabled: true,
     autoCopyResult: false,
+    onboardingCompleted: false,
   };
 }
 
