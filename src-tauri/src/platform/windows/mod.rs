@@ -1,15 +1,17 @@
 //! Windows platform implementation. Slice A got the crate building, testing,
 //! and running on Windows with a tray icon, popover, Settings, a registered
-//! global shortcut, and clipboard-fallback capture. Slice B (this state)
-//! adds the native capture/replace loop: `selection_backend()` reads the
-//! current selection instantly via UI Automation (`IUIAutomation` +
-//! `TextPattern`), falling back through `core::capture`'s existing
-//! clipboard + synthetic-Ctrl+C path — `keyboard()`'s `SendInput`-based
-//! `send_copy`/`send_paste` — when UI Automation finds nothing usable;
-//! `app_activator()` brings the source application back to the foreground
-//! via `SetForegroundWindow` (plus the documented `AttachThreadInput`
-//! fallback) for Replace. Native spell check (the Windows Spell Checking
-//! API) is still a Slice C stub — see `spell_checker()`.
+//! global shortcut, and clipboard-fallback capture. Slice B added the native
+//! capture/replace loop: `selection_backend()` reads the current selection
+//! instantly via UI Automation (`IUIAutomation` + `TextPattern`), falling
+//! back through `core::capture`'s existing clipboard + synthetic-Ctrl+C
+//! path — `keyboard()`'s `SendInput`-based `send_copy`/`send_paste` — when
+//! UI Automation finds nothing usable; `app_activator()` brings the source
+//! application back to the foreground via `SetForegroundWindow` (plus the
+//! documented `AttachThreadInput` fallback) for Replace. Slice C (this
+//! state) adds native spell check: `spell_checker()` is backed by the
+//! Windows Spell Checking API (`ISpellCheckerFactory`/`ISpellChecker`),
+//! whose UTF-16 code-unit offsets line up exactly with what
+//! `core::spellcheck::Misspelling` already documents.
 
 mod activation;
 mod clipboard;
@@ -58,10 +60,13 @@ pub fn app_activator(app: tauri::AppHandle) -> WindowsAppActivator {
     WindowsAppActivator::new(app)
 }
 
-/// Constructs the Windows `SpellChecker`. Slice A stub — see the module doc
-/// comment; the `AppHandle` parameter exists for signature parity with the
-/// macOS/Linux constructors, which do need one (marshalling onto a
-/// main/worker thread).
+/// Constructs the Windows `SpellChecker`: the Windows Spell Checking API
+/// (`ISpellCheckerFactory`/`ISpellChecker`), served by a dedicated worker
+/// thread that's shared process-wide (see the `spellcheck` module doc). The
+/// `AppHandle` parameter is unused — it exists only for signature parity
+/// with the macOS/Linux constructors, which do need one (marshalling onto a
+/// main/worker thread they don't own outright); the Windows worker thread is
+/// spawned and owned entirely within `spellcheck.rs`.
 pub fn spell_checker(_app: tauri::AppHandle) -> WindowsSpellChecker {
     WindowsSpellChecker
 }
