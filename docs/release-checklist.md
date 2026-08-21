@@ -7,14 +7,16 @@ the sections in order; do not publish a release until every gate passes.
 
 - [ ] CI is green on `main` (typecheck/lint, frontend tests, clippy, Rust
       tests, and `tauri build` all pass).
-- [ ] Manual app matrix (sections 2 and 3) has been run and passes.
+- [ ] Manual app matrix (sections 2, 3, and 4) has been run and passes.
 - [ ] README accuracy check: README describes only shipped behavior, contains
       no contradictions (e.g. no diff-view claims), and any version
       references match the release being cut.
 - [ ] Platform accuracy check: README and website describe only shipped
-      behavior on *both* platforms — no macOS-only claim reads as universal,
-      no Linux capability is promised beyond what the matrix below confirmed,
-      and neither names an install channel that does not exist yet.
+      behavior on all three platforms (macOS, Linux, Windows) — no macOS-only
+      claim reads as universal, no Linux capability is promised beyond what
+      the matrix below confirmed, no Windows capability is promised beyond
+      what the matrix confirmed, and none names an install channel that does
+      not exist yet.
 
 ## 2. macOS app matrix
 
@@ -92,9 +94,49 @@ portals are active in Settings → Accessibility.
       shortcut *does* bind, that README caveat is wrong and must be corrected
       before publishing.
 
-## 4. Clean-install smoke runs
+## 4. Windows manual matrix
 
-### 4a. Clean Mac
+For each app: select some text, trigger capture (default Ctrl+Alt+K), confirm
+the popover shows the captured text, run a spell check and/or AI action, then
+use Replace and confirm the result lands back in the source app and the
+original clipboard contents are restored afterwards.
+
+| App | Automatic capture (Ctrl+Alt+K) | Edit / spell check | Replace puts result back | Clipboard restored after |
+| --- | --- | --- | --- | --- |
+| Notepad | [ ] | [ ] | [ ] | [ ] |
+| Word | [ ] | [ ] | [ ] | [ ] |
+| Outlook | [ ] | [ ] | [ ] | [ ] |
+| Edge | [ ] | [ ] | [ ] | [ ] |
+| Chrome | [ ] | [ ] | [ ] | [ ] |
+| VS Code | [ ] | [ ] | [ ] | [ ] |
+| Windows Terminal | [ ] | [ ] | [ ] | [ ] |
+| Slack | [ ] | [ ] | [ ] | [ ] |
+
+Password / secure field (e.g. a Windows credential prompt or a browser
+password input): expected behavior is that capture fails or falls back
+gracefully, Kallilex does not crash, and no secret is left on the clipboard
+afterwards.
+
+- [ ] Password/secure field checked — capture fails or falls back gracefully,
+      no crash, no secret leaked to the clipboard afterwards.
+- [ ] Elevated app (e.g. Registry Editor run as administrator): capture
+      reports no selection and Replace reports a clear error, rather than
+      silently doing nothing or crashing — this is the expected UIPI
+      limitation, not a bug.
+- [ ] Tray icon is legible on both a light and a dark taskbar.
+- [ ] The installer installs per-user with no admin prompt, and the app
+      starts from the Start menu.
+- [ ] The autostart toggle in Settings survives a reboot.
+- [ ] Spell check uses the installed display language(s); with no
+      spell-check feature installed for any of them, the backend rejects the
+      check with a named error instead of returning an empty result (today
+      the popover only logs that error to the console — known, pre-existing
+      on every platform — so verify it in the dev tools rather than
+      expecting a visible message).
+
+## 5. Clean-install smoke runs
+
+### 5a. Clean Mac
 
 Run this on a Mac (or a fresh user account) that has never run Kallilex:
 
@@ -109,7 +151,7 @@ Run this on a Mac (or a fresh user account) that has never run Kallilex:
 - [ ] Full workflow works: select text → ⌥⌘K → run an action → Replace puts
       the result back into the source app.
 
-### 4b. Clean Linux machine
+### 5b. Clean Linux machine
 
 Run this on a machine (or fresh user account) that has never run Kallilex:
 
@@ -126,7 +168,21 @@ Run this on a machine (or fresh user account) that has never run Kallilex:
 - [ ] An API key saved in Settings survives an app restart (Secret Service is
       reachable), and no key appears anywhere under `~/.config`.
 
-## 5. Shipping steps
+### 5c. Clean Windows machine
+
+Run this on a machine (or fresh user account) that has never run Kallilex:
+
+- [ ] Download `Kallilex-vX.Y.Z-windows-x86_64-setup.exe` and run it.
+- [ ] SmartScreen shows "Windows protected your PC" — click through with
+      **More info → Run anyway**.
+- [ ] The installer completes per-user, with no admin prompt.
+- [ ] The tray icon appears in the notification area.
+- [ ] First capture works: select text → Ctrl+Alt+K → the popover shows it.
+- [ ] Spell check flags a misspelling in an installed display language.
+- [ ] An API key saved in Settings survives an app restart (Credential
+      Manager is reachable), and no key appears anywhere under `%APPDATA%`.
+
+## 6. Shipping steps
 
 1. [ ] Bump `version` in `package.json`, `src-tauri/tauri.conf.json`, and
        `src-tauri/Cargo.toml` — keep all three in sync, and let
@@ -140,10 +196,13 @@ Run this on a machine (or fresh user account) that has never run Kallilex:
        job as well — `.deb`, `.rpm`, and `.AppImage` plus one `.sha256` file
        each — alongside the macOS zip, and that every filename carries the
        tag being cut.
-7. [ ] Run the gates in sections 1–4 above against the built release.
-8. [ ] Publish the draft release.
+7. [ ] Confirm the draft release also carries the Windows artifact from the
+       third job — `Kallilex-vX.Y.Z-windows-x86_64-setup.exe` plus its
+       `.sha256` file — with the same tag in the filename.
+8. [ ] Run the gates in sections 1–5 above against the built release.
+9. [ ] Publish the draft release.
 
-## 6. Privacy check
+## 7. Privacy check
 
 - [ ] Confirm no telemetry/analytics code or dependency has been added.
 - [ ] Confirm any logs the app produces (if present) contain no selection

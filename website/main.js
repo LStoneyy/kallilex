@@ -33,8 +33,9 @@
         var debAsset = findAsset(assets, /^Kallilex-v.+-linux-x86_64\.deb$/);
         var rpmAsset = findAsset(assets, /^Kallilex-v.+-linux-x86_64\.rpm$/);
         var appImageAsset = findAsset(assets, /^Kallilex-v.+-linux-x86_64\.AppImage$/);
+        var exeAsset = findAsset(assets, /^Kallilex-v.+-windows-x86_64-setup\.exe$/);
 
-        if (!macAsset && !debAsset && !rpmAsset && !appImageAsset) {
+        if (!macAsset && !debAsset && !rpmAsset && !appImageAsset && !exeAsset) {
           throw new Error("no matching asset");
         }
 
@@ -44,14 +45,17 @@
         var primaryButtons = document.querySelectorAll("[data-download]");
         for (var p = 0; p < primaryButtons.length; p++) {
           var button = primaryButtons[p];
-          var isLinuxButton = button.getAttribute("data-download-os") === "linux";
-          var primaryAsset = isLinuxButton ? debAsset : macAsset;
+          var downloadOs = button.getAttribute("data-download-os");
+          var primaryAsset = macAsset;
+          if (downloadOs === "linux") primaryAsset = debAsset;
+          else if (downloadOs === "windows") primaryAsset = exeAsset;
           if (primaryAsset) button.href = primaryAsset.browser_download_url;
         }
 
         wireAssetLinks("[data-download-deb]", debAsset);
         wireAssetLinks("[data-download-rpm]", rpmAsset);
         wireAssetLinks("[data-download-appimage]", appImageAsset);
+        wireAssetLinks("[data-download-exe]", exeAsset);
 
         var versionEls = document.querySelectorAll("[data-version]");
         for (var k = 0; k < versionEls.length; k++) {
@@ -77,14 +81,28 @@
     return true;
   }
 
+  function isWindowsUserAgent(ua) {
+    ua = ua || (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
+    if (!/Windows NT/.test(ua)) return false;
+    if (/Windows Phone/.test(ua)) return false;
+    return true;
+  }
+
   function upgradeDownloadButtons() {
-    if (!isLinuxUserAgent()) return; // keep the default macOS label + href
+    var isLinux = isLinuxUserAgent();
+    var isWindows = isWindowsUserAgent();
+    if (!isLinux && !isWindows) return; // keep the default macOS label + href
 
     var buttons = document.querySelectorAll("[data-download]");
     buttons.forEach(function (button) {
-      button.setAttribute("data-download-os", "linux");
       var label = button.querySelector("[data-download-label]");
-      if (label) label.textContent = "Download for Linux";
+      if (isLinux) {
+        button.setAttribute("data-download-os", "linux");
+        if (label) label.textContent = "Download for Linux";
+      } else if (isWindows) {
+        button.setAttribute("data-download-os", "windows");
+        if (label) label.textContent = "Download for Windows";
+      }
     });
   }
 

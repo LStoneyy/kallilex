@@ -114,3 +114,56 @@ jobs:
             "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.rpm.sha256" \
             "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage" \
             "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage.sha256"
+
+  build-release-windows:
+    runs-on: windows-latest
+    needs: build-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows bundle
+        run: pnpm tauri build
+
+      - name: Rename artifact and generate checksum
+        shell: pwsh
+        run: |
+          $bundleDir = "src-tauri/target/release/bundle/nsis"
+          $installer = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe" -File
+
+          if (-not $installer -or $installer.Count -ne 1) {
+            Write-Output "::error::expected exactly one *-setup.exe in $bundleDir, found $(if ($installer) { $installer.Count } else { 0 })"
+            exit 1
+          }
+
+          $name = "Kallilex-$env:GITHUB_REF_NAME-windows-x86_64-setup.exe"
+          Copy-Item -Path $installer.FullName -Destination $name
+
+          $hash = (Get-FileHash -Path $name -Algorithm SHA256).Hash.ToLower()
+          $shaPath = "$name.sha256"
+          [System.IO.File]::WriteAllText($shaPath, "$hash  $name`n", (New-Object System.Text.UTF8Encoding $false))
+
+      - name: Upload Windows artifacts to draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $name = "Kallilex-$env:GITHUB_REF_NAME-windows-x86_64-setup.exe"
+          gh release upload "$env:GITHUB_REF_NAME" "$name" "$name.sha256"

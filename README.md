@@ -51,6 +51,26 @@ On GNOME, the tray icon requires the AppIndicator extension (`gnome-shell-extens
 
 Kallilex picks up system Hunspell dictionaries from `/usr/share/hunspell` and `/usr/share/myspell` automatically and prefers them; it also bundles fallback `en_US` and German dictionaries for machines without system dictionaries installed. The bundled dictionaries carry their own licenses (the German dictionary is GPL-licensed), with the license texts included in the package; the app itself remains Apache-2.0.
 
+## Windows
+
+Kallilex also ships for Windows, distributed as a single NSIS installer on [GitHub Releases](../../releases).
+
+Supported: Windows 10 21H2+ and Windows 11, x86_64.
+
+Install:
+
+1. Download `Kallilex-vX.Y.Z-windows-x86_64-setup.exe` from the latest release.
+2. Run it — the installer installs Kallilex per-user, with no admin prompt.
+3. On first launch, because the binary is unsigned (no code-signing certificate in v1), Windows SmartScreen shows a "Windows protected your PC" dialog: click **More info**, then **Run anyway**. This approval is only needed once.
+
+Kallilex lives in the notification area, never the taskbar or Alt-Tab, with `Ctrl+Alt+K` as the default global shortcut.
+
+Spell checking uses the built-in Windows Spell Checking API, fully offline, with the spell-check languages installed for your display languages. To add one, go to **Settings → Time & Language → Language & region**, add or select a language, and enable its "Basic typing" feature.
+
+Provider API keys are stored in Windows Credential Manager — never written to config files.
+
+Two honest limitations: apps running as administrator (elevated) are off-limits to Kallilex, because Windows' User Interface Privilege Isolation (UIPI) blocks synthetic input and accessibility reads across integrity levels — capture reports no selection and Replace reports a clear failure rather than silently doing nothing; and apps that expose no accessible text (some Electron and custom-toolkit apps) fall back to the synthetic-copy capture path described below.
+
 ## Capture
 
 Capture is automatic — there is no manual paste step. On macOS:
@@ -58,13 +78,13 @@ Capture is automatic — there is no manual paste step. On macOS:
 - **Primary path:** the macOS Accessibility API reads the current selection directly from the frontmost app. This requires the one-time Accessibility permission above.
 - **Fallback:** for apps that don't expose their selection through Accessibility, Kallilex falls back to a clipboard-based capture (a synthetic ⌘C). The clipboard is backed up before the fallback runs and restored afterwards, so your existing clipboard contents are never lost.
 
-See [Linux](#linux) for the Linux capture paths.
+See [Linux](#linux) for the Linux capture paths. On Windows, capture reads the current selection via UI Automation (`TextPattern`), with the same clipboard-backed-up-and-restored synthetic-copy fallback for apps that expose no accessible text — see [Windows](#windows) for the platform's honest limitations.
 
 ## Popover
 
 The popover shows the captured text as editable content, plus:
 
-- local spell check, powered by macOS's native `NSSpellChecker` (a Hunspell-compatible engine on Linux) — fully offline;
+- local spell check, powered by macOS's native `NSSpellChecker` (a Hunspell-compatible engine on Linux, the Windows Spell Checking API on Windows) — fully offline;
 - action buttons: **Rewrite**, **Shorten**, **Improve clarity**, and **Custom prompt**;
 - a privacy badge showing whether the active AI provider is **Local**, **LAN**, or **Cloud**, derived from its base URL before any request is sent.
 
@@ -75,13 +95,13 @@ There is no diff view in v1 — running an action replaces the editable text in 
 Once you're happy with the result:
 
 - **Copy** leaves the result on the clipboard for you to paste manually.
-- **Replace** pastes the result back into the app you captured it from (via a synthetic ⌘V on macOS, Ctrl+V on Linux), then restores your original clipboard contents afterwards. On Linux, Replace needs X11, or a Wayland compositor with the RemoteDesktop portal and "Use automatic paste-back" left on — see [Linux](#linux).
+- **Replace** pastes the result back into the app you captured it from (via a synthetic ⌘V on macOS, Ctrl+V on Linux and Windows), then restores your original clipboard contents afterwards. On Linux, Replace needs X11, or a Wayland compositor with the RemoteDesktop portal and "Use automatic paste-back" left on — see [Linux](#linux). On Windows, Replace activates the source window (`SetForegroundWindow`) before pasting; it does not work against apps running elevated — see [Windows](#windows).
 
 ## Privacy
 
-- **Local-first spell check.** Spell checking is fully offline and works without an AI provider or network access — macOS's native `NSSpellChecker`, or on Linux a Hunspell-compatible engine.
+- **Local-first spell check.** Spell checking is fully offline and works without an AI provider or network access — macOS's native `NSSpellChecker`, on Linux a Hunspell-compatible engine, or on Windows the built-in Windows Spell Checking API.
 - **Local / LAN / Cloud badge.** Before any AI request, the popover classifies the active provider from its base URL and shows whether it's local, on your LAN, or a cloud endpoint — so you always know where your text is about to go.
-- **System-keychain-only API keys.** Provider API keys are stored in the macOS Keychain or, on Linux, the Secret Service (gnome-keyring / KWallet) — never written to config files.
+- **System-keychain-only API keys.** Provider API keys are stored in the macOS Keychain, on Linux the Secret Service (gnome-keyring / KWallet), or on Windows Credential Manager — never written to config files.
 - **No accounts, no telemetry, no analytics.** Kallilex has no cloud backend and does not phone home.
 - **No logs of your text.** The app does not log the content you select or edit.
 - Text only leaves your machine when you explicitly invoke an AI action against a provider configured with a remote base URL.
@@ -141,13 +161,15 @@ On macOS, selected-text capture and replacement live behind a platform abstracti
 
 On Linux, the same abstraction has two backends. On X11, it's fully supported: `x11rb` queries the active window for frontmost-app identity, and key synthesis (for the clipboard fallback and Replace) and window activation both work directly. On Wayland, it runs through XDG desktop portals: the GlobalShortcuts portal binds the global shortcut, and the RemoteDesktop portal synthesizes the copy/paste keystrokes Replace needs, both only where the compositor supports them; primary-selection reads go through `arboard`'s data-control backend. Wayland has no cross-client window query protocol, so there is no way to read another app's window identity there.
 
+On Windows, capture uses UI Automation (`IUIAutomation`/`TextPattern`) to read the current selection from the focused element directly, with a synthetic Ctrl+C clipboard fallback for apps that expose no accessible text; frontmost-app identity comes from `GetForegroundWindow`. Replace activates the remembered source window with `SetForegroundWindow` and pastes via `SendInput` (synthetic Ctrl+V). Both capture and Replace are blocked by Windows' User Interface Privilege Isolation (UIPI) against apps running at a higher integrity level (elevated/administrator), which is reported as a clear failure rather than silent no-ops.
+
 ### Spell checking
 
 Spell checking is independent from AI.
 
 On macOS, Kallilex uses the native spell-checking facilities so it benefits from the user's installed/preferred languages without loading a model.
 
-On Linux, the same `SpellChecker` seam is backed by `spellbook` — a pure-Rust Hunspell-compatible engine — reading system Hunspell/MySpell dictionaries with bundled `en_US`/`de_DE` fallbacks (see [Linux](#linux) for the dictionary lookup). A future Windows build plugs into the same seam.
+On Linux, the same `SpellChecker` seam is backed by `spellbook` — a pure-Rust Hunspell-compatible engine — reading system Hunspell/MySpell dictionaries with bundled `en_US`/`de_DE` fallbacks (see [Linux](#linux) for the dictionary lookup). On Windows, the same seam is backed by the native Windows Spell Checking API, using the spell-check languages installed for your display languages — no bundled dictionaries needed.
 
 ### AI provider layer
 
@@ -169,7 +191,7 @@ Each provider profile is configured with:
 - model;
 - timeout;
 - optional custom headers;
-- optional API key (stored in the macOS Keychain or, on Linux, the Secret Service via gnome-keyring/KWallet — never in config files).
+- optional API key (stored in the macOS Keychain, on Linux the Secret Service via gnome-keyring/KWallet, or on Windows Credential Manager — never in config files).
 
 Ollama and LM Studio expose OpenAI-compatible APIs, so they reuse the generic adapter rather than getting separate hard-coded implementations.
 
@@ -220,7 +242,7 @@ pnpm tauri dev     # run in development
 pnpm tauri build   # build a release app bundle
 ```
 
-CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck), `pnpm test` (frontend tests), `cargo clippy` and `cargo test` for the Rust side, and a full `tauri build`, on both macOS and Linux.
+CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck), `pnpm test` (frontend tests), `cargo clippy` and `cargo test` for the Rust side, and a full `tauri build`, on macOS, Linux, and Windows.
 
 ## v1 feature set
 
@@ -244,7 +266,6 @@ The first macOS release stays intentionally small:
 - Developer-ID signing and notarization;
 - Homebrew cask;
 - auto-updater;
-- Windows build;
 - richer diff view and one-click suggestion acceptance;
 - user-defined rewrite presets;
 - per-app presets;

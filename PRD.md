@@ -28,7 +28,7 @@ Core properties: fast, unobtrusive, privacy-conscious, free, open source (Apache
 - No streaming responses.
 - No Harper / grammar-style checking.
 - No llama.cpp process management (external server only).
-- No light theme, no auto-updater. Platform support: macOS (menu bar, full functionality), Linux X11 (tier 1, full capture/replace loop), Linux Wayland (portal-backed on supported compositors: GlobalShortcuts + RemoteDesktop portals give shortcut and replace; degraded tray-capture/copy-only elsewhere); Windows remains unsupported (planned).
+- No light theme, no auto-updater. Platform support: macOS (menu bar, full functionality), Linux X11 (tier 1, full capture/replace loop), Linux Wayland (portal-backed on supported compositors: GlobalShortcuts + RemoteDesktop portals give shortcut and replace; degraded tray-capture/copy-only elsewhere); Windows (tier 1: notification-area app, full capture/replace loop via UI Automation and SendInput, Windows Spell Checking API, Credential Manager).
 - No Mac App Store distribution, no notarization in v1.
 - No telemetry, crash reporting, or analytics of any kind.
 
@@ -257,7 +257,7 @@ Ad-hoc signed build, GitHub Release workflow, README updates (resolve diff-view/
 
 ## 16. Roadmap (post-v1)
 
-Diff view with one-click acceptance; user-defined and per-app presets; learn/ignore words; Harper for English grammar/style; llama.cpp process management; Developer-ID signing + notarization + Homebrew; auto-update (Sparkle or Tauri updater — undecided); Linux/Windows builds via the existing platform traits; config import/export without secrets; light (marble) theme.
+Diff view with one-click acceptance; user-defined and per-app presets; learn/ignore words; Harper for English grammar/style; llama.cpp process management; Developer-ID signing + notarization + Homebrew; auto-update (Sparkle or Tauri updater — undecided); config import/export without secrets; light (marble) theme.
 
 ## 17. Decision log
 
