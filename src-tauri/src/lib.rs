@@ -152,7 +152,9 @@ pub(crate) fn show_settings(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
         let _ = window.show();
         let _ = window.set_focus();
-        resync_frame_extents(&window);
+        if platform::needs_frame_extents_resync() {
+            resync_frame_extents(&window);
+        }
     }
 }
 
@@ -356,15 +358,26 @@ pub fn run() {
             commands::open_settings,
             commands::get_wayland_shortcut_trigger,
         ])
+        // Registered on the builder, not inside `.setup()`: the windows
+        // declared in `tauri.conf.json` are created while `Builder::build`
+        // is still running, before `setup` gets a chance to run. On
+        // Windows, WebView2 initialisation of the second (settings) window
+        // pumps the main thread's message loop, which can let the
+        // already-loaded popover webview dispatch its first IPC command
+        // (e.g. `capture_selection`) before `setup` would have called
+        // `app.manage(...)`, panicking on `state() called before
+        // manage()`. `Builder::manage` registers state before any window
+        // exists, on every platform, so moving it here is safe everywhere;
+        // behavior on macOS/Linux is unchanged since nothing there reads
+        // this state earlier than `setup` did.
+        .manage(CaptureState::default())
+        .manage(BackupLifecycle::new())
+        .manage(ReplaceInFlight::default())
+        .manage(ActionInFlight::new())
+        .manage(platform::PortalShortcutTrigger::default())
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
             platform::setup(app);
-
-            app.manage(CaptureState::default());
-            app.manage(BackupLifecycle::new());
-            app.manage(ReplaceInFlight::default());
-            app.manage(ActionInFlight::new());
-            app.manage(platform::PortalShortcutTrigger::default());
 
             let settings_store = TauriStoreSettings::new(app.handle().clone());
             let current_settings = settings::get_settings(&settings_store).unwrap_or_default();

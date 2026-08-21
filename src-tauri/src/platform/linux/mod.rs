@@ -74,39 +74,7 @@ pub fn setup(app: &mut tauri::App) {
 /// don't provide). Falls back to the top-right corner of the current (or
 /// primary) monitor when the cursor position can't be read.
 pub fn position_popover(window: &tauri::WebviewWindow) {
-    use tauri::PhysicalPosition;
-
-    let Some(monitor) = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .or_else(|| window.primary_monitor().ok().flatten())
-    else {
-        return;
-    };
-
-    let window_size = window
-        .outer_size()
-        .unwrap_or(tauri::PhysicalSize::new(400, 300));
-    let work_area = monitor.work_area();
-
-    let min_x = work_area.position.x;
-    let min_y = work_area.position.y;
-    let max_x = (min_x + work_area.size.width as i32 - window_size.width as i32).max(min_x);
-    let max_y = (min_y + work_area.size.height as i32 - window_size.height as i32).max(min_y);
-
-    let (x, y) = match window.cursor_position() {
-        Ok(cursor) => (cursor.x as i32, cursor.y as i32),
-        // Cursor position unavailable: fall back to the monitor's top-right
-        // corner rather than guessing.
-        Err(_) => (
-            min_x + work_area.size.width as i32 - window_size.width as i32,
-            min_y,
-        ),
-    };
-
-    let clamped = PhysicalPosition::new(x.clamp(min_x, max_x), y.clamp(min_y, max_y));
-    let _ = window.set_position(clamped);
+    super::positioning::position_popover(window, super::positioning::FallbackCorner::TopRight);
 }
 
 /// Linux platform metadata: session-aware. Replace (write-back into the
@@ -243,6 +211,14 @@ pub fn spawn_portal_shortcut(
         preferred_shortcut,
         on_activated,
     ));
+}
+
+/// `true`: the Settings window needs the GTK client-side-decoration
+/// workaround (see `lib.rs::resync_frame_extents`) on Linux, where GTK/tao's
+/// frame-extents handling leaves the title-bar buttons unclickable until the
+/// window has been through one maximise/restore cycle.
+pub fn needs_frame_extents_resync() -> bool {
+    true
 }
 
 #[cfg(test)]

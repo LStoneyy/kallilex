@@ -157,7 +157,7 @@ export interface WaylandCapabilities {
  * metadata surfaced to the frontend by the `get_platform_info` command.
  */
 export interface PlatformInfo {
-  os: "macos" | "linux";
+  os: "macos" | "linux" | "windows";
   session: string | null;
   replaceBackAvailable: boolean;
   permissionRequired: boolean;

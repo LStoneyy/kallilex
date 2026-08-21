@@ -581,3 +581,10 @@ pub fn spawn_portal_shortcut(
     _on_activated: fn(&tauri::AppHandle),
 ) {
 }
+
+/// `false`: macOS has no client-side-decoration toolkit, so the GTK
+/// frame-extents workaround (see `lib.rs::resync_frame_extents`) does not
+/// apply here.
+pub fn needs_frame_extents_resync() -> bool {
+    false
+}

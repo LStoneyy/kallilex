@@ -4,26 +4,44 @@
 //! submodule implements under its own name. Adding a new platform means
 //! adding a new submodule that implements this same function surface and
 //! wiring it into the `#[cfg]` blocks below; nothing else in the crate
-//! changes.
+//! changes. Three platforms are supported: macOS, Linux, and Windows.
 
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
+
+// Shared, pure popover-clamping helper (Linux and Windows only — macOS
+// positions relative to the menu bar instead, so an unused module there
+// would trip `-D warnings`). See `positioning.rs` for details.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod positioning;
 
 #[cfg(target_os = "linux")]
 pub use linux::{
-    app_activator, clipboard, global_shortcut_failure_expected, keyboard, open_permission_settings,
-    platform_info, position_popover, selection_backend, set_input_synthesis_enabled, setup,
-    spawn_portal_shortcut, spell_checker, tray_icon_as_template, tray_icon_bytes,
-    tray_open_captures, use_portal_global_shortcut, wants_tray_open_entry,
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
+    needs_frame_extents_resync, open_permission_settings, platform_info, position_popover,
+    selection_backend, set_input_synthesis_enabled, setup, spawn_portal_shortcut, spell_checker,
+    tray_icon_as_template, tray_icon_bytes, tray_open_captures, use_portal_global_shortcut,
+    wants_tray_open_entry,
 };
 #[cfg(target_os = "macos")]
 pub use macos::{
-    app_activator, clipboard, global_shortcut_failure_expected, keyboard, open_permission_settings,
-    platform_info, position_popover, selection_backend, set_input_synthesis_enabled, setup,
-    spawn_portal_shortcut, spell_checker, tray_icon_as_template, tray_icon_bytes,
-    tray_open_captures, use_portal_global_shortcut, wants_tray_open_entry,
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
+    needs_frame_extents_resync, open_permission_settings, platform_info, position_popover,
+    selection_backend, set_input_synthesis_enabled, setup, spawn_portal_shortcut, spell_checker,
+    tray_icon_as_template, tray_icon_bytes, tray_open_captures, use_portal_global_shortcut,
+    wants_tray_open_entry,
+};
+#[cfg(target_os = "windows")]
+pub use windows::{
+    app_activator, clipboard, global_shortcut_failure_expected, keyboard,
+    needs_frame_extents_resync, open_permission_settings, platform_info, position_popover,
+    selection_backend, set_input_synthesis_enabled, setup, spawn_portal_shortcut, spell_checker,
+    tray_icon_as_template, tray_icon_bytes, tray_open_captures, use_portal_global_shortcut,
+    wants_tray_open_entry,
 };
 
 /// Platform metadata surfaced to the frontend via the `get_platform_info`
@@ -32,7 +50,7 @@ pub use macos::{
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformInfo {
-    /// "macos" | "linux"
+    /// "macos" | "linux" | "windows"
     pub os: &'static str,
     /// Display-server session: `None` on macOS; Slice B fills in
     /// "x11"/"wayland" on Linux.

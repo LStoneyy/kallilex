@@ -90,6 +90,17 @@ function macosPlatformInfo(): PlatformInfo {
   };
 }
 
+function windowsPlatformInfo(): PlatformInfo {
+  return {
+    os: "windows",
+    session: null,
+    replaceBackAvailable: true,
+    permissionRequired: false,
+    defaultShortcut: "Ctrl+Alt+K",
+    wayland: null,
+  };
+}
+
 function sampleProfile(overrides: Partial<ProviderProfile> = {}): ProviderProfile {
   return {
     id: "profile-1",
@@ -413,6 +424,33 @@ describe("settings App", () => {
     expect(screen.queryByText("Not granted")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open System Settings" })).not.toBeInTheDocument();
     expect(accessibilityStatus).not.toHaveBeenCalled();
+  });
+
+  it("reflects Windows' default shortcut in the hint and input placeholder", async () => {
+    getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
+
+    render(App);
+
+    const shortcutInput = await screen.findByPlaceholderText("Ctrl+Alt+K");
+    expect(shortcutInput).toBeInTheDocument();
+    expect(await screen.findByText("Ctrl+Alt+K", { selector: "code" })).toBeInTheDocument();
+  });
+
+  it("shows the no-permission-needed platform note on Windows without any Wayland sub-block", async () => {
+    getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
+
+    render(App);
+    await openAccessibilityTab();
+
+    expect(
+      await screen.findByText("No system permission is needed to capture selections on this platform."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not granted")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open System Settings" })).not.toBeInTheDocument();
+    expect(accessibilityStatus).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(/Wayland capabilities \(detected via your desktop's XDG portals\)/),
+    ).not.toBeInTheDocument();
   });
 
   it("shows both Wayland capability rows as unavailable when the compositor offers neither portal", async () => {

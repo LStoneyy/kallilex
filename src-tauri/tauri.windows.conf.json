@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "publisher": "webcommits",
+    "shortDescription": "Menu-bar writing utility",
+    "longDescription": "Kallilex captures your selected text from any app for spell checking and AI-assisted rewriting, then puts the result back.",
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
+}

@@ -107,6 +107,17 @@ function macosPlatformInfo(): PlatformInfo {
   };
 }
 
+function windowsPlatformInfo(): PlatformInfo {
+  return {
+    os: "windows",
+    session: null,
+    replaceBackAvailable: true,
+    permissionRequired: false,
+    defaultShortcut: "Ctrl+Alt+K",
+    wayland: null,
+  };
+}
+
 const waylandNoticeNoCapabilitiesText =
   "Wayland session: your compositor doesn't offer the GlobalShortcuts or RemoteDesktop portals — open Kallilex from the tray to capture, and copy results manually.";
 const waylandNoticeNoGlobalShortcutText =
@@ -1339,6 +1350,28 @@ describe("popover App", () => {
 
     await waitFor(() => {
       expect(getPlatformInfo).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoGlobalShortcutText)).not.toBeInTheDocument();
+    expect(screen.queryByText(waylandNoticeNoInputSynthesisText)).not.toBeInTheDocument();
+  });
+
+  it("offers Replace and shows no Wayland notice on Windows platform info", async () => {
+    // spec-15 Slice A: Windows has no session/portal concept at all, so
+    // Replace is offered purely off `replaceBackAvailable` (true, a final
+    // platform capability, not a Slice A placeholder) and no Wayland notice
+    // should ever render regardless of session.
+    getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: null, pid: 123, name: "Notepad" },
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
     });
     expect(screen.queryByText(waylandNoticeNoCapabilitiesText)).not.toBeInTheDocument();
     expect(screen.queryByText(waylandNoticeNoGlobalShortcutText)).not.toBeInTheDocument();

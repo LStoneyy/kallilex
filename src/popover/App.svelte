@@ -814,10 +814,14 @@
       sans-serif;
   }
 
-  /* X11 has no compositor by default, so the semi-transparent surface color
-     above renders as garbage instead of a blur/blend. Linux gets a fully
-     opaque surface; macOS is untouched. */
-  :global(html.platform-linux) .popover {
+  /* The semi-transparent surface color above relies on macOS's vibrancy
+     window effect to actually blur/blend — it's a macOS-only look. X11 has
+     no compositor by default (the color would render as garbage without
+     one), and WebView2 on Windows has no equivalent vibrancy effect at all,
+     so both platforms get the same fully opaque surface instead; macOS is
+     untouched. */
+  :global(html.platform-linux) .popover,
+  :global(html.platform-windows) .popover {
     background-color: var(--color-basalt);
   }
 
