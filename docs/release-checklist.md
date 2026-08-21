@@ -142,12 +142,17 @@ Run this on a Mac (or a fresh user account) that has never run Kallilex:
 
 - [ ] Download the release zip and unzip it.
 - [ ] Move `Kallilex.app` to `/Applications`.
-- [ ] First launch is blocked by Gatekeeper (app is ad-hoc signed, not
+- [ ] First launch is blocked by Gatekeeper (app is self-signed, not
       notarized).
 - [ ] Open **System Settings → Privacy & Security**, scroll down, click
       **"Open Anyway"**.
 - [ ] The app launches.
 - [ ] On first capture, grant the requested **Accessibility** permission.
+- [ ] The Accessibility permission survives an app restart: quit Kallilex,
+      relaunch it, and confirm the checkbox in System Settings →
+      Accessibility is still present and enabled and the app does not
+      re-prompt. (This regresses if the release was not signed with the
+      stable release certificate — see section 8.)
 - [ ] Full workflow works: select text → ⌥⌘K → run an action → Replace puts
       the result back into the source app.
 
@@ -207,3 +212,43 @@ Run this on a machine (or fresh user account) that has never run Kallilex:
 - [ ] Confirm no telemetry/analytics code or dependency has been added.
 - [ ] Confirm any logs the app produces (if present) contain no selection
       content or other user text.
+
+## 8. macOS release signing
+
+Release builds are signed with a **stable self-signed certificate** ("Kallilex
+Signing") instead of an ad-hoc signature. macOS ties TCC grants (Accessibility)
+to the app's code-signing identity; with ad-hoc signing that identity is the
+cdhash of the exact binary, so every release invalidated the user's grant and
+left a stale, un-fixable entry in System Settings. With the stable certificate
+the designated requirement pins the certificate leaf, and the grant survives
+updates. Gatekeeper behavior is unchanged (the app is still not notarized).
+
+How it is wired up:
+
+- The public certificate lives in the repo at
+  `src-tauri/packaging/macos/kallilex-signing-cert.pem`.
+- The private key + certificate (`.p12`, legacy PKCS#12 format — required for
+  `security import`) and its password live in the GitHub Actions secrets
+  `APPLE_CERTIFICATE` (base64 of the `.p12`) and
+  `APPLE_CERTIFICATE_PASSWORD`. The originals are kept locally in
+  `~/.kallilex-signing/` on the release manager's machine.
+- The release workflow imports the certificate into a CI keychain, trusts it
+  (`sudo security add-trusted-cert`, required for self-signed identities),
+  builds with `--config src-tauri/tauri.macos-release.conf.json` (which sets
+  `signingIdentity` to "Kallilex Signing"), and then **verifies** that the
+  built app's designated requirement pins the repo certificate — the job
+  fails if it does not.
+- Local dev builds stay ad-hoc (`"signingIdentity": "-"` in
+  `tauri.conf.json`); no certificate is needed to develop.
+
+Testing the signing setup without cutting a release: run the `Release`
+workflow manually (`workflow_dispatch`); it builds and verifies the signed
+macOS app and uploads it as a workflow artifact instead of creating a release.
+
+Rotating the certificate (only if the key is lost or compromised): generate a
+new key + certificate with the same CN, export the `.p12` with
+`openssl pkcs12 -export -legacy`, update both secrets and the `.pem` in the
+repo. Note: rotation changes the signing identity, so every user's
+Accessibility grant is invalidated once — users must
+`tccutil reset Accessibility com.webcommits.kallilex` and re-grant (the README
+documents this).

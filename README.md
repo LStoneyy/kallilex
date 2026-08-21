@@ -24,8 +24,10 @@ Kallilex ships as a macOS app, distributed as a zip on [GitHub Releases](../../r
 
 1. Download `Kallilex-vX.Y.Z-macos-universal.zip` from the latest release.
 2. Unzip it and drag `Kallilex.app` to `/Applications`.
-3. On first launch, macOS blocks the app because it is ad-hoc signed (there is no Apple Developer notarization in v1): a dialog says the app could not be verified, offering only **Done** and **Move to Trash**. Click **Done**, then open **System Settings → Privacy & Security**, scroll down to the security section, and click **"Open Anyway"**; confirm the follow-up prompt. This approval is only needed once. (On macOS 15 Sequoia and later, the old right-click → Open shortcut no longer works for unnotarized apps.)
+3. On first launch, macOS blocks the app because it is signed with a self-signed certificate, not notarized by Apple (there is no Apple Developer notarization in v1): a dialog says the app could not be verified, offering only **Done** and **Move to Trash**. Click **Done**, then open **System Settings → Privacy & Security**, scroll down to the security section, and click **"Open Anyway"**; confirm the follow-up prompt. This approval is only needed once. (On macOS 15 Sequoia and later, the old right-click → Open shortcut no longer works for unnotarized apps.)
 4. On the first capture, macOS prompts for **Accessibility** permission — grant it under **System Settings → Privacy & Security → Accessibility**. Kallilex needs this to read the selected text from the frontmost app.
+
+Releases are signed with a stable self-signed certificate, so the Accessibility permission survives app updates. When updating from v0.4.0 or earlier (which were ad-hoc signed), the old permission entry is stale and the checkbox will not stick — run `tccutil reset Accessibility com.webcommits.kallilex` once (or remove the Kallilex entry in the Accessibility list), then grant the permission again.
 
 Notarized builds and a Homebrew cask are on the roadmap; see [Later](#later).
 
