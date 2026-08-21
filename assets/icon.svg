@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#201F24"/>
+      <stop offset="1" stop-color="#141318"/>
+    </linearGradient>
+  </defs>
+  <!-- Basalt rounded square, macOS icon grid: 824x824 inset, r=184 -->
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#surface)"/>
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="none" stroke="#2A292F" stroke-width="4"/>
+  <!-- Verdigris monoline K -->
+  <g stroke="#2FAF9B" stroke-width="96" stroke-linecap="round" fill="none">
+    <line x1="368" y1="278" x2="368" y2="700"/>
+    <line x1="400" y1="512" x2="652" y2="286"/>
+    <line x1="400" y1="512" x2="652" y2="692"/>
+  </g>
+  <!-- Attic Clay correction squiggle -->
+  <path d="M 336 806 q 44 -34 88 0 t 88 0 t 88 0 t 88 0"
+        fill="none" stroke="#E46846" stroke-width="34" stroke-linecap="round"/>
+</svg>
