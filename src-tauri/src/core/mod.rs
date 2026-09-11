@@ -4,6 +4,7 @@
 pub mod capture;
 pub mod clipboard;
 pub mod onboarding;
+pub mod prompts;
 pub mod providers;
 pub mod replace;
 pub mod secrets;

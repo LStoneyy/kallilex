@@ -59,6 +59,8 @@ function defaultSettings(): Settings {
     inputSynthesisEnabled: true,
     autoCopyResult: false,
     onboardingCompleted: false,
+    popoverPosition: null,
+    prompts: [],
   };
 }
 

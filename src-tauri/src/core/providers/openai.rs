@@ -107,9 +107,26 @@ fn truncate(s: &str, max_chars: usize) -> String {
     }
 }
 
+/// Strips model padding without destroying user-visible formatting:
+/// removes leading blank lines and all trailing whitespace, but keeps
+/// the first content line's indentation and all interior whitespace.
+fn strip_padding(content: &str) -> String {
+    let start = content
+        .find(|c: char| !c.is_whitespace())
+        .map(|idx| {
+            // Back up to the start of the line containing the first
+            // non-whitespace character, so its indentation is kept.
+            content[..idx].rfind('\n').map_or(0, |nl| nl + 1)
+        })
+        .unwrap_or(content.len());
+
+    content[start..].trim_end().to_string()
+}
+
 /// Sends `request`, maps transport failures, non-2xx responses, and
 /// malformed response bodies to the [`ProviderError`] taxonomy, and
-/// extracts `choices[0].message.content` (trimmed) on success.
+/// extracts `choices[0].message.content` (leading/trailing padding
+/// stripped, interior formatting preserved) on success.
 async fn send_and_extract_content(
     request: reqwest::RequestBuilder,
     timeout_secs: u64,
@@ -146,7 +163,7 @@ async fn send_and_extract_content(
             ProviderError::InvalidResponse("message content was missing or null".to_string())
         })?;
 
-    Ok(content.trim().to_string())
+    Ok(strip_padding(&content))
 }
 
 impl Provider for OpenAiCompatibleAdapter {
@@ -245,7 +262,7 @@ mod tests {
             .complete(&profile, Some("sk-test"), "system prompt", "user text")
             .await;
 
-        assert_eq!(result, Ok("Hello there".to_string()));
+        assert_eq!(result, Ok("  Hello there".to_string()));
 
         let requests = server.received_requests().await.unwrap();
         assert_eq!(requests.len(), 1);
@@ -256,6 +273,28 @@ mod tests {
         assert_eq!(body["messages"][0]["content"], "system prompt");
         assert_eq!(body["messages"][1]["role"], "user");
         assert_eq!(body["messages"][1]["content"], "user text");
+    }
+
+    #[tokio::test]
+    async fn success_preserves_interior_formatting_while_stripping_padding() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(success_body("\n\nLine one\n\n    indented\n")),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let profile = profile_for(server.uri());
+        let adapter = OpenAiCompatibleAdapter;
+        let result = adapter
+            .complete(&profile, None, "system prompt", "user text")
+            .await;
+
+        assert_eq!(result, Ok("Line one\n\n    indented".to_string()));
     }
 
     #[tokio::test]
@@ -386,5 +425,27 @@ mod tests {
             matches!(result, Err(ProviderError::MissingModel)),
             "{result:?}"
         );
+    }
+
+    // ---- strip_padding --------------------------------------------------
+
+    #[test]
+    fn strip_padding_drops_leading_blank_lines_and_trailing_whitespace() {
+        assert_eq!(strip_padding("\n\n  - a\n  - b\n\n"), "  - a\n  - b");
+    }
+
+    #[test]
+    fn strip_padding_leaves_interior_blank_lines_untouched() {
+        assert_eq!(strip_padding("para 1\n\npara 2"), "para 1\n\npara 2");
+    }
+
+    #[test]
+    fn strip_padding_leaves_a_single_indented_line_untouched() {
+        assert_eq!(strip_padding("  indented"), "  indented");
+    }
+
+    #[test]
+    fn strip_padding_keeps_leading_indentation_but_trims_trailing_whitespace() {
+        assert_eq!(strip_padding("  Hello there  "), "  Hello there");
     }
 }

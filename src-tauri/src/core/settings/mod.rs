@@ -15,6 +15,7 @@ pub use tauri_store::TauriStoreSettings;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::prompts::CustomPrompt;
 use crate::core::providers::ProviderProfile;
 
 /// The platform's default global shortcut: ⌥⌘K on macOS, Ctrl+Alt+K
@@ -25,6 +26,16 @@ pub fn default_shortcut() -> &'static str {
     } else {
         "Ctrl+Alt+K"
     }
+}
+
+/// A user-chosen popover position, in physical pixels — the origin the
+/// popover's top-left corner was last dragged to. See
+/// [`Settings::popover_position`] for when this is populated vs. `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PopoverPosition {
+    pub x: i32,
+    pub y: i32,
 }
 
 /// Persisted, non-secret user settings.
@@ -97,6 +108,39 @@ pub struct Settings {
     /// auto-completes without ever showing the window.
     #[serde(default)]
     pub onboarding_completed: bool,
+    /// The popover's user-dragged position (its window's top-left corner,
+    /// in physical pixels), persisted after the popover is hidden following
+    /// a drag. `None` means automatic positioning: `show_popover` anchors
+    /// the popover at the cursor (see `platform::position_popover`) exactly
+    /// as it always has, and `Some` means it reopens at this position
+    /// instead, clamped back on-screen (see
+    /// `platform::positioning::clamp_saved_position`) in case the monitor
+    /// layout changed since it was saved. Plain `#[serde(default)]` (`None`)
+    /// is correct: settings persisted before this field existed belong to
+    /// installs that never moved the popover, so "no opinion persisted"
+    /// must mean "keep positioning automatically". Inherently machine-local
+    /// like `wayland_restore_token` above — a saved pixel position from one
+    /// machine's monitor layout would be meaningless (or off-screen) on
+    /// another — so, like that field, it is never round-tripped through any
+    /// settings-export/sync feature if one is ever added.
+    #[serde(default)]
+    pub popover_position: Option<PopoverPosition>,
+    /// User-managed AI prompts offered as buttons in the popover's action
+    /// row. Defaults to the three prompts Kallilex used to bundle
+    /// unconditionally (Rewrite / Shorten / Improve clarity) via the named
+    /// [`crate::core::prompts::default_prompts`] rather than a bare
+    /// `#[serde(default)]` (which would be an empty `Vec`): that same
+    /// function is also this field's *value* default (see `impl Default for
+    /// Settings` below), so the seeded list appears both for a fresh install
+    /// and for a pre-existing settings.json written before this field
+    /// existed — neither has "no opinion" about which prompts to offer, the
+    /// way an install that never touched Wayland has "no opinion" about
+    /// `wayland_restore_token`. A user who deletes every prompt via the
+    /// Settings window's Prompts tab persists an explicit empty `Vec`,
+    /// which then stays empty: only a *missing* key falls back to the
+    /// seeded default, not an explicitly empty one.
+    #[serde(default = "crate::core::prompts::default_prompts")]
+    pub prompts: Vec<CustomPrompt>,
 }
 
 /// See [`Settings::input_synthesis_enabled`]'s doc comment for why this is a
@@ -118,6 +162,8 @@ impl Default for Settings {
             input_synthesis_enabled: true,
             auto_copy_result: false,
             onboarding_completed: false,
+            popover_position: None,
+            prompts: crate::core::prompts::default_prompts(),
         }
     }
 }
@@ -189,6 +235,12 @@ mod tests {
             input_synthesis_enabled: false,
             auto_copy_result: true,
             onboarding_completed: true,
+            popover_position: Some(PopoverPosition { x: 120, y: 340 }),
+            prompts: vec![crate::core::prompts::CustomPrompt {
+                id: "prompt-1".to_string(),
+                label: "Translate".to_string(),
+                instruction: "Translate to French".to_string(),
+            }],
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -274,6 +326,27 @@ mod tests {
         };
         set_settings(&store, with_onboarding_completed.clone()).unwrap();
         assert!(get_settings(&store).unwrap().onboarding_completed);
+
+        let with_popover_position = Settings {
+            popover_position: Some(PopoverPosition { x: 50, y: 75 }),
+            ..with_onboarding_completed.clone()
+        };
+        set_settings(&store, with_popover_position.clone()).unwrap();
+        assert_eq!(
+            get_settings(&store).unwrap().popover_position,
+            Some(PopoverPosition { x: 50, y: 75 })
+        );
+
+        let with_prompts = Settings {
+            prompts: vec![crate::core::prompts::CustomPrompt {
+                id: "prompt-1".to_string(),
+                label: "Translate".to_string(),
+                instruction: "Translate to French".to_string(),
+            }],
+            ..with_popover_position.clone()
+        };
+        set_settings(&store, with_prompts.clone()).unwrap();
+        assert_eq!(get_settings(&store).unwrap().prompts, with_prompts.prompts);
     }
 
     #[test]
@@ -332,6 +405,79 @@ mod tests {
         // field, by design — see their doc comments on `Settings`.
         assert!(settings.input_synthesis_enabled);
         assert!(!settings.auto_copy_result);
+    }
+
+    #[test]
+    fn pre_spec_14_persisted_json_without_popover_position_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null,
+            "inputSynthesisEnabled": true,
+            "autoCopyResult": false,
+            "onboardingCompleted": false
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        assert_eq!(settings.popover_position, None);
+    }
+
+    #[test]
+    fn pre_spec_15_persisted_json_without_prompts_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null,
+            "inputSynthesisEnabled": true,
+            "autoCopyResult": false,
+            "onboardingCompleted": false,
+            "popoverPosition": null
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        // A missing `prompts` key has "no opinion" — it falls back to the
+        // same three seeded prompts a fresh install gets, not an empty list.
+        let seeds = crate::core::prompts::default_prompts();
+        assert_eq!(settings.prompts.len(), seeds.len());
+        for (actual, expected) in settings.prompts.iter().zip(seeds.iter()) {
+            assert_eq!(actual.id, expected.id);
+            assert_eq!(actual.label, expected.label);
+        }
+    }
+
+    #[test]
+    fn an_explicit_empty_prompts_list_in_persisted_json_stays_empty() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null,
+            "inputSynthesisEnabled": true,
+            "autoCopyResult": false,
+            "onboardingCompleted": false,
+            "popoverPosition": null,
+            "prompts": []
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        // Unlike a *missing* key, an explicitly empty list means the user
+        // deleted every prompt — it must not be resurrected back to the
+        // seeded defaults.
+        assert!(settings.prompts.is_empty());
     }
 
     #[test]

@@ -59,13 +59,11 @@ pub struct ProviderProfile {
     pub has_api_key: bool,
 }
 
-/// A bundled AI action, or a free-form custom instruction.
+/// A saved prompt's instruction, or a free-form custom instruction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Action {
-    Rewrite,
-    Shorten,
-    ImproveClarity,
+    Prompt { instruction: String },
     Custom { instruction: String },
 }
 
@@ -119,22 +117,14 @@ pub trait Provider {
 /// The strict instruction every prompt ends with: models love to add
 /// preamble ("Here's the rewritten text:") or wrap the result in quotes,
 /// both of which would land verbatim in the source app on replace-back.
-const RETURN_ONLY_TEXT_INSTRUCTION: &str = "Return only the transformed text, with no preamble, commentary, or surrounding quotes. Preserve the text's original language.";
+const RETURN_ONLY_TEXT_INSTRUCTION: &str = "Return only the transformed text, with no preamble, commentary, or surrounding quotes. Preserve the text's original language. Preserve the text's structure and formatting exactly: keep paragraph breaks, line breaks, list markers, indentation, and any markup characters (e.g. Markdown) that appear in the input.";
 
 /// Builds the system prompt for `action`. The user's text is always sent
 /// verbatim as the user message — never folded into this prompt — so it
 /// can't be reinterpreted as instructions.
 pub fn assemble_prompt(action: &Action) -> String {
     match action {
-        Action::Rewrite => format!(
-            "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone. {RETURN_ONLY_TEXT_INSTRUCTION}"
-        ),
-        Action::Shorten => format!(
-            "Make the user's text noticeably shorter while keeping its essential meaning and tone. {RETURN_ONLY_TEXT_INSTRUCTION}"
-        ),
-        Action::ImproveClarity => format!(
-            "Make the user's text clearer and easier to understand without changing its meaning. {RETURN_ONLY_TEXT_INSTRUCTION}"
-        ),
+        Action::Prompt { instruction } => format!("{instruction} {RETURN_ONLY_TEXT_INSTRUCTION}"),
         Action::Custom { instruction } => format!(
             "Apply the following instruction to the user's text: {instruction} {RETURN_ONLY_TEXT_INSTRUCTION}"
         ),
@@ -486,6 +476,7 @@ pub fn list_profiles_core(
 mod tests {
     use super::fakes::FakeProvider;
     use super::*;
+    use crate::core::prompts::default_prompts;
     use crate::core::secrets::fakes::InMemorySecretStore;
     use crate::core::settings::InMemorySettingsStore;
 
@@ -502,15 +493,48 @@ mod tests {
         }
     }
 
+    /// A generic `Action::Prompt` used by tests that exercise `run_action`'s
+    /// general orchestration rather than any specific prompt's wording.
+    fn sample_action() -> Action {
+        Action::Prompt {
+            instruction: "Do something with the text.".to_string(),
+        }
+    }
+
     // ---- assemble_prompt ----------------------------------------------
 
     #[test]
-    fn every_bundled_action_prompt_demands_only_the_transformed_text() {
-        for action in [Action::Rewrite, Action::Shorten, Action::ImproveClarity] {
-            let prompt = assemble_prompt(&action);
-            assert!(prompt.contains("Return only the transformed text"));
-            assert!(prompt.contains("Preserve the text's original language"));
+    fn every_seeded_prompt_demands_only_the_transformed_text() {
+        for prompt in default_prompts() {
+            let action = Action::Prompt {
+                instruction: prompt.instruction,
+            };
+            let assembled = assemble_prompt(&action);
+            assert!(assembled.contains("Return only the transformed text"));
+            assert!(assembled.contains("Preserve the text's original language"));
+            assert!(assembled.contains("Preserve the text's structure and formatting exactly"));
         }
+    }
+
+    #[test]
+    fn prompt_seed_reproduces_the_original_rewrite_prompt_byte_for_byte() {
+        // Proves that seeding `default_prompts()` and running it back through
+        // `assemble_prompt` reproduces, byte-for-byte, the exact prompt text
+        // Kallilex used to hardcode for `Action::Rewrite` before prompts
+        // became user-editable.
+        let expected = format!(
+            "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone. {RETURN_ONLY_TEXT_INSTRUCTION}"
+        );
+
+        let seed = default_prompts()
+            .into_iter()
+            .find(|p| p.id == "builtin-rewrite")
+            .expect("the Rewrite seed must exist");
+        let assembled = assemble_prompt(&Action::Prompt {
+            instruction: seed.instruction,
+        });
+
+        assert_eq!(assembled, expected);
     }
 
     #[test]
@@ -521,6 +545,7 @@ mod tests {
         let prompt = assemble_prompt(&action);
         assert!(prompt.contains("Translate to French"));
         assert!(prompt.contains("Return only the transformed text"));
+        assert!(prompt.contains("Preserve the text's structure and formatting exactly"));
     }
 
     // ---- classify_privacy ----------------------------------------------
@@ -653,7 +678,7 @@ mod tests {
         let secrets = InMemorySecretStore::new();
         let provider = FakeProvider::returning("result");
 
-        let outcome = run_action(None, &secrets, &provider, "hello", &Action::Rewrite).await;
+        let outcome = run_action(None, &secrets, &provider, "hello", &sample_action()).await;
 
         assert_eq!(outcome, RunActionOutcome::NotConfigured);
         assert!(provider.calls().is_empty());
@@ -670,7 +695,7 @@ mod tests {
         let provider = FakeProvider::returning("result");
 
         let active = active_profile(&profiles, Some("a"));
-        let outcome = run_action(active, &secrets, &provider, "hello", &Action::Rewrite).await;
+        let outcome = run_action(active, &secrets, &provider, "hello", &sample_action()).await;
 
         assert_eq!(outcome, RunActionOutcome::NotConfigured);
         assert!(provider.calls().is_empty());
@@ -687,7 +712,7 @@ mod tests {
             &secrets,
             &provider,
             "hello",
-            &Action::Rewrite,
+            &sample_action(),
         )
         .await;
 
@@ -737,7 +762,7 @@ mod tests {
                 &secrets,
                 &provider,
                 "hello",
-                &Action::Rewrite,
+                &sample_action(),
             )
             .await;
             assert_eq!(
@@ -763,7 +788,7 @@ mod tests {
             &secrets,
             &provider,
             "hello",
-            &Action::Rewrite,
+            &sample_action(),
         )
         .await;
 
@@ -784,7 +809,7 @@ mod tests {
             &secrets,
             &provider,
             "hello",
-            &Action::Rewrite,
+            &sample_action(),
         )
         .await;
 

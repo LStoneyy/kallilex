@@ -3,5 +3,5 @@
   "identifier": "popover",
   "description": "Capability for the popover window",
   "windows": ["popover"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

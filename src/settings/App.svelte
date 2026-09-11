@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import {
     accessibilityStatus,
+    deletePrompt,
     deleteProfile,
     disableAutostart,
     enableAutostart,
@@ -10,22 +11,42 @@
     getWaylandShortcutTrigger,
     isAutostartEnabled,
     listProfiles,
+    listPrompts,
     openAccessibilitySettings,
+    resetPopoverPosition,
     saveProfile,
+    savePrompt,
     setActiveProfile,
     setSettings,
     testConnection,
   } from "../shared/invoke";
   import { loadPlatformInfo } from "../shared/platform";
-  import type { HeaderEntry, PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
+  import type {
+    CustomPrompt,
+    HeaderEntry,
+    PlatformInfo,
+    Preset,
+    ProviderProfile,
+    Settings,
+  } from "../shared/types";
 
   const POLL_INTERVAL_MS = 1000;
 
-  type Tab = "general" | "providers" | "accessibility";
+  type Tab = "general" | "providers" | "prompts" | "accessibility";
 
   // ---- tabs -----------------------------------------------------------
 
   let activeTab = $state<Tab>("general");
+
+  // Switches tabs and clears the Prompts tab's armed delete-confirmation
+  // (see `promptDeleteConfirmId` below) so it never carries over — leaving
+  // the tab it was armed on, then coming back later, must not greet the
+  // user with a leftover "Confirm delete?" for a click they made in a past
+  // visit to the tab.
+  function selectTab(tab: Tab) {
+    activeTab = tab;
+    promptDeleteConfirmId = null;
+  }
 
   // ---- platform info ----------------------------------------------------
 
@@ -148,6 +169,19 @@
       settings = await setSettings(updated);
     } catch (error) {
       autoCopyError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  // ---- General: popover position -----------------------------------------
+
+  let resetPositionError = $state<string | null>(null);
+
+  async function handleResetPopoverPosition() {
+    resetPositionError = null;
+    try {
+      settings = await resetPopoverPosition();
+    } catch (error) {
+      resetPositionError = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -357,6 +391,92 @@
     }
   }
 
+  // ---- Prompts: list ------------------------------------------------------
+
+  let prompts = $state<CustomPrompt[]>([]);
+  let promptListError = $state<string | null>(null);
+  let promptDeleteConfirmId = $state<string | null>(null);
+
+  async function loadPrompts() {
+    try {
+      prompts = await listPrompts();
+    } catch (error) {
+      promptListError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  function handlePromptDeleteClick(id: string) {
+    if (promptDeleteConfirmId === id) {
+      void confirmPromptDelete(id);
+    } else {
+      promptDeleteConfirmId = id;
+    }
+  }
+
+  async function confirmPromptDelete(id: string) {
+    promptListError = null;
+    try {
+      prompts = await deletePrompt(id);
+    } catch (error) {
+      promptListError = error instanceof Error ? error.message : String(error);
+    } finally {
+      promptDeleteConfirmId = null;
+    }
+  }
+
+  // ---- Prompts: add/edit form ----------------------------------------------
+
+  type PromptDraft = {
+    id: string;
+    label: string;
+    instruction: string;
+  };
+
+  function emptyPromptDraft(): PromptDraft {
+    return { id: "", label: "", instruction: "" };
+  }
+
+  let promptView = $state<"list" | "form">("list");
+  let promptDraft = $state<PromptDraft>(emptyPromptDraft());
+  let promptFormError = $state<string | null>(null);
+  let promptFormSaving = $state(false);
+
+  function openAddPrompt() {
+    promptListError = null;
+    promptDeleteConfirmId = null;
+    promptDraft = emptyPromptDraft();
+    promptFormError = null;
+    promptView = "form";
+  }
+
+  function openEditPrompt(prompt: CustomPrompt) {
+    promptDeleteConfirmId = null;
+    promptDraft = { id: prompt.id, label: prompt.label, instruction: prompt.instruction };
+    promptFormError = null;
+    promptView = "form";
+  }
+
+  function handleCancelPromptForm() {
+    promptView = "list";
+  }
+
+  async function handleSavePrompt() {
+    promptFormError = null;
+    promptFormSaving = true;
+    try {
+      prompts = await savePrompt({
+        id: promptDraft.id,
+        label: promptDraft.label,
+        instruction: promptDraft.instruction,
+      });
+      promptView = "list";
+    } catch (error) {
+      promptFormError = error instanceof Error ? error.message : String(error);
+    } finally {
+      promptFormSaving = false;
+    }
+  }
+
   // ---- Accessibility ------------------------------------------------------
 
   let granted = $state(false);
@@ -375,6 +495,7 @@
   onMount(() => {
     void loadSettings();
     void loadProviders();
+    void loadPrompts();
     void loadAutostart();
     void loadPlatformInfo().then((info) => {
       if (destroyed) {
@@ -423,7 +544,7 @@
       type="button"
       class="tab"
       class:active={activeTab === "general"}
-      onclick={() => (activeTab = "general")}
+      onclick={() => selectTab("general")}
     >
       General
     </button>
@@ -431,15 +552,23 @@
       type="button"
       class="tab"
       class:active={activeTab === "providers"}
-      onclick={() => (activeTab = "providers")}
+      onclick={() => selectTab("providers")}
     >
       Providers
     </button>
     <button
       type="button"
       class="tab"
+      class:active={activeTab === "prompts"}
+      onclick={() => selectTab("prompts")}
+    >
+      Prompts
+    </button>
+    <button
+      type="button"
+      class="tab"
       class:active={activeTab === "accessibility"}
-      onclick={() => (activeTab = "accessibility")}
+      onclick={() => selectTab("accessibility")}
     >
       Accessibility
     </button>
@@ -556,6 +685,24 @@
         </p>
         {#if autoCopyError}
           <p class="error">{autoCopyError}</p>
+        {/if}
+
+        <h2>Popover position</h2>
+        <p class="hint">
+          Kallilex remembers where you last dragged the popover by its toolbar. Reset it to have
+          the popover position itself near your cursor again.
+        </p>
+        <div class="row">
+          <button
+            type="button"
+            disabled={settings?.popoverPosition == null}
+            onclick={() => void handleResetPopoverPosition()}
+          >
+            Reset position to automatic
+          </button>
+        </div>
+        {#if resetPositionError}
+          <p class="error">{resetPositionError}</p>
         {/if}
       </section>
     {:else if activeTab === "providers"}
@@ -688,6 +835,63 @@
               {formSaving ? "Saving…" : "Save"}
             </button>
             <button type="button" onclick={handleCancelForm}>Cancel</button>
+          </div>
+        {/if}
+      </section>
+    {:else if activeTab === "prompts"}
+      <section class="prompts">
+        {#if promptView === "list"}
+          <div class="row providers-header">
+            <h2>Prompts</h2>
+            <button type="button" onclick={openAddPrompt}>Add prompt</button>
+          </div>
+          {#if promptListError}
+            <p class="error">{promptListError}</p>
+          {/if}
+          {#if prompts.length === 0}
+            <p class="hint">No prompts yet — add one to offer it as a button in the popover.</p>
+          {/if}
+          <ul class="profile-list">
+            {#each prompts as prompt (prompt.id)}
+              <li class="profile-row">
+                <div class="profile-info">
+                  <span class="profile-name">{prompt.label}</span>
+                  <span class="profile-model">{prompt.instruction}</span>
+                </div>
+                <button type="button" onclick={() => openEditPrompt(prompt)}>Edit</button>
+                <button
+                  type="button"
+                  class="danger"
+                  onclick={() => handlePromptDeleteClick(prompt.id)}
+                >
+                  {promptDeleteConfirmId === prompt.id ? "Confirm delete?" : "Delete"}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else if promptView === "form"}
+          <h2>{promptDraft.id ? "Edit prompt" : "New prompt"}</h2>
+          <label class="field">
+            Label
+            <input class="text-input" type="text" bind:value={promptDraft.label} />
+          </label>
+          <label class="field">
+            Instruction
+            <textarea
+              class="text-input prompt-instruction"
+              bind:value={promptDraft.instruction}
+            ></textarea>
+          </label>
+
+          {#if promptFormError}
+            <p class="error">{promptFormError}</p>
+          {/if}
+
+          <div class="row form-actions">
+            <button type="button" disabled={promptFormSaving} onclick={() => void handleSavePrompt()}>
+              {promptFormSaving ? "Saving…" : "Save"}
+            </button>
+            <button type="button" onclick={handleCancelPromptForm}>Cancel</button>
           </div>
         {/if}
       </section>
@@ -1022,5 +1226,10 @@
 
   .form-actions {
     margin-top: 12px;
+  }
+
+  .prompt-instruction {
+    min-height: 70px;
+    resize: vertical;
   }
 </style>

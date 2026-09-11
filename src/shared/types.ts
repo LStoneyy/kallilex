@@ -17,6 +17,17 @@ export interface Settings {
   /** Whether the first-run onboarding window has been completed (or
    * auto-completed for an already-set-up install). */
   onboardingCompleted: boolean;
+  /** The popover's user-dragged position (physical pixels), or `null` for
+   * automatic (cursor-anchored) positioning. See `Settings::popover_position`'s
+   * doc comment in the Rust source for why this is machine-local, like
+   * `waylandRestoreToken` above. */
+  popoverPosition: { x: number; y: number } | null;
+  /** User-managed AI prompts offered as buttons in the popover's action
+   * row. Defaults to the three bundled prompts (Rewrite / Shorten / Improve
+   * clarity) both for a fresh install and for settings persisted before
+   * this field existed — see `Settings::prompts`'s doc comment in the Rust
+   * source. */
+  prompts: CustomPrompt[];
 }
 
 /**
@@ -88,13 +99,22 @@ export interface ProviderProfile {
 }
 
 /**
- * Mirrors `Action` in `src-tauri/src/core/providers/mod.rs`: a bundled AI
- * action, or a free-form custom instruction.
+ * Mirrors `CustomPrompt` in `src-tauri/src/core/prompts.rs`: a single
+ * user-manageable prompt — the label shown on its popover button, and the
+ * instruction sent to the AI provider.
+ */
+export interface CustomPrompt {
+  id: string;
+  label: string;
+  instruction: string;
+}
+
+/**
+ * Mirrors `Action` in `src-tauri/src/core/providers/mod.rs`: a saved
+ * prompt's instruction, or a free-form custom instruction.
  */
 export type Action =
-  | { kind: "rewrite" }
-  | { kind: "shorten" }
-  | { kind: "improveClarity" }
+  | { kind: "prompt"; instruction: string }
   | { kind: "custom"; instruction: string };
 
 /**

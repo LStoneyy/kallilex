@@ -8,6 +8,7 @@ import type {
   Action,
   ActionContext,
   CaptureResult,
+  CustomPrompt,
   PlatformInfo,
   Preset,
   ProviderProfile,
@@ -92,6 +93,23 @@ export async function getPresets(): Promise<Preset[]> {
   return invoke<Preset[]>("get_presets");
 }
 
+export async function listPrompts(): Promise<CustomPrompt[]> {
+  return invoke<CustomPrompt[]>("list_prompts");
+}
+
+/**
+ * Creates or updates a user-managed prompt; see
+ * `prompts::save_prompt_core`'s doc comment in the Rust source for the
+ * id-generation and upsert rules. Returns the fresh prompt list.
+ */
+export async function savePrompt(prompt: CustomPrompt): Promise<CustomPrompt[]> {
+  return invoke<CustomPrompt[]>("save_prompt", { prompt });
+}
+
+export async function deletePrompt(id: string): Promise<CustomPrompt[]> {
+  return invoke<CustomPrompt[]>("delete_prompt", { id });
+}
+
 export async function testConnection(id: string): Promise<number> {
   return invoke<number>("test_connection", { id });
 }
@@ -148,4 +166,23 @@ export async function completeOnboarding(): Promise<void> {
  */
 export async function setInputSynthesis(enabled: boolean): Promise<void> {
   return invoke<void>("set_input_synthesis", { enabled });
+}
+
+/**
+ * Marks a popover drag as started. Called right before
+ * `getCurrentWindow().startDragging()` from the popover's `.toolbar`
+ * `onmousedown` handler — see `src/popover/App.svelte`.
+ */
+export async function beginPopoverDrag(): Promise<void> {
+  return invoke<void>("begin_popover_drag");
+}
+
+/**
+ * Clears the popover's saved position back to automatic (cursor-anchored)
+ * positioning and returns the fresh settings. A dedicated command instead of
+ * a `setSettings` spread — see `commands::reset_popover_position`'s doc
+ * comment in the Rust source for why.
+ */
+export async function resetPopoverPosition(): Promise<Settings> {
+  return invoke<Settings>("reset_popover_position");
 }

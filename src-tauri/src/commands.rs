@@ -6,6 +6,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::core::capture::CaptureResult;
 use crate::core::onboarding;
+use crate::core::prompts::{self, CustomPrompt};
 use crate::core::providers::openai::{self, OpenAiCompatibleAdapter};
 use crate::core::providers::{
     self, Action, ActionContext, Preset, ProviderProfile, RunActionOutcome,
@@ -15,7 +16,7 @@ use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::spellcheck::SpellcheckResult;
 use crate::core::ONBOARDING_WINDOW_LABEL;
 use crate::platform::{self, PlatformInfo};
-use crate::{ActionInFlight, CaptureState, ReplaceInFlight};
+use crate::{ActionInFlight, CaptureState, PopoverDrag, ReplaceInFlight};
 
 /// RAII guard clearing [`ReplaceInFlight`] on drop, so every exit path out
 /// of `replace_back` — success, error, or an unexpected panic — releases the
@@ -250,7 +251,7 @@ pub fn get_platform_info() -> Result<PlatformInfo, String> {
     Ok(platform::platform_info())
 }
 
-/// Runs an AI action (Rewrite/Shorten/ImproveClarity/Custom) against the
+/// Runs an AI action (a saved prompt or a free-form custom instruction) against the
 /// active provider profile. `async` so the request itself, and the
 /// `tokio::select!` race against a cancel, run on the async runtime.
 ///
@@ -351,6 +352,26 @@ pub fn get_presets() -> Result<Vec<Preset>, String> {
     Ok(providers::presets())
 }
 
+#[tauri::command]
+pub fn list_prompts(app: AppHandle) -> Result<Vec<CustomPrompt>, String> {
+    let store = TauriStoreSettings::new(app);
+    prompts::list_prompts_core(&store).map_err(|e| e.to_string())
+}
+
+/// Creates or updates a user-managed prompt; see
+/// [`prompts::save_prompt_core`] for the id-generation and upsert rules.
+#[tauri::command]
+pub fn save_prompt(app: AppHandle, prompt: CustomPrompt) -> Result<Vec<CustomPrompt>, String> {
+    let store = TauriStoreSettings::new(app);
+    prompts::save_prompt_core(&store, prompt).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_prompt(app: AppHandle, id: String) -> Result<Vec<CustomPrompt>, String> {
+    let store = TauriStoreSettings::new(app);
+    prompts::delete_prompt_core(&store, &id).map_err(|e| e.to_string())
+}
+
 /// Shows (and focuses) the settings window. Used by the popover's
 /// "no provider configured" hint so the user can jump straight to Settings
 /// -> Providers without hunting for the tray menu.
@@ -412,4 +433,64 @@ pub fn set_input_synthesis(app: AppHandle, enabled: bool) -> Result<(), String> 
     onboarding::set_input_synthesis_core(&store, enabled).map_err(|e| e.to_string())?;
     platform::set_input_synthesis_enabled(enabled);
     Ok(())
+}
+
+/// Marks a popover drag as started. Called by the popover's `.toolbar`
+/// `onmousedown` handler right before it calls the webview window API's
+/// `startDragging()` — setting the flag first (rather than after
+/// `startDragging()` resolves, or not at all) ensures `PopoverDrag::dragging`
+/// is already true by the time the native drag's first `WindowEvent::Moved`
+/// arrives, so `lib.rs`'s `on_window_event` handler can tell it apart from
+/// `show_popover`'s own positioning. See [`crate::PopoverDrag`]'s doc
+/// comment for the full handshake, including why this also starts an
+/// inactivity watchdog rather than relying on the frontend to ever signal
+/// the drag's end.
+#[tauri::command]
+pub fn begin_popover_drag(app: AppHandle) -> Result<(), String> {
+    let drag = app.state::<PopoverDrag>();
+    *drag
+        .last_drag_activity
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(std::time::Instant::now());
+
+    // `swap` (rather than a plain `store`) makes "is a watchdog already
+    // running for this gesture?" race-free: whichever call observes `false`
+    // is guaranteed to be the one that just flipped it, so exactly one
+    // watchdog gets spawned per gesture even if this command were somehow
+    // invoked concurrently.
+    let was_already_dragging = drag
+        .dragging
+        .swap(true, std::sync::atomic::Ordering::SeqCst);
+    if !was_already_dragging {
+        crate::spawn_drag_watchdog(app.clone());
+    }
+    Ok(())
+}
+
+/// Resets the popover back to automatic positioning: clears
+/// `Settings::popover_position` (so the next `show_popover` anchors at the
+/// cursor again) and any not-yet-persisted drag still pending from the
+/// current session, then returns the fresh settings.
+///
+/// A dedicated command instead of the Settings window spreading
+/// `popoverPosition: null` into a `setSettings` call, for the same reason
+/// [`set_input_synthesis`] is dedicated rather than folded into
+/// `set_settings`: the popover window's own in-memory settings can go stale
+/// while the Settings window is open, and a plain `setSettings` call from
+/// there would otherwise silently resurrect whatever position was already
+/// on disk instead of clearing it.
+#[tauri::command]
+pub fn reset_popover_position(app: AppHandle) -> Result<Settings, String> {
+    let store = TauriStoreSettings::new(app.clone());
+    let mut current = settings::get_settings(&store).map_err(|e| e.to_string())?;
+    current.popover_position = None;
+    let saved = settings::set_settings(&store, current).map_err(|e| e.to_string())?;
+
+    let drag = app.state::<PopoverDrag>();
+    *drag
+        .pending_user_position
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+
+    Ok(saved)
 }

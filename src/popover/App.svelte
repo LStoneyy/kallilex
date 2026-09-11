@@ -3,6 +3,7 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
+    beginPopoverDrag,
     cancelAction as cancelActionInvoke,
     captureSelection,
     copyResult,
@@ -13,6 +14,7 @@
     openSettings as openSettingsInvoke,
     replaceBack,
     runAction as runActionInvoke,
+    setSettings,
     spellcheck as spellcheckInvoke,
   } from "../shared/invoke";
   import { loadPlatformInfo } from "../shared/platform";
@@ -20,6 +22,7 @@
     Action,
     ActionContext,
     CaptureFailureReason,
+    CustomPrompt,
     Misspelling,
     PlatformInfo,
     SourceApp,
@@ -55,6 +58,17 @@
   let actionError = $state<string | null>(null);
   let actionContext = $state<ActionContext | null>(null);
   let spellcheckEnabled = $state(true);
+  // The user's "keep this open" preference: while pinned, the popover no
+  // longer auto-hides on focus loss (see `should_hide_on_blur` in
+  // `lib.rs`) — it can still be closed via Escape, the global shortcut
+  // toggle, or the tray. Defaults to `false`, matching the setting's own
+  // default and `spellcheckEnabled`'s convention above.
+  let pinned = $state(false);
+  // The user's saved prompts, rendered as buttons in the action row ahead
+  // of the always-present "Custom" toggle. Populated from `refreshContext()`
+  // the same way `pinned` is above — it can change while the user was away
+  // in Settings' Prompts tab.
+  let prompts = $state<CustomPrompt[]>([]);
   // The user's opt-out from Wayland input synthesis. Defaults to `true` (permissive) so nothing flashes away before the
   // first `refreshContext()` resolves, matching `spellcheckEnabled`'s
   // convention above.
@@ -197,6 +211,8 @@
     spellcheckEnabled = settings.spellcheckEnabled;
     inputSynthesisEnabled = settings.inputSynthesisEnabled;
     autoCopyResult = settings.autoCopyResult;
+    pinned = settings.popoverPinned;
+    prompts = settings.prompts;
     actionContext = context;
     if (context.configured) {
       showConfiguredHint = false;
@@ -329,6 +345,39 @@
 
   function handleCheckSpellingClick() {
     void runSpellcheck(text);
+  }
+
+  // Re-fetches immediately before mutating, so a stale in-memory `pinned`
+  // never clobbers a change made elsewhere (e.g. the Settings window) —
+  // same concurrency convention as the toggles in `settings/App.svelte`.
+  async function handlePinToggle() {
+    try {
+      const fresh = await getSettings();
+      const updated = await setSettings({ ...fresh, popoverPinned: !fresh.popoverPinned });
+      pinned = updated.popoverPinned;
+    } catch (error) {
+      console.error("setSettings (popoverPinned) failed", error);
+    }
+  }
+
+  /**
+   * Starts a native window drag when the user mousedowns on empty
+   * `.toolbar` space (not one of its buttons). `begin_popover_drag` sets
+   * the backend's drag flag *before* `startDragging()` is called, so the
+   * native drag's first `WindowEvent::Moved` is already recognized as a
+   * user drag rather than the popover's own positioning — see
+   * `PopoverDrag`'s doc comment in `lib.rs`.
+   */
+  async function handleToolbarMouseDown(event: MouseEvent) {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button, input")) return;
+    event.preventDefault();
+    try {
+      await beginPopoverDrag();
+      await getCurrentWindow().startDragging();
+    } catch (error) {
+      console.error("startDragging failed", error);
+    }
   }
 
   const canReplace = $derived(text.trim() !== "" && sourceApp !== null && !busy);
@@ -614,15 +663,29 @@
     </div>
   {/if}
 
-  <div class="toolbar">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="toolbar" onmousedown={(event) => void handleToolbarMouseDown(event)}>
     {#if text.length > 0}
       <span class="char-count">{text.length} chars</span>
     {:else}
       <span class="char-count-placeholder"></span>
     {/if}
-    <button type="button" class="check-spelling" onclick={handleCheckSpellingClick}>
-      Check spelling
-    </button>
+    <div class="toolbar-actions">
+      <button type="button" class="check-spelling" onclick={handleCheckSpellingClick}>
+        Check spelling
+      </button>
+      <button
+        type="button"
+        class="pin-button"
+        class:active={pinned}
+        aria-pressed={pinned}
+        aria-label="Pin popover"
+        title="Pin popover"
+        onclick={() => void handlePinToggle()}
+      >
+        Pin
+      </button>
+    </div>
   </div>
 
   <div
@@ -676,30 +739,17 @@
   </div>
 
   <div class="action-row">
-    <button
-      type="button"
-      class="action-button"
-      disabled={!canRunAction}
-      onclick={() => void runAiAction({ kind: "rewrite" })}
-    >
-      Rewrite
-    </button>
-    <button
-      type="button"
-      class="action-button"
-      disabled={!canRunAction}
-      onclick={() => void runAiAction({ kind: "shorten" })}
-    >
-      Shorten
-    </button>
-    <button
-      type="button"
-      class="action-button"
-      disabled={!canRunAction}
-      onclick={() => void runAiAction({ kind: "improveClarity" })}
-    >
-      Improve clarity
-    </button>
+    {#each prompts as prompt (prompt.id)}
+      <button
+        type="button"
+        class="action-button"
+        title={prompt.label}
+        disabled={!canRunAction}
+        onclick={() => void runAiAction({ kind: "prompt", instruction: prompt.instruction })}
+      >
+        {prompt.label}
+      </button>
+    {/each}
     <button
       type="button"
       class="action-button"
@@ -856,12 +906,33 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    /* Draggable via `onmousedown` (see `handleToolbarMouseDown`) — the
+       grab/grabbing cursors are the conventional affordance for that,
+       matching what native title bars use. */
+    cursor: grab;
+  }
+
+  .toolbar:active {
+    cursor: grabbing;
+  }
+
+  /* The toolbar's own buttons stay clickable with their normal pointer
+     cursor — `handleToolbarMouseDown` already excludes them from starting a
+     drag, so the cursor should say so too. */
+  .toolbar button {
+    cursor: pointer;
   }
 
   .char-count,
   .char-count-placeholder {
     color: var(--color-ash);
     font-size: 11px;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .check-spelling {
@@ -876,6 +947,28 @@
   .check-spelling:hover {
     color: var(--color-marble);
     text-decoration: underline;
+  }
+
+  .pin-button {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-ash);
+    font-size: 11px;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+
+  .pin-button:hover {
+    color: var(--color-marble);
+  }
+
+  /* Same highlight treatment as `.action-button.active` below, for the
+     same reason: a pressed/active toggle in the palette's "active" accent. */
+  .pin-button.active {
+    border-color: color-mix(in srgb, var(--color-verdigris) 60%, transparent);
+    background-color: color-mix(in srgb, var(--color-verdigris) 18%, transparent);
+    color: var(--color-marble);
   }
 
   .editor {
@@ -1019,11 +1112,18 @@
 
   .action-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
+    max-height: 66px;
+    overflow-y: auto;
   }
 
   .action-button {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 84px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     border: 1px solid color-mix(in srgb, var(--color-attic-clay) 35%, transparent);
     background-color: color-mix(in srgb, var(--color-attic-clay) 14%, transparent);
     color: var(--color-marble);
@@ -1231,6 +1331,7 @@
   .result-button,
   .custom-run,
   .check-spelling,
+  .pin-button,
   .ai-cancel,
   .ai-hint button,
   .permission-banner button,
@@ -1245,6 +1346,7 @@
   .result-button:focus-visible,
   .custom-run:focus-visible,
   .check-spelling:focus-visible,
+  .pin-button:focus-visible,
   .ai-cancel:focus-visible,
   .ai-hint button:focus-visible,
   .permission-banner button:focus-visible,
@@ -1272,6 +1374,7 @@
     .result-button,
     .custom-run,
     .check-spelling,
+    .pin-button,
     .ai-cancel,
     .ai-hint button,
     .permission-banner button,
@@ -1287,6 +1390,7 @@
     .result-button:active:not(:disabled),
     .custom-run:active:not(:disabled),
     .check-spelling:active:not(:disabled),
+    .pin-button:active:not(:disabled),
     .ai-cancel:active:not(:disabled),
     .ai-hint button:active:not(:disabled),
     .permission-banner button:active:not(:disabled),

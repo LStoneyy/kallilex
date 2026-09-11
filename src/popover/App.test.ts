@@ -5,6 +5,7 @@ import { resetPlatformInfoForTests } from "../shared/platform";
 import type {
   ActionContext,
   CaptureResult,
+  CustomPrompt,
   Misspelling,
   PlatformInfo,
   Settings,
@@ -19,11 +20,13 @@ const {
   replaceBack,
   copyResult,
   getSettings,
+  setSettings,
   getActionContext,
   runAction,
   cancelAction,
   openSettings,
   getPlatformInfo,
+  beginPopoverDrag,
 } = vi.hoisted(() => ({
   hidePopover: vi.fn(),
   captureSelection: vi.fn(),
@@ -32,19 +35,22 @@ const {
   replaceBack: vi.fn(),
   copyResult: vi.fn(),
   getSettings: vi.fn(),
+  setSettings: vi.fn(),
   getActionContext: vi.fn(),
   runAction: vi.fn(),
   cancelAction: vi.fn(),
   openSettings: vi.fn(),
   getPlatformInfo: vi.fn(),
+  beginPopoverDrag: vi.fn(),
 }));
 
 const { listen } = vi.hoisted(() => ({
   listen: vi.fn(),
 }));
 
-const { onFocusChanged } = vi.hoisted(() => ({
+const { onFocusChanged, startDragging } = vi.hoisted(() => ({
   onFocusChanged: vi.fn(),
+  startDragging: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -55,11 +61,13 @@ vi.mock("../shared/invoke", () => ({
   replaceBack,
   copyResult,
   getSettings,
+  setSettings,
   getActionContext,
   runAction,
   cancelAction,
   openSettings,
   getPlatformInfo,
+  beginPopoverDrag,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -67,7 +75,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ onFocusChanged }),
+  getCurrentWindow: () => ({ onFocusChanged, startDragging }),
 }));
 
 function emptyResult(): CaptureResult {
@@ -76,6 +84,29 @@ function emptyResult(): CaptureResult {
 
 function emptySpellcheck(): SpellcheckResult {
   return { misspellings: [] };
+}
+
+function seededPrompts(): CustomPrompt[] {
+  return [
+    {
+      id: "builtin-rewrite",
+      label: "Rewrite",
+      instruction:
+        "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone.",
+    },
+    {
+      id: "builtin-shorten",
+      label: "Shorten",
+      instruction:
+        "Make the user's text noticeably shorter while keeping its essential meaning and tone.",
+    },
+    {
+      id: "builtin-improve-clarity",
+      label: "Improve clarity",
+      instruction:
+        "Make the user's text clearer and easier to understand without changing its meaning.",
+    },
+  ];
 }
 
 function defaultSettings(): Settings {
@@ -90,6 +121,8 @@ function defaultSettings(): Settings {
     inputSynthesisEnabled: true,
     autoCopyResult: false,
     onboardingCompleted: false,
+    popoverPosition: null,
+    prompts: seededPrompts(),
   };
 }
 
@@ -144,25 +177,31 @@ describe("popover App", () => {
     replaceBack.mockClear();
     copyResult.mockClear();
     getSettings.mockClear();
+    setSettings.mockClear();
     getActionContext.mockClear();
     runAction.mockClear();
     cancelAction.mockClear();
     openSettings.mockClear();
     getPlatformInfo.mockClear();
+    beginPopoverDrag.mockClear();
     listen.mockClear();
     onFocusChanged.mockClear();
+    startDragging.mockClear();
     captureSelection.mockResolvedValue(emptyResult());
     spellcheck.mockResolvedValue(emptySpellcheck());
     replaceBack.mockResolvedValue(undefined);
     copyResult.mockResolvedValue(undefined);
     getSettings.mockResolvedValue(defaultSettings());
+    setSettings.mockImplementation((settings: Settings) => Promise.resolve(settings));
     getActionContext.mockResolvedValue(notConfiguredContext());
     runAction.mockResolvedValue({ status: "ok", text: "" });
     cancelAction.mockResolvedValue(undefined);
     openSettings.mockResolvedValue(undefined);
     getPlatformInfo.mockResolvedValue(macosPlatformInfo());
+    beginPopoverDrag.mockResolvedValue(undefined);
     listen.mockResolvedValue(() => {});
     onFocusChanged.mockResolvedValue(() => {});
+    startDragging.mockResolvedValue(undefined);
   });
 
   it("renders captured text from captureSelection on mount", async () => {
@@ -410,16 +449,67 @@ describe("popover App", () => {
     expect(hidePopover).not.toHaveBeenCalled();
   });
 
-  it("renders the action row and a disabled result row", async () => {
+  it("renders the action row from the seeded prompts and a disabled result row", async () => {
     render(App);
 
-    expect(screen.getByRole("button", { name: "Rewrite" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Rewrite" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Improve clarity" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Custom" })).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Replace" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Copy" })).toBeDisabled();
+  });
+
+  it("renders a button for every user-added prompt, alongside the seeded ones", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      prompts: [
+        ...seededPrompts(),
+        { id: "custom-1", label: "Translate", instruction: "Translate to French." },
+      ],
+    });
+
+    render(App);
+
+    expect(await screen.findByRole("button", { name: "Translate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rewrite" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Improve clarity" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Custom" })).toBeInTheDocument();
+  });
+
+  it("clicking a user-added prompt calls runAction with its instruction", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      prompts: [
+        ...seededPrompts(),
+        { id: "custom-1", label: "Translate", instruction: "Translate to French." },
+      ],
+    });
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({ status: "ok", text: "texte traduit" });
+
+    render(App);
+
+    const translateButton = await screen.findByRole("button", { name: "Translate" });
+    await fireEvent.click(translateButton);
+
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("some captured text", {
+        kind: "prompt",
+        instruction: "Translate to French.",
+      });
+    });
   });
 
   it("survives a rejected spellcheck call without crashing or rendering marks", async () => {
@@ -746,7 +836,7 @@ describe("popover App", () => {
     expect(hidePopover).not.toHaveBeenCalled();
   });
 
-  it("clicking Rewrite calls runAction with the current text and applies the returned text", async () => {
+  it("clicking a seeded prompt calls runAction with its instruction and applies the returned text", async () => {
     captureSelection.mockResolvedValue({
       text: "some captured text",
       reason: null,
@@ -765,14 +855,47 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
-      expect(runAction).toHaveBeenCalledWith("some captured text", { kind: "rewrite" });
+      expect(runAction).toHaveBeenCalledWith("some captured text", {
+        kind: "prompt",
+        instruction: seededPrompts()[0]!.instruction,
+      });
     });
     await waitFor(() => {
       expect(screen.getByRole("textbox")).toHaveValue("some rewritten text");
+    });
+  });
+
+  it("preserves multi-line structure and indentation in the text an AI action returns", async () => {
+    captureSelection.mockResolvedValue({
+      text: "some captured text",
+      reason: null,
+      sourceApp: null,
+    });
+    getActionContext.mockResolvedValue({
+      configured: true,
+      profileName: "Llama",
+      privacy: "local",
+    });
+    runAction.mockResolvedValue({
+      status: "ok",
+      text: "Para one.\n\nPara two.\n  indented",
+    });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("some captured text");
+    });
+
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("Para one.\n\nPara two.\n  indented");
     });
   });
 
@@ -790,7 +913,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     expect(runAction).not.toHaveBeenCalled();
@@ -823,7 +946,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
@@ -859,7 +982,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     const cancelButton = await screen.findByRole("button", { name: "Cancel" });
@@ -905,11 +1028,14 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("first captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
-      expect(runAction).toHaveBeenCalledWith("first captured text", { kind: "rewrite" });
+      expect(runAction).toHaveBeenCalledWith("first captured text", {
+        kind: "prompt",
+        instruction: seededPrompts()[0]!.instruction,
+      });
     });
 
     // A fresh capture arrives while the action is still in flight.
@@ -965,7 +1091,7 @@ describe("popover App", () => {
     const textarea = screen.getByRole("textbox");
     expect(textarea).toBeEnabled();
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
@@ -1182,7 +1308,7 @@ describe("popover App", () => {
     expect(editor).toHaveClass("can-scroll-down");
 
     overflowing = false;
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
@@ -1246,7 +1372,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     expect(await screen.findByLabelText("Working…")).toBeInTheDocument();
@@ -1467,7 +1593,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
@@ -1494,7 +1620,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
@@ -1588,7 +1714,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Rewrite" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Rewrite" }));
 
     await waitFor(() => {
       expect(copyResult).toHaveBeenCalledWith("some rewritten text");
@@ -1615,6 +1741,65 @@ describe("popover App", () => {
     ).not.toBeInTheDocument();
   });
 
+  // Pinning.
+
+  it("renders the pin button in its active state when popoverPinned is true", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), popoverPinned: true });
+
+    render(App);
+
+    const pinButton = await screen.findByRole("button", { name: "Pin popover" });
+    await waitFor(() => {
+      expect(pinButton).toHaveAttribute("aria-pressed", "true");
+    });
+    expect(pinButton).toHaveClass("active");
+  });
+
+  it("renders the pin button unpressed when popoverPinned is false (the default)", async () => {
+    render(App);
+
+    const pinButton = await screen.findByRole("button", { name: "Pin popover" });
+    await waitFor(() => {
+      expect(getSettings).toHaveBeenCalled();
+    });
+    expect(pinButton).toHaveAttribute("aria-pressed", "false");
+    expect(pinButton).not.toHaveClass("active");
+  });
+
+  it("clicking the pin button re-fetches settings and persists the flipped popoverPinned flag", async () => {
+    render(App);
+
+    const pinButton = await screen.findByRole("button", { name: "Pin popover" });
+    await waitFor(() => {
+      expect(pinButton).toHaveAttribute("aria-pressed", "false");
+    });
+
+    getSettings.mockClear();
+    await fireEvent.click(pinButton);
+
+    await waitFor(() => {
+      expect(getSettings).toHaveBeenCalledTimes(1);
+    });
+    expect(setSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ popoverPinned: true }),
+    );
+    await waitFor(() => {
+      expect(pinButton).toHaveAttribute("aria-pressed", "true");
+    });
+  });
+
+  it("Escape still hides the popover while pinned", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), popoverPinned: true });
+
+    render(App);
+
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(hidePopover).toHaveBeenCalledTimes(1);
+  });
+
   it("surfaces a failure of the automatic copy instead of swallowing it silently", async () => {
     getSettings.mockResolvedValue({ ...defaultSettings(), autoCopyResult: true });
     copyResult.mockRejectedValueOnce(new Error("clipboard write failed"));
@@ -1636,7 +1821,7 @@ describe("popover App", () => {
       expect(screen.getByRole("textbox")).toHaveValue("some captured text");
     });
 
-    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    const rewriteButton = await screen.findByRole("button", { name: "Rewrite" });
     await fireEvent.click(rewriteButton);
 
     await waitFor(() => {
@@ -1644,5 +1829,59 @@ describe("popover App", () => {
         screen.getByText("The result couldn't be copied automatically — use Copy."),
       ).toBeInTheDocument();
     });
+  });
+
+  // Drag-to-move.
+
+  it("mousedown on the toolbar begins a drag and starts the native window drag", async () => {
+    const { container } = render(App);
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+
+    const toolbar = container.querySelector(".toolbar") as HTMLElement;
+    await fireEvent.mouseDown(toolbar, { button: 0 });
+
+    await waitFor(() => {
+      expect(beginPopoverDrag).toHaveBeenCalledTimes(1);
+    });
+    expect(startDragging).toHaveBeenCalledTimes(1);
+  });
+
+  it("mousedown on the Check spelling button does not start a drag", async () => {
+    render(App);
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+
+    const button = screen.getByRole("button", { name: "Check spelling" });
+    await fireEvent.mouseDown(button, { button: 0 });
+
+    expect(beginPopoverDrag).not.toHaveBeenCalled();
+    expect(startDragging).not.toHaveBeenCalled();
+  });
+
+  it("mousedown on the Pin button does not start a drag", async () => {
+    render(App);
+    const pinButton = await screen.findByRole("button", { name: "Pin popover" });
+
+    await fireEvent.mouseDown(pinButton, { button: 0 });
+
+    expect(beginPopoverDrag).not.toHaveBeenCalled();
+    expect(startDragging).not.toHaveBeenCalled();
+  });
+
+  it("a non-primary-button mousedown on the toolbar does not start a drag", async () => {
+    const { container } = render(App);
+    await waitFor(() => {
+      expect(captureSelection).toHaveBeenCalled();
+    });
+
+    const toolbar = container.querySelector(".toolbar") as HTMLElement;
+    // Right-click.
+    await fireEvent.mouseDown(toolbar, { button: 2 });
+
+    expect(beginPopoverDrag).not.toHaveBeenCalled();
+    expect(startDragging).not.toHaveBeenCalled();
   });
 });

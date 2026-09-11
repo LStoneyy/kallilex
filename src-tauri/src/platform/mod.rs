@@ -13,11 +13,14 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
-// Shared, pure popover-clamping helper (Linux and Windows only — macOS
-// positions relative to the menu bar instead, so an unused module there
-// would trip `-D warnings`). See `positioning.rs` for details.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-mod positioning;
+// Shared popover-clamping helpers. Compiled on every platform: macOS still
+// positions a *freshly opened* popover relative to the menu bar via
+// `tauri_plugin_positioner::Position::TrayBottomCenter` rather than
+// `position_popover` from this module (see `positioning.rs`'s module doc),
+// but `clamp_saved_position` is used everywhere to keep a user-dragged
+// position on-screen when the popover reopens. See `positioning.rs` for
+// details.
+pub mod positioning;
 
 #[cfg(target_os = "linux")]
 pub use linux::{

@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/sve
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 import { resetPlatformInfoForTests } from "../shared/platform";
-import type { PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
+import type { CustomPrompt, PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
 
 const {
   accessibilityStatus,
@@ -20,6 +20,10 @@ const {
   disableAutostart,
   getPlatformInfo,
   getWaylandShortcutTrigger,
+  resetPopoverPosition,
+  listPrompts,
+  savePrompt,
+  deletePrompt,
 } = vi.hoisted(() => ({
   accessibilityStatus: vi.fn(),
   openAccessibilitySettings: vi.fn(),
@@ -36,6 +40,10 @@ const {
   disableAutostart: vi.fn(),
   getPlatformInfo: vi.fn(),
   getWaylandShortcutTrigger: vi.fn(),
+  resetPopoverPosition: vi.fn(),
+  listPrompts: vi.fn(),
+  savePrompt: vi.fn(),
+  deletePrompt: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -54,7 +62,34 @@ vi.mock("../shared/invoke", () => ({
   disableAutostart,
   getPlatformInfo,
   getWaylandShortcutTrigger,
+  resetPopoverPosition,
+  listPrompts,
+  savePrompt,
+  deletePrompt,
 }));
+
+function defaultPrompts(): CustomPrompt[] {
+  return [
+    {
+      id: "builtin-rewrite",
+      label: "Rewrite",
+      instruction:
+        "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone.",
+    },
+    {
+      id: "builtin-shorten",
+      label: "Shorten",
+      instruction:
+        "Make the user's text noticeably shorter while keeping its essential meaning and tone.",
+    },
+    {
+      id: "builtin-improve-clarity",
+      label: "Improve clarity",
+      instruction:
+        "Make the user's text clearer and easier to understand without changing its meaning.",
+    },
+  ];
+}
 
 function defaultSettings(): Settings {
   return {
@@ -68,6 +103,8 @@ function defaultSettings(): Settings {
     inputSynthesisEnabled: true,
     autoCopyResult: false,
     onboardingCompleted: false,
+    popoverPosition: null,
+    prompts: defaultPrompts(),
   };
 }
 
@@ -134,6 +171,10 @@ describe("settings App", () => {
     disableAutostart.mockClear();
     getPlatformInfo.mockClear();
     getWaylandShortcutTrigger.mockClear();
+    resetPopoverPosition.mockClear();
+    listPrompts.mockClear();
+    savePrompt.mockClear();
+    deletePrompt.mockClear();
 
     accessibilityStatus.mockResolvedValue(false);
     getSettings.mockResolvedValue(defaultSettings());
@@ -145,6 +186,8 @@ describe("settings App", () => {
     disableAutostart.mockResolvedValue(undefined);
     getPlatformInfo.mockResolvedValue(macosPlatformInfo());
     getWaylandShortcutTrigger.mockResolvedValue(null);
+    resetPopoverPosition.mockResolvedValue(defaultSettings());
+    listPrompts.mockResolvedValue(defaultPrompts());
   });
 
   afterEach(() => {
@@ -158,6 +201,11 @@ describe("settings App", () => {
 
   async function openProvidersTab() {
     const tab = await screen.findByRole("button", { name: "Providers" });
+    await fireEvent.click(tab);
+  }
+
+  async function openPromptsTab() {
+    const tab = await screen.findByRole("button", { name: "Prompts" });
     await fireEvent.click(tab);
   }
 
@@ -308,6 +356,138 @@ describe("settings App", () => {
     expect(
       await screen.findByText("Can't reach the endpoint — is the server running? (connection refused)"),
     ).toBeInTheDocument();
+  });
+
+  // ---- Prompts tab -------------------------------------------------------
+
+  it("renders the seeded prompts from listPrompts", async () => {
+    render(App);
+    await openPromptsTab();
+
+    expect(await screen.findByText("Rewrite")).toBeInTheDocument();
+    expect(screen.getByText("Shorten")).toBeInTheDocument();
+    expect(screen.getByText("Improve clarity")).toBeInTheDocument();
+  });
+
+  it("adding a prompt calls savePrompt and shows the new entry", async () => {
+    savePrompt.mockResolvedValue([
+      ...defaultPrompts(),
+      { id: "prompt-new", label: "Translate", instruction: "Translate to French." },
+    ]);
+
+    render(App);
+    await openPromptsTab();
+
+    const addButton = await screen.findByRole("button", { name: "Add prompt" });
+    await fireEvent.click(addButton);
+
+    const labelInput = await screen.findByLabelText("Label");
+    await fireEvent.input(labelInput, { target: { value: "Translate" } });
+
+    const instructionInput = screen.getByLabelText("Instruction");
+    await fireEvent.input(instructionInput, { target: { value: "Translate to French." } });
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(savePrompt).toHaveBeenCalledWith({
+        id: "",
+        label: "Translate",
+        instruction: "Translate to French.",
+      });
+    });
+    expect(await screen.findByText("Translate")).toBeInTheDocument();
+  });
+
+  it("editing a prompt prefills the form with its current values", async () => {
+    render(App);
+    await openPromptsTab();
+
+    await screen.findByText("Rewrite");
+    const editButtons = screen.getAllByRole("button", { name: "Edit" });
+    await fireEvent.click(editButtons[0]!);
+
+    const labelInput = await screen.findByLabelText("Label");
+    expect(labelInput).toHaveValue("Rewrite");
+    const instructionInput = screen.getByLabelText("Instruction");
+    expect(instructionInput).toHaveValue(defaultPrompts()[0]!.instruction);
+  });
+
+  it("deleting a prompt requires a second confirming click, then calls deletePrompt", async () => {
+    deletePrompt.mockResolvedValue(
+      defaultPrompts().filter((p) => p.id !== "builtin-rewrite"),
+    );
+
+    render(App);
+    await openPromptsTab();
+
+    await screen.findByText("Rewrite");
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    await fireEvent.click(deleteButtons[0]!);
+
+    expect(deletePrompt).not.toHaveBeenCalled();
+    const confirmButton = await screen.findByRole("button", { name: "Confirm delete?" });
+    await fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(deletePrompt).toHaveBeenCalledWith("builtin-rewrite");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Rewrite")).not.toBeInTheDocument();
+    });
+  });
+
+  it("switching tabs clears an armed delete confirmation on the Prompts tab", async () => {
+    render(App);
+    await openPromptsTab();
+
+    await screen.findByText("Rewrite");
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    await fireEvent.click(deleteButtons[0]!);
+    await screen.findByRole("button", { name: "Confirm delete?" });
+
+    await openAccessibilityTab();
+    await openPromptsTab();
+
+    expect(screen.queryByRole("button", { name: "Confirm delete?" })).not.toBeInTheDocument();
+    expect(deletePrompt).not.toHaveBeenCalled();
+  });
+
+  it("opening the add-prompt form clears an armed delete confirmation", async () => {
+    render(App);
+    await openPromptsTab();
+
+    await screen.findByText("Rewrite");
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    await fireEvent.click(deleteButtons[0]!);
+    await screen.findByRole("button", { name: "Confirm delete?" });
+
+    const addButton = await screen.findByRole("button", { name: "Add prompt" });
+    await fireEvent.click(addButton);
+    const cancelButton = await screen.findByRole("button", { name: "Cancel" });
+    await fireEvent.click(cancelButton);
+
+    expect(screen.queryByRole("button", { name: "Confirm delete?" })).not.toBeInTheDocument();
+    expect(deletePrompt).not.toHaveBeenCalled();
+  });
+
+  it("shows a validation error when saving a prompt with a blank label", async () => {
+    savePrompt.mockRejectedValueOnce(new Error("Prompt label must not be empty."));
+
+    render(App);
+    await openPromptsTab();
+
+    const addButton = await screen.findByRole("button", { name: "Add prompt" });
+    await fireEvent.click(addButton);
+
+    const instructionInput = await screen.findByLabelText("Instruction");
+    await fireEvent.input(instructionInput, { target: { value: "Do something." } });
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await fireEvent.click(saveButton);
+
+    expect(await screen.findByText("Prompt label must not be empty.")).toBeInTheDocument();
   });
 
   it("saving the shortcut calls setSettings with the new shortcut", async () => {
@@ -722,6 +902,77 @@ describe("settings App", () => {
         autoCopyResult: true,
       });
     });
+  });
+
+  // Popover position reset.
+
+  it("renders the reset-position button disabled when the popover has no saved position", async () => {
+    getSettings.mockResolvedValue({ ...defaultSettings(), popoverPosition: null });
+
+    render(App);
+
+    const button = await screen.findByRole("button", { name: "Reset position to automatic" });
+    expect(button).toBeDisabled();
+  });
+
+  it("renders the reset-position button enabled when the popover has a saved position", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverPosition: { x: 120, y: 340 },
+    });
+
+    render(App);
+
+    const button = await screen.findByRole("button", { name: "Reset position to automatic" });
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+  });
+
+  it("clicking the reset-position button calls resetPopoverPosition and updates local state", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverPosition: { x: 120, y: 340 },
+    });
+    resetPopoverPosition.mockResolvedValue({ ...defaultSettings(), popoverPosition: null });
+
+    render(App);
+
+    const button = await screen.findByRole("button", { name: "Reset position to automatic" });
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+
+    await fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(resetPopoverPosition).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(button).toBeDisabled();
+    });
+  });
+
+  it("shows an error and leaves the setting unchanged when resetPopoverPosition fails", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverPosition: { x: 120, y: 340 },
+    });
+    resetPopoverPosition.mockRejectedValueOnce(new Error("failed to persist popover position"));
+
+    render(App);
+
+    const button = await screen.findByRole("button", { name: "Reset position to automatic" });
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+
+    await fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByText("failed to persist popover position")).toBeInTheDocument();
+    });
+    expect(button).toBeEnabled();
   });
 
   it("Accessibility tab reads Replace as switched off in Settings when the capability is present but the setting is off", async () => {

@@ -104,13 +104,164 @@ impl ActionInFlight {
     }
 }
 
+/// How often the drag-inactivity watchdog (see `PopoverDrag::dragging`)
+/// polls for whether the current native drag gesture has gone quiet.
+const DRAG_WATCHDOG_TICK: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// How long a native drag must go quiet (no `WindowEvent::Moved` activity)
+/// before the watchdog considers the gesture over and clears `dragging`.
+const DRAG_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1000);
+
+/// Tracks a user-initiated popover drag, started by the frontend's
+/// `begin_popover_drag` command right before it calls the webview window
+/// API's `startDragging()` (see `src/popover/App.svelte`'s `.toolbar`
+/// `onmousedown` handler) — native window drags fire the same
+/// `WindowEvent::Moved` events a programmatic `set_position` does, so
+/// `on_window_event` needs a way to tell them apart.
+///
+/// - `dragging`: true for the duration of the drag gesture itself, not just
+///   from `begin_popover_drag` onward. The webview never gets a reliable
+///   end-of-drag signal — `startDragging()` doesn't resolve when the OS-level
+///   drag ends, and there's no guaranteed pointerup once a native drag has
+///   taken over — so `dragging` can't simply be cleared by the frontend.
+///   Instead, `begin_popover_drag` starts an inactivity watchdog thread (see
+///   `spawn_drag_watchdog`) the first time it sets `dragging` true: a native
+///   drag emits a continuous stream of `Moved` events, so once that stream
+///   has gone quiet for `DRAG_IDLE_TIMEOUT` the watchdog treats the gesture
+///   as over and clears `dragging` itself. `show_popover`/`hide_popover`
+///   still clear it eagerly as well, which also ends the watchdog on its
+///   next tick. Deliberate tradeoff: a drag held perfectly still for longer
+///   than `DRAG_IDLE_TIMEOUT` ends the logical gesture early (hide-on-blur
+///   and position tracking start treating it as over mid-drag) — rare (it
+///   requires literally zero pointer movement for a full second while still
+///   holding the mouse down) and low-consequence (the window just stops
+///   being tracked as "moving"; nothing crashes or misbehaves, and the next
+///   real drag gesture starts a fresh `begin_popover_drag`/watchdog cycle
+///   regardless). While true, `on_window_event`'s `Focused(false)` arm skips
+///   hiding-on-blur (starting a native drag can transiently blur the window
+///   on some platforms, which must not be mistaken for the user clicking
+///   away) and its `Moved` arm treats the new position as a user drag rather
+///   than an echo of `show_popover`'s own placement.
+/// - `last_drag_activity`: the time of the most recent evidence that the
+///   drag gesture is still live — set by `begin_popover_drag` and refreshed
+///   by every `Moved` event recorded while `dragging` is true. The watchdog
+///   reads this each tick to decide whether the gesture has gone quiet.
+/// - `last_programmatic`: the position `show_popover` most recently placed
+///   the window at, if any. An incoming `Moved` event that matches this is
+///   `show_popover`'s own `set_position` call echoing back through the
+///   event system, not a user drag, and is ignored either way regardless of
+///   `dragging`.
+/// - `pending_user_position`: the most recent position observed from a real
+///   user drag (`dragging` was true and the position didn't match
+///   `last_programmatic`), if any. `hide_popover` takes this and persists it
+///   into `Settings::popover_position` — deferred to hide rather than
+///   written on every `Moved` event, so a fast drag doesn't hammer the
+///   settings store with a write per pixel moved.
+#[derive(Default)]
+pub(crate) struct PopoverDrag {
+    dragging: std::sync::atomic::AtomicBool,
+    last_drag_activity: Mutex<Option<std::time::Instant>>,
+    last_programmatic: Mutex<Option<(i32, i32)>>,
+    pending_user_position: Mutex<Option<(i32, i32)>>,
+}
+
+/// Pure decision the drag-inactivity watchdog (see `PopoverDrag::dragging`
+/// and `spawn_drag_watchdog`) makes each tick: whether the gesture has gone
+/// quiet for long enough that it should be considered over. Takes the
+/// already-computed elapsed-since-last-activity duration (`None` if no
+/// activity was ever recorded) rather than an `Instant`, so it's testable
+/// without real thread timing.
+fn drag_gesture_is_idle(
+    elapsed_since_activity: Option<std::time::Duration>,
+    timeout: std::time::Duration,
+) -> bool {
+    match elapsed_since_activity {
+        Some(elapsed) => elapsed > timeout,
+        None => true,
+    }
+}
+
+/// Spawns the inactivity watchdog for a popover drag gesture (see
+/// `PopoverDrag::dragging`'s doc comment for the full rationale). Polls every
+/// `DRAG_WATCHDOG_TICK`, and either exits early because `dragging` was
+/// already cleared elsewhere (`show_popover`/`hide_popover`) or, once
+/// `last_drag_activity` has gone quiet for longer than `DRAG_IDLE_TIMEOUT`,
+/// clears `dragging` itself and exits.
+///
+/// Only `begin_popover_drag` calls this, and only the first time it sets
+/// `dragging` true for a gesture (its `swap` makes that check race-free) —
+/// otherwise a drag with several `begin_popover_drag` calls in quick
+/// succession (unlikely in practice, since the frontend calls it once per
+/// `onmousedown`) would spawn a redundant watchdog per call.
+///
+/// Runs on its own thread rather than the caller's: `begin_popover_drag` is
+/// a Tauri command that must return promptly, and the watchdog needs to keep
+/// polling for as long as the drag lasts. It reaches `PopoverDrag` through a
+/// cloned `AppHandle` rather than a borrow, the same pattern `trigger_capture`
+/// uses to reach managed state from its own off-main-thread work.
+pub(crate) fn spawn_drag_watchdog(app: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(DRAG_WATCHDOG_TICK);
+
+        let drag = app.state::<PopoverDrag>();
+        if !drag.dragging.load(std::sync::atomic::Ordering::SeqCst) {
+            // Cleared by show_popover/hide_popover: the gesture (or the
+            // whole popover) is already done, nothing left to watch.
+            return;
+        }
+
+        let elapsed = drag
+            .last_drag_activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .map(|last| last.elapsed());
+
+        if drag_gesture_is_idle(elapsed, DRAG_IDLE_TIMEOUT) {
+            drag.dragging
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            return;
+        }
+    });
+}
+
 /// Shows the popover window under the tray icon, positions it, and gives it
-/// keyboard focus.
+/// keyboard focus. Positions at the user's last dragged position (clamped
+/// back on-screen in case the monitor layout changed) when one is saved;
+/// otherwise anchors at the cursor as always. Either way, records where the
+/// popover actually ended up in `PopoverDrag::last_programmatic` so
+/// `on_window_event`'s `Moved` handler can recognize this call's own
+/// `set_position`/positioner side effect as an echo rather than a user
+/// drag.
 fn show_popover(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window(POPOVER_WINDOW_LABEL) else {
         return;
     };
-    platform::position_popover(&window);
+
+    let drag = app.state::<PopoverDrag>();
+    drag.dragging
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let saved_position = settings::get_settings(&TauriStoreSettings::new(app.clone()))
+        .ok()
+        .and_then(|settings| settings.popover_position);
+
+    if let Some(pos) = saved_position {
+        let clamped = platform::positioning::clamp_saved_position(&window, (pos.x, pos.y));
+        *drag
+            .last_programmatic
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(clamped);
+        let _ = window.set_position(tauri::PhysicalPosition::new(clamped.0, clamped.1));
+    } else {
+        platform::position_popover(&window);
+        if let Ok(pos) = window.outer_position() {
+            *drag
+                .last_programmatic
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((pos.x, pos.y));
+        }
+    }
+
     let _ = window.show();
     let _ = window.set_focus();
 }
@@ -119,8 +270,41 @@ fn show_popover(app: &tauri::AppHandle) {
 /// backup (from the fallback path) is restored immediately, and the stored
 /// capture result is cleared. Safe to call whether or not a capture is
 /// currently pending — both operations are no-ops in that case.
+///
+/// Also clears the in-progress drag flag and, if the user dragged the
+/// popover during this session, persists the position it was dropped at
+/// into `Settings::popover_position` so the next `show_popover` reuses it.
+/// A settings read/write failure here is logged and otherwise ignored —
+/// losing a just-made drag is unfortunate but not worth failing the hide
+/// over, and the popover keeps working with automatic positioning either
+/// way.
 pub(crate) fn hide_popover(app: &tauri::AppHandle) {
     cancel_capture(app);
+
+    let drag = app.state::<PopoverDrag>();
+    drag.dragging
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let pending_position = drag
+        .pending_user_position
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+
+    if let Some((x, y)) = pending_position {
+        let store = TauriStoreSettings::new(app.clone());
+        match settings::get_settings(&store) {
+            Ok(mut current) => {
+                current.popover_position = Some(settings::PopoverPosition { x, y });
+                if let Err(err) = settings::set_settings(&store, current) {
+                    eprintln!("Kallilex: failed to persist popover position: {err}");
+                }
+            }
+            Err(err) => {
+                eprintln!("Kallilex: failed to load settings before persisting popover position: {err}");
+            }
+        }
+    }
+
     if let Some(window) = app.get_webview_window(POPOVER_WINDOW_LABEL) {
         let _ = window.hide();
     }
@@ -146,6 +330,19 @@ fn toggle_popover(app: &tauri::AppHandle) {
         Some(window) if window.is_visible().unwrap_or(false) => hide_popover(app),
         _ => open_popover_from_tray(app),
     }
+}
+
+/// Whether a popover focus-loss event should hide the popover. Pinning lets
+/// the user keep the popover open while interacting with other windows (a
+/// reference document, a browser tab to copy from, etc.), so a pinned
+/// popover only closes via Escape, the global shortcut toggle, or the tray.
+/// A settings read failure degrades to the pre-pin behavior (hide): losing
+/// a rare pin preference is far less surprising than a popover that's stuck
+/// open with no obvious way to dismiss it.
+fn should_hide_on_blur(app: &tauri::AppHandle) -> bool {
+    !settings::get_settings(&TauriStoreSettings::new(app.clone()))
+        .map(|settings| settings.popover_pinned)
+        .unwrap_or(false)
 }
 
 pub(crate) fn show_settings(app: &tauri::AppHandle) {
@@ -404,11 +601,16 @@ pub fn run() {
             commands::delete_profile,
             commands::set_active_profile,
             commands::get_presets,
+            commands::list_prompts,
+            commands::save_prompt,
+            commands::delete_prompt,
             commands::test_connection,
             commands::open_settings,
             commands::get_wayland_shortcut_trigger,
             commands::complete_onboarding,
             commands::set_input_synthesis,
+            commands::begin_popover_drag,
+            commands::reset_popover_position,
         ])
         // Registered on the builder, not inside `.setup()`: the windows
         // declared in `tauri.conf.json` are created while `Builder::build`
@@ -427,6 +629,7 @@ pub fn run() {
         .manage(ReplaceInFlight::default())
         .manage(ActionInFlight::new())
         .manage(platform::PortalShortcutTrigger::default())
+        .manage(PopoverDrag::default())
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
             platform::setup(app);
@@ -542,10 +745,50 @@ pub fn run() {
             if let Some(popover) = app.get_webview_window(POPOVER_WINDOW_LABEL) {
                 popover.on_window_event({
                     let app_handle = app.handle().clone();
-                    move |event| {
-                        if let WindowEvent::Focused(false) = event {
-                            hide_popover(&app_handle);
+                    move |event| match event {
+                        WindowEvent::Focused(false) => {
+                            let dragging = app_handle
+                                .state::<PopoverDrag>()
+                                .dragging
+                                .load(std::sync::atomic::Ordering::SeqCst);
+                            // A native drag can transiently blur the window on
+                            // some platforms — that's not the user clicking
+                            // away, so hide-on-blur is suppressed for as long
+                            // as `dragging` is set (see `PopoverDrag`'s doc
+                            // comment).
+                            if should_hide_on_blur(&app_handle) && !dragging {
+                                hide_popover(&app_handle);
+                            }
                         }
+                        WindowEvent::Moved(position) => {
+                            let drag = app_handle.state::<PopoverDrag>();
+                            let moved = (position.x, position.y);
+                            let is_echo = *drag
+                                .last_programmatic
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                == Some(moved);
+                            if is_echo {
+                                // `show_popover`'s own `set_position` (or the
+                                // positioner plugin it delegates to)
+                                // triggering this same event — not a user
+                                // drag.
+                                return;
+                            }
+                            if drag.dragging.load(std::sync::atomic::Ordering::SeqCst) {
+                                *drag
+                                    .last_drag_activity
+                                    .lock()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                                    Some(std::time::Instant::now());
+                                *drag
+                                    .pending_user_position
+                                    .lock()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                                    Some(moved);
+                            }
+                        }
+                        _ => {}
                     }
                 });
             }
@@ -624,5 +867,39 @@ mod tests {
         in_flight.cancel();
 
         assert!(rx.await.is_err());
+    }
+
+    // `drag_gesture_is_idle` — the pure decision the popover drag-inactivity
+    // watchdog (`spawn_drag_watchdog`) makes each tick. Exercised directly
+    // with injected durations rather than real `Instant`/thread timing, so
+    // these stay fast and deterministic; the watchdog thread itself needs a
+    // live, managed `AppHandle` to reach `PopoverDrag` state, which isn't
+    // available in a plain unit test, so it's left untested here.
+
+    #[test]
+    fn drag_gesture_with_no_recorded_activity_is_idle() {
+        assert!(drag_gesture_is_idle(None, DRAG_IDLE_TIMEOUT));
+    }
+
+    #[test]
+    fn drag_gesture_within_the_timeout_is_not_idle() {
+        let elapsed = DRAG_IDLE_TIMEOUT - std::time::Duration::from_millis(1);
+        assert!(!drag_gesture_is_idle(Some(elapsed), DRAG_IDLE_TIMEOUT));
+    }
+
+    #[test]
+    fn drag_gesture_exactly_at_the_timeout_is_not_yet_idle() {
+        // Strictly greater-than in `drag_gesture_is_idle`, so a tick landing
+        // exactly on the boundary still counts as active.
+        assert!(!drag_gesture_is_idle(
+            Some(DRAG_IDLE_TIMEOUT),
+            DRAG_IDLE_TIMEOUT
+        ));
+    }
+
+    #[test]
+    fn drag_gesture_past_the_timeout_is_idle() {
+        let elapsed = DRAG_IDLE_TIMEOUT + std::time::Duration::from_millis(1);
+        assert!(drag_gesture_is_idle(Some(elapsed), DRAG_IDLE_TIMEOUT));
     }
 }
