@@ -2,7 +2,14 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/sve
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 import { resetPlatformInfoForTests } from "../shared/platform";
-import type { CustomPrompt, PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
+import type {
+  CustomPrompt,
+  PlatformInfo,
+  Preset,
+  ProviderProfile,
+  Settings,
+  UpdateStatus,
+} from "../shared/types";
 
 const {
   accessibilityStatus,
@@ -80,6 +87,14 @@ vi.mock("../shared/invoke", () => ({
   openUpdateReleasePage,
 }));
 
+const { listen } = vi.hoisted(() => ({
+  listen: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen,
+}));
+
 function defaultPrompts(): CustomPrompt[] {
   return [
     {
@@ -119,6 +134,19 @@ function defaultSettings(): Settings {
     prompts: defaultPrompts(),
     updateChannel: "stable",
     updateCheckFrequency: "daily",
+  };
+}
+
+function updateStatus(overrides: Partial<UpdateStatus> = {}): UpdateStatus {
+  return {
+    currentVersion: "0.6.0-beta.1",
+    channel: "stable",
+    lastCheckAt: null,
+    phase: "idle",
+    available: null,
+    progress: null,
+    error: null,
+    ...overrides,
   };
 }
 
@@ -189,6 +217,11 @@ describe("settings App", () => {
     listPrompts.mockClear();
     savePrompt.mockClear();
     deletePrompt.mockClear();
+    getUpdateStatus.mockClear();
+    checkForUpdates.mockClear();
+    installUpdate.mockClear();
+    openUpdateReleasePage.mockClear();
+    listen.mockClear();
 
     accessibilityStatus.mockResolvedValue(false);
     getSettings.mockResolvedValue(defaultSettings());
@@ -202,6 +235,11 @@ describe("settings App", () => {
     getWaylandShortcutTrigger.mockResolvedValue(null);
     resetPopoverPosition.mockResolvedValue(defaultSettings());
     listPrompts.mockResolvedValue(defaultPrompts());
+    getUpdateStatus.mockResolvedValue(updateStatus());
+    checkForUpdates.mockResolvedValue(updateStatus());
+    installUpdate.mockResolvedValue(undefined);
+    openUpdateReleasePage.mockResolvedValue(undefined);
+    listen.mockResolvedValue(() => {});
   });
 
   afterEach(() => {
@@ -220,6 +258,11 @@ describe("settings App", () => {
 
   async function openPromptsTab() {
     const tab = await screen.findByRole("button", { name: "Prompts" });
+    await fireEvent.click(tab);
+  }
+
+  async function openUpdatesTab() {
+    const tab = await screen.findByRole("button", { name: "Updates" });
     await fireEvent.click(tab);
   }
 
@@ -1027,5 +1070,243 @@ describe("settings App", () => {
       await screen.findByText(/doesn't offer the RemoteDesktop portal/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/switched off in Settings/)).not.toBeInTheDocument();
+  });
+
+  describe("Updates tab", () => {
+    it("renders the current version and the saved channel badge", async () => {
+      getSettings.mockResolvedValue({ ...defaultSettings(), updateChannel: "preview" });
+      getUpdateStatus.mockResolvedValue(updateStatus({ currentVersion: "0.6.0-beta.1" }));
+
+      render(App);
+      await openUpdatesTab();
+
+      expect(await screen.findByText("Kallilex 0.6.0-beta.1")).toBeInTheDocument();
+      expect(screen.getByText("Preview", { selector: ".channel-badge" })).toBeInTheDocument();
+    });
+
+    it("saves only updateChannel through the fetch-then-spread pattern", async () => {
+      const fresh: Settings = { ...defaultSettings(), shortcut: "Ctrl+Alt+U" };
+      getSettings.mockResolvedValueOnce(defaultSettings());
+      getSettings.mockResolvedValueOnce(fresh);
+
+      render(App);
+      await openUpdatesTab();
+      const select = await screen.findByLabelText("Update channel");
+      await fireEvent.change(select, { target: { value: "preview" } });
+
+      await waitFor(() => {
+        expect(setSettings).toHaveBeenCalledTimes(1);
+      });
+      expect(setSettings).toHaveBeenCalledWith({ ...fresh, updateChannel: "preview" });
+    });
+
+    it("saves only updateCheckFrequency through the fetch-then-spread pattern", async () => {
+      const fresh: Settings = { ...defaultSettings(), shortcut: "Ctrl+Alt+U" };
+      getSettings.mockResolvedValueOnce(defaultSettings());
+      getSettings.mockResolvedValueOnce(fresh);
+
+      render(App);
+      await openUpdatesTab();
+      const select = await screen.findByLabelText("Check for updates automatically");
+      await fireEvent.change(select, { target: { value: "weekly" } });
+
+      await waitFor(() => {
+        expect(setSettings).toHaveBeenCalledTimes(1);
+      });
+      expect(setSettings).toHaveBeenCalledWith({ ...fresh, updateCheckFrequency: "weekly" });
+    });
+
+    it("checks for updates and renders the up-to-date confirmation with a formatted time", async () => {
+      const lastCheckAt = 1_700_000_000;
+      checkForUpdates.mockResolvedValue(updateStatus({ phase: "upToDate", lastCheckAt }));
+
+      render(App);
+      await openUpdatesTab();
+      const button = await screen.findByRole("button", { name: "Check for Updates" });
+      await fireEvent.click(button);
+
+      await waitFor(() => {
+        expect(checkForUpdates).toHaveBeenCalledTimes(1);
+      });
+
+      const formatted = new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(lastCheckAt * 1000));
+
+      expect(
+        await screen.findByText(`You're up to date (checked ${formatted}).`),
+      ).toBeInTheDocument();
+    });
+
+    it("renders Download & install for an installable available update and calls installUpdate", async () => {
+      getUpdateStatus.mockResolvedValue(
+        updateStatus({
+          phase: "available",
+          available: {
+            version: "0.7.0",
+            tag: "v0.7.0",
+            releaseUrl: "https://example.com/releases/v0.7.0",
+            notes: "notes",
+            publishedAt: null,
+            installable: true,
+          },
+        }),
+      );
+
+      render(App);
+      await openUpdatesTab();
+
+      const installButton = await screen.findByRole("button", { name: "Download & install" });
+      expect(screen.queryByRole("button", { name: "Open release page" })).not.toBeInTheDocument();
+
+      await fireEvent.click(installButton);
+      await waitFor(() => {
+        expect(installUpdate).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("renders Open release page and the deb/rpm hint for a non-installable available update", async () => {
+      getUpdateStatus.mockResolvedValue(
+        updateStatus({
+          phase: "available",
+          available: {
+            version: "0.7.0",
+            tag: "v0.7.0",
+            releaseUrl: "https://example.com/releases/v0.7.0",
+            notes: "notes",
+            publishedAt: null,
+            installable: false,
+          },
+        }),
+      );
+
+      render(App);
+      await openUpdatesTab();
+
+      expect(
+        await screen.findByRole("button", { name: "Open release page" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/isn't updated in place/),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Download & install" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders a percentage for a downloading status with a known total and disables the check button", async () => {
+      getUpdateStatus.mockResolvedValue(
+        updateStatus({ phase: "downloading", progress: { downloaded: 50, total: 200 } }),
+      );
+
+      render(App);
+      await openUpdatesTab();
+
+      expect(await screen.findByText("25%")).toBeInTheDocument();
+      const button = screen.getByRole("button", { name: "Check for Updates" });
+      expect(button).toBeDisabled();
+    });
+
+    it("renders the error message for an error status and leaves the check button enabled", async () => {
+      getUpdateStatus.mockResolvedValue(
+        updateStatus({ phase: "error", error: "Could not reach GitHub." }),
+      );
+
+      render(App);
+      await openUpdatesTab();
+
+      expect(await screen.findByText("Could not reach GitHub.")).toBeInTheDocument();
+      const button = screen.getByRole("button", { name: "Check for Updates" });
+      expect(button).not.toBeDisabled();
+    });
+
+    it("updates the rendering from an update:status event without a re-fetch", async () => {
+      const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+      listen.mockImplementation((event: string, handler: (event: { payload: unknown }) => void) => {
+        handlers[event] = handler;
+        return Promise.resolve(() => {});
+      });
+
+      render(App);
+      await openUpdatesTab();
+      await screen.findByText("Kallilex 0.6.0-beta.1");
+
+      expect(getUpdateStatus).toHaveBeenCalledTimes(1);
+
+      handlers["update:status"]({
+        payload: updateStatus({
+          phase: "available",
+          available: {
+            version: "0.9.0",
+            tag: "v0.9.0",
+            releaseUrl: "https://example.com/releases/v0.9.0",
+            notes: null,
+            publishedAt: null,
+            installable: true,
+          },
+        }),
+      });
+
+      expect(await screen.findByText("Version 0.9.0 is available.")).toBeInTheDocument();
+      expect(getUpdateStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it("switches to the Updates tab on a settings:show-tab event", async () => {
+      const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+      listen.mockImplementation((event: string, handler: (event: { payload: unknown }) => void) => {
+        handlers[event] = handler;
+        return Promise.resolve(() => {});
+      });
+
+      render(App);
+      await screen.findByRole("button", { name: "General" });
+
+      handlers["settings:show-tab"]({ payload: "updates" });
+
+      expect(await screen.findByText("Kallilex 0.6.0-beta.1")).toBeInTheDocument();
+    });
+
+    it("ignores a settings:show-tab event with an unknown tab name", async () => {
+      const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+      listen.mockImplementation((event: string, handler: (event: { payload: unknown }) => void) => {
+        handlers[event] = handler;
+        return Promise.resolve(() => {});
+      });
+
+      render(App);
+      await screen.findByRole("button", { name: "General" });
+
+      handlers["settings:show-tab"]({ payload: "bogus" });
+
+      // Still on General: its shortcut heading is present, the Updates
+      // version line is not.
+      expect(await screen.findByRole("heading", { name: "Shortcut" })).toBeInTheDocument();
+      expect(screen.queryByText("Kallilex 0.6.0-beta.1")).not.toBeInTheDocument();
+    });
+
+    it("opens the release page from the What's new link", async () => {
+      getUpdateStatus.mockResolvedValue(
+        updateStatus({
+          phase: "available",
+          available: {
+            version: "0.7.0",
+            tag: "v0.7.0",
+            releaseUrl: "https://example.com/releases/v0.7.0",
+            notes: null,
+            publishedAt: null,
+            installable: true,
+          },
+        }),
+      );
+
+      render(App);
+      await openUpdatesTab();
+
+      await fireEvent.click(await screen.findByRole("button", { name: "What's new" }));
+      await waitFor(() => {
+        expect(openUpdateReleasePage).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });

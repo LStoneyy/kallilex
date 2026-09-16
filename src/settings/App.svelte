@@ -1,18 +1,23 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import {
     accessibilityStatus,
+    checkForUpdates,
     deletePrompt,
     deleteProfile,
     disableAutostart,
     enableAutostart,
     getPresets,
     getSettings,
+    getUpdateStatus,
     getWaylandShortcutTrigger,
+    installUpdate,
     isAutostartEnabled,
     listProfiles,
     listPrompts,
     openAccessibilitySettings,
+    openUpdateReleasePage,
     resetPopoverPosition,
     saveProfile,
     savePrompt,
@@ -28,11 +33,23 @@
     Preset,
     ProviderProfile,
     Settings,
+    UpdateStatus,
   } from "../shared/types";
 
   const POLL_INTERVAL_MS = 1000;
 
-  type Tab = "general" | "providers" | "prompts" | "accessibility";
+  type Tab = "general" | "providers" | "prompts" | "updates" | "accessibility";
+
+  const KNOWN_TABS: readonly Tab[] = ["general", "providers", "prompts", "updates", "accessibility"];
+
+  const checkTimeFormatter = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  function formatCheckTime(epochSeconds: number): string {
+    return checkTimeFormatter.format(new Date(epochSeconds * 1000));
+  }
 
   // ---- tabs -----------------------------------------------------------
 
@@ -477,6 +494,70 @@
     }
   }
 
+  // ---- Updates --------------------------------------------------------
+
+  // `null` until the initial `getUpdateStatus()` resolves.
+  let updateStatus = $state<UpdateStatus | null>(null);
+  let updateChannelError = $state<string | null>(null);
+  let updateFrequencyError = $state<string | null>(null);
+  // Fallback surface for a rejected `checkForUpdates`/`installUpdate`/
+  // `openUpdateReleasePage` call — the backend also pushes the outcome via
+  // `update:status`, so this only fires when the command itself rejects
+  // (e.g. never reaches the backend).
+  let updateActionError = $state<string | null>(null);
+  let unlistenUpdateStatus: UnlistenFn | undefined;
+  let unlistenShowTab: UnlistenFn | undefined;
+
+  async function handleUpdateChannelChange(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement).value as Settings["updateChannel"];
+    updateChannelError = null;
+    try {
+      const fresh = await getSettings();
+      const updated: Settings = { ...fresh, updateChannel: value };
+      settings = await setSettings(updated);
+    } catch (error) {
+      updateChannelError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  async function handleUpdateFrequencyChange(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement)
+      .value as Settings["updateCheckFrequency"];
+    updateFrequencyError = null;
+    try {
+      const fresh = await getSettings();
+      const updated: Settings = { ...fresh, updateCheckFrequency: value };
+      settings = await setSettings(updated);
+    } catch (error) {
+      updateFrequencyError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  function handleCheckForUpdates() {
+    updateActionError = null;
+    void checkForUpdates()
+      .then((status) => {
+        updateStatus = status;
+      })
+      .catch((error) => {
+        updateActionError = error instanceof Error ? error.message : String(error);
+      });
+  }
+
+  function handleInstallUpdate() {
+    updateActionError = null;
+    void installUpdate().catch((error) => {
+      updateActionError = error instanceof Error ? error.message : String(error);
+    });
+  }
+
+  function handleOpenUpdateReleasePage() {
+    updateActionError = null;
+    void openUpdateReleasePage().catch((error) => {
+      updateActionError = error instanceof Error ? error.message : String(error);
+    });
+  }
+
   // ---- Accessibility ------------------------------------------------------
 
   let granted = $state(false);
@@ -497,6 +578,40 @@
     void loadProviders();
     void loadPrompts();
     void loadAutostart();
+
+    void getUpdateStatus().then((status) => {
+      if (!destroyed) {
+        updateStatus = status;
+      }
+    });
+
+    // The settings window is created hidden at startup; the tray's update
+    // entry calls `show_settings` first and only emits `settings:show-tab`
+    // afterwards, so by the time either event can fire this listener is
+    // already registered — no handshake needed (see spec-18's Further Notes).
+    void listen<UpdateStatus>("update:status", (event) => {
+      updateStatus = event.payload;
+    }).then((fn) => {
+      if (destroyed) {
+        fn();
+      } else {
+        unlistenUpdateStatus = fn;
+      }
+    });
+
+    void listen<string>("settings:show-tab", (event) => {
+      const tab = event.payload;
+      if ((KNOWN_TABS as readonly string[]).includes(tab)) {
+        selectTab(tab as Tab);
+      }
+    }).then((fn) => {
+      if (destroyed) {
+        fn();
+      } else {
+        unlistenShowTab = fn;
+      }
+    });
+
     void loadPlatformInfo().then((info) => {
       if (destroyed) {
         return;
@@ -527,6 +642,8 @@
 
   onDestroy(() => {
     destroyed = true;
+    unlistenUpdateStatus?.();
+    unlistenShowTab?.();
     if (intervalId !== undefined) {
       clearInterval(intervalId);
     }
@@ -563,6 +680,14 @@
       onclick={() => selectTab("prompts")}
     >
       Prompts
+    </button>
+    <button
+      type="button"
+      class="tab"
+      class:active={activeTab === "updates"}
+      onclick={() => selectTab("updates")}
+    >
+      Updates
     </button>
     <button
       type="button"
@@ -895,6 +1020,128 @@
           </div>
         {/if}
       </section>
+    {:else if activeTab === "updates"}
+      <section class="updates">
+        <h2>Updates</h2>
+
+        {#if updateStatus}
+          <p class="version-line">
+            Kallilex {updateStatus.currentVersion}
+            <span class="channel-badge">
+              {settings?.updateChannel === "preview" ? "Preview" : "Stable"}
+            </span>
+          </p>
+        {:else}
+          <p class="hint">Loading…</p>
+        {/if}
+
+        <label class="field">
+          Update channel
+          <select
+            class="select-input"
+            value={settings?.updateChannel ?? "stable"}
+            onchange={handleUpdateChannelChange}
+          >
+            <option value="stable">Stable</option>
+            <option value="preview">Preview</option>
+          </select>
+        </label>
+        <p class="hint">
+          Stable offers final releases only. Preview also offers pre-releases ahead of stable —
+          expect rough edges. Switching to Stable while on a pre-release keeps this build until a
+          newer stable release exists.
+        </p>
+        {#if updateChannelError}
+          <p class="error">{updateChannelError}</p>
+        {/if}
+
+        <label class="field">
+          Check for updates automatically
+          <select
+            class="select-input"
+            value={settings?.updateCheckFrequency ?? "daily"}
+            onchange={handleUpdateFrequencyChange}
+          >
+            <option value="never">Never</option>
+            <option value="onLaunch">When Kallilex starts</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </label>
+        <p class="hint">
+          A check asks GitHub (api.github.com) for the release list. It sends nothing but the
+          request — no identifiers, no usage data.
+        </p>
+        {#if updateFrequencyError}
+          <p class="error">{updateFrequencyError}</p>
+        {/if}
+
+        <div class="row">
+          <button
+            type="button"
+            disabled={updateStatus?.phase === "checking" || updateStatus?.phase === "downloading"}
+            onclick={handleCheckForUpdates}
+          >
+            {updateStatus?.phase === "checking" ? "Checking…" : "Check for Updates"}
+          </button>
+        </div>
+
+        {#if updateStatus}
+          {#if updateStatus.phase === "idle"}
+            <p class="hint">
+              {updateStatus.lastCheckAt !== null
+                ? `Last checked: ${formatCheckTime(updateStatus.lastCheckAt)}`
+                : "Never checked"}
+            </p>
+          {:else if updateStatus.phase === "checking"}
+            <p class="hint">Checking…</p>
+          {:else if updateStatus.phase === "upToDate"}
+            <p class="confirm">
+              {updateStatus.lastCheckAt !== null
+                ? `You're up to date (checked ${formatCheckTime(updateStatus.lastCheckAt)}).`
+                : "You're up to date."}
+            </p>
+          {:else if updateStatus.phase === "available" && updateStatus.available}
+            <p>Version {updateStatus.available.version} is available.</p>
+            <div class="row">
+              <button type="button" class="link" onclick={handleOpenUpdateReleasePage}>
+                What's new
+              </button>
+              {#if updateStatus.available.installable}
+                <button type="button" onclick={handleInstallUpdate}> Download &amp; install </button>
+              {:else}
+                <button type="button" onclick={handleOpenUpdateReleasePage}>
+                  Open release page
+                </button>
+              {/if}
+            </div>
+            {#if !updateStatus.available.installable}
+              <p class="hint">
+                This Kallilex was installed from a .deb/.rpm package, so it isn't updated in place
+                — download the new package from the release page and install it the same way.
+              </p>
+            {/if}
+          {:else if updateStatus.phase === "downloading"}
+            {#if updateStatus.progress?.total}
+              <progress
+                class="update-progress"
+                max={updateStatus.progress.total}
+                value={updateStatus.progress.downloaded}
+              ></progress>
+              <p>{Math.round((updateStatus.progress.downloaded / updateStatus.progress.total) * 100)}%</p>
+            {:else}
+              <p>Downloading…</p>
+            {/if}
+            <p class="hint">Kallilex restarts when the download finishes.</p>
+          {:else if updateStatus.phase === "error"}
+            <p class="error">{updateStatus.error ?? "Update check failed."}</p>
+          {/if}
+        {/if}
+
+        {#if updateActionError}
+          <p class="error">{updateActionError}</p>
+        {/if}
+      </section>
     {:else if activeTab === "accessibility"}
       <section class="accessibility">
         <h2>Accessibility permission</h2>
@@ -1142,6 +1389,51 @@
   .confirm {
     color: var(--color-verdigris);
     font-size: 12px;
+  }
+
+  .select-input {
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--color-marble) 18%, transparent);
+    border-radius: 6px;
+    background-color: transparent;
+    color: var(--color-marble);
+    font-size: 13px;
+    padding: 5px 8px;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .version-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--color-marble);
+  }
+
+  .channel-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-verdigris);
+    background-color: color-mix(in srgb, var(--color-verdigris) 18%, transparent);
+  }
+
+  .update-progress {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    margin: 6px 0;
+  }
+
+  button.link {
+    background: none;
+    padding: 0;
+    color: var(--color-verdigris);
+    font-weight: 600;
+    text-decoration: underline;
   }
 
   .providers-header {
