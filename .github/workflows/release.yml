@@ -4,8 +4,9 @@ on:
   push:
     tags:
       - "v*"
-  # Manual runs build and sign the macOS app without creating a release —
-  # use this to verify the signing setup before cutting a tag.
+  # Manual runs build and sign all three platforms and upload the bundles as
+  # workflow artifacts without creating a release — use this to verify
+  # signing before cutting a tag.
   workflow_dispatch:
 
 permissions:
@@ -16,6 +17,25 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify tag matches version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version=$(jq -r .version package.json)
+          conf_version=$(jq -r .version src-tauri/tauri.conf.json)
+          cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' src-tauri/Cargo.toml | head -n1)
+          ok=1
+          for entry in "package.json=$pkg_version" "src-tauri/tauri.conf.json=$conf_version" "src-tauri/Cargo.toml=$cargo_version"; do
+            file="${entry%%=*}"
+            version="${entry#*=}"
+            if [ "$version" != "$tag_version" ]; then
+              echo "::error::tag $GITHUB_REF_NAME expects version $tag_version, but $file has version $version"
+              ok=0
+            fi
+          done
+          [ "$ok" -eq 1 ]
 
       - uses: pnpm/action-setup@v4
         with:
@@ -61,8 +81,14 @@ jobs:
             -k /Library/Keychains/System.keychain \
             src-tauri/packaging/macos/kallilex-signing-cert.pem
 
+      # The release overlay turns on updater artifacts (.app.tar.gz + a
+      # minisign .sig), which requires the signing key, so it is only
+      # applied here and not in tauri.conf.json.
       - name: Build universal app
-        run: pnpm tauri build --target universal-apple-darwin --config src-tauri/tauri.macos-release.conf.json
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --target universal-apple-darwin --config src-tauri/tauri.macos-release.conf.json --config src-tauri/tauri.release.conf.json
 
       - name: Verify code signature
         run: |
@@ -85,25 +111,48 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/Kallilex.app \
             "Kallilex-${safe_ref}-macos-universal.zip"
 
+      - name: Collect updater archive and signature
+        run: |
+          set -euo pipefail
+          safe_ref="${GITHUB_REF_NAME//\//-}"
+          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle/macos"
+          [ -f "$bundle_dir/Kallilex.app.tar.gz" ] || { echo "::error::no Kallilex.app.tar.gz in $bundle_dir — was tauri.release.conf.json applied?"; exit 1; }
+          [ -f "$bundle_dir/Kallilex.app.tar.gz.sig" ] || { echo "::error::no Kallilex.app.tar.gz.sig in $bundle_dir — is TAURI_SIGNING_PRIVATE_KEY set?"; exit 1; }
+          # The signature covers the archive content, so renaming is safe.
+          cp "$bundle_dir/Kallilex.app.tar.gz" "Kallilex-${safe_ref}-macos-universal.app.tar.gz"
+          cp "$bundle_dir/Kallilex.app.tar.gz.sig" "Kallilex-${safe_ref}-macos-universal.app.tar.gz.sig"
+
       - name: Create draft GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "Kallilex-${GITHUB_REF_NAME}-macos-universal.zip" \
-            --draft --title "Kallilex $GITHUB_REF_NAME" --generate-notes
+          set -euo pipefail
+          args=(--draft --title "Kallilex $GITHUB_REF_NAME" --generate-notes)
+          # A semver suffix (v0.6.0-beta.1) marks a pre-release; the app's stable
+          # channel ignores releases flagged this way.
+          case "$GITHUB_REF_NAME" in
+            *-*) args+=(--prerelease) ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            "Kallilex-${GITHUB_REF_NAME}-macos-universal.zip" \
+            "Kallilex-${GITHUB_REF_NAME}-macos-universal.app.tar.gz" \
+            "Kallilex-${GITHUB_REF_NAME}-macos-universal.app.tar.gz.sig" \
+            "${args[@]}"
 
       - name: Upload signed test build (manual run only)
         if: "!startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v4
         with:
           name: kallilex-macos-universal-signed
-          path: Kallilex-*-macos-universal.zip
+          path: |
+            Kallilex-*-macos-universal.zip
+            Kallilex-*-macos-universal.app.tar.gz
+            Kallilex-*-macos-universal.app.tar.gz.sig
 
   build-release-linux:
     runs-on: ubuntu-latest
     needs: build-release
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
 
@@ -131,11 +180,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Linux bundles
-        run: pnpm tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --config src-tauri/tauri.release.conf.json
 
       - name: Rename artifacts and generate checksums
         run: |
           set -euo pipefail
+          safe_ref="${GITHUB_REF_NAME//\//-}"
           bundle_dir="src-tauri/target/release/bundle"
 
           deb_src=$(find "$bundle_dir/deb" -maxdepth 1 -name '*.deb' | head -n1)
@@ -146,30 +199,59 @@ jobs:
           [ -n "$rpm_src" ] || { echo "::error::no .rpm found in $bundle_dir/rpm"; exit 1; }
           [ -n "$appimage_src" ] || { echo "::error::no .AppImage found in $bundle_dir/appimage"; exit 1; }
 
-          cp "$deb_src" "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.deb"
-          cp "$rpm_src" "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.rpm"
-          cp "$appimage_src" "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage"
+          cp "$deb_src" "Kallilex-${safe_ref}-linux-x86_64.deb"
+          cp "$rpm_src" "Kallilex-${safe_ref}-linux-x86_64.rpm"
+          cp "$appimage_src" "Kallilex-${safe_ref}-linux-x86_64.AppImage"
 
-          sha256sum "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.deb" > "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.deb.sha256"
-          sha256sum "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.rpm" > "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.rpm.sha256"
-          sha256sum "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage" > "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage.sha256"
+          sha256sum "Kallilex-${safe_ref}-linux-x86_64.deb" > "Kallilex-${safe_ref}-linux-x86_64.deb.sha256"
+          sha256sum "Kallilex-${safe_ref}-linux-x86_64.rpm" > "Kallilex-${safe_ref}-linux-x86_64.rpm.sha256"
+          sha256sum "Kallilex-${safe_ref}-linux-x86_64.AppImage" > "Kallilex-${safe_ref}-linux-x86_64.AppImage.sha256"
+
+          # The updater installs the AppImage, so its signature is mandatory.
+          [ -f "$appimage_src.sig" ] || { echo "::error::no signature next to $appimage_src — is TAURI_SIGNING_PRIVATE_KEY set?"; exit 1; }
+          cp "$appimage_src.sig" "Kallilex-${safe_ref}-linux-x86_64.AppImage.sig"
+
+          # deb/rpm are notify-only for the updater; their signatures are uploaded
+          # for completeness when present, but their absence is not an error.
+          for pair in "$deb_src=deb" "$rpm_src=rpm"; do
+            src="${pair%=*}"
+            ext="${pair##*=}"
+            if [ -f "$src.sig" ]; then
+              cp "$src.sig" "Kallilex-${safe_ref}-linux-x86_64.${ext}.sig"
+            else
+              echo "no signature next to $src, skipping"
+            fi
+          done
 
       - name: Upload Linux artifacts to draft release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" \
-            "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.deb" \
-            "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.deb.sha256" \
-            "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.rpm" \
-            "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.rpm.sha256" \
-            "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage" \
-            "Kallilex-${GITHUB_REF_NAME}-linux-x86_64.AppImage.sha256"
+          set -euo pipefail
+          prefix="Kallilex-${GITHUB_REF_NAME}-linux-x86_64"
+          files=(
+            "$prefix.deb" "$prefix.deb.sha256"
+            "$prefix.rpm" "$prefix.rpm.sha256"
+            "$prefix.AppImage" "$prefix.AppImage.sha256" "$prefix.AppImage.sig"
+          )
+          for optional in "$prefix.deb.sig" "$prefix.rpm.sig"; do
+            if [ -f "$optional" ]; then
+              files+=("$optional")
+            fi
+          done
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}"
+
+      - name: Upload signed test build (manual run only)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: kallilex-linux-x86_64-signed
+          path: Kallilex-*-linux-x86_64.*
 
   build-release-windows:
     runs-on: windows-latest
     needs: build-release
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
 
@@ -192,11 +274,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Windows bundle
-        run: pnpm tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --config src-tauri/tauri.release.conf.json
 
       - name: Rename artifact and generate checksum
         shell: pwsh
         run: |
+          $safeRef = $env:GITHUB_REF_NAME -replace '/', '-'
           $bundleDir = "src-tauri/target/release/bundle/nsis"
           $installer = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe" -File
 
@@ -205,17 +291,52 @@ jobs:
             exit 1
           }
 
-          $name = "Kallilex-$env:GITHUB_REF_NAME-windows-x86_64-setup.exe"
+          $name = "Kallilex-$safeRef-windows-x86_64-setup.exe"
           Copy-Item -Path $installer.FullName -Destination $name
 
           $hash = (Get-FileHash -Path $name -Algorithm SHA256).Hash.ToLower()
           $shaPath = "$name.sha256"
           [System.IO.File]::WriteAllText($shaPath, "$hash  $name`n", (New-Object System.Text.UTF8Encoding $false))
 
+          $sig = "$($installer.FullName).sig"
+          if (-not (Test-Path $sig)) {
+            Write-Output "::error::no signature next to $($installer.FullName) - is TAURI_SIGNING_PRIVATE_KEY set?"
+            exit 1
+          }
+          Copy-Item -Path $sig -Destination "$name.sig"
+
       - name: Upload Windows artifacts to draft release
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $name = "Kallilex-$env:GITHUB_REF_NAME-windows-x86_64-setup.exe"
-          gh release upload "$env:GITHUB_REF_NAME" "$name" "$name.sha256"
+          gh release upload "$env:GITHUB_REF_NAME" "$name" "$name.sha256" "$name.sig"
+
+      - name: Upload signed test build (manual run only)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: kallilex-windows-x86_64-signed
+          path: Kallilex-*-windows-x86_64-setup.exe*
+
+  # Assembles the updater manifest from the signatures the three build jobs
+  # uploaded and attaches it to the draft. The app looks for an asset named
+  # exactly latest.json on each release.
+  publish-update-manifest:
+    runs-on: ubuntu-latest
+    needs: [build-release, build-release-linux, build-release-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and attach latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$GITHUB_REF_NAME" --pattern '*.sig' --dir sigs
+          scripts/build-update-manifest.sh "$GITHUB_REF_NAME" sigs > latest.json
+          cat latest.json
+          gh release upload "$GITHUB_REF_NAME" latest.json

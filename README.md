@@ -77,6 +77,20 @@ Provider API keys are stored in Windows Credential Manager — never written to 
 
 Two honest limitations: apps running as administrator (elevated) are off-limits to Kallilex, because Windows' User Interface Privilege Isolation (UIPI) blocks synthetic input and accessibility reads across integrity levels — capture reports no selection and Replace reports a clear failure rather than silently doing nothing; and apps that expose no accessible text (some Electron and custom-toolkit apps) fall back to the synthetic-copy capture path described below.
 
+## Updates
+
+Kallilex can update itself. It checks [GitHub Releases](../../releases) for a newer version and, when there is one, says so in the tray menu and in **Settings → Updates**. There you can also:
+
+- pick the **update channel** — **Stable** (release versions only) or **Preview** (release versions and pre-releases such as `0.6.0-beta.1`). Pre-release builds start on Preview, release builds on Stable;
+- choose how often Kallilex checks on its own — **Never**, **When Kallilex starts**, **Daily** (the default), or **Weekly**;
+- run **Check for Updates** by hand at any time.
+
+A check is a single request to `api.github.com` for the release list. It carries no account, device identifier, or usage data — it is the same request a browser makes when you open the releases page. With the frequency set to **Never**, Kallilex makes no network requests on its own at all.
+
+On macOS, Windows, and the Linux AppImage, **Download & install** replaces the running app in place and restarts it. Every download is verified against a signing key built into the app before it is installed; a download that does not match is discarded. The `.deb` and `.rpm` packages are not replaced in place: Kallilex shows the new version and opens the release page so you can install the package with your package manager as usual.
+
+Installs of **0.5.0 or older** predate the updater and must be updated by hand once, by downloading the new release as described above. From then on, updates arrive in the app.
+
 ## Capture
 
 Capture is automatic — there is no manual paste step. On macOS:
@@ -109,6 +123,7 @@ Once you're happy with the result:
 - **Local / LAN / Cloud badge.** Before any AI request, the popover classifies the active provider from its base URL and shows whether it's local, on your LAN, or a cloud endpoint — so you always know where your text is about to go.
 - **System-keychain-only API keys.** Provider API keys are stored in the macOS Keychain, on Linux the Secret Service (gnome-keyring / KWallet), or on Windows Credential Manager — never written to config files.
 - **No accounts, no telemetry, no analytics.** Kallilex has no cloud backend and does not phone home.
+- **Update checks are the only other network activity.** Besides the AI provider you configure, the only request Kallilex makes on its own is the update check against GitHub Releases described in [Updates](#updates) — no identifiers, and no request at all with the frequency set to **Never**.
 - **No logs of your text.** The app does not log the content you select or edit.
 - Text only leaves your machine when you explicitly invoke an AI action against a provider configured with a remote base URL.
 
@@ -187,7 +202,6 @@ CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck),
 
 - Developer-ID signing and notarization;
 - Homebrew cask;
-- auto-updater;
 - richer diff view and one-click suggestion acceptance;
 - user-defined rewrite presets;
 - per-app presets;

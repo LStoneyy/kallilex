@@ -17,6 +17,14 @@ the sections in order; do not publish a release until every gate passes.
       the matrix below confirmed, no Windows capability is promised beyond
       what the matrix confirmed, and none names an install channel that does
       not exist yet.
+- [ ] Update path verified: the previous published release on the same
+      channel updates in place to this build via Settings → Updates on
+      macOS, Windows, and the AppImage; `.deb`/`.rpm` installs show the
+      new version with the release-page path and no install button; and
+      after the macOS update the Accessibility grant is still present and
+      no new Gatekeeper approval was needed. (The first release that carries
+      the updater cannot be updated *into*; for it, run this gate from it to
+      the following pre-release instead.)
 
 ## 2. macOS app matrix
 
@@ -193,25 +201,52 @@ Run this on a machine (or fresh user account) that has never run Kallilex:
        `src-tauri/Cargo.toml` — keep all three in sync, and let
        `src-tauri/Cargo.lock` follow (a `cargo check` refreshes it).
 2. [ ] Commit the version bump.
-3. [ ] Tag the commit `vX.Y.Z`.
+3. [ ] Tag the commit `vX.Y.Z`. A pre-release carries a semver suffix
+       (`v0.6.0-beta.1`); the workflow flags it *Pre-release* on GitHub
+       automatically, the app's Stable channel ignores it, and the website
+       keeps pointing at the newest non-pre-release. The workflow refuses to
+       build when the tag does not match the version in the three files.
 4. [ ] Push the tag.
-5. [ ] Wait for the `Release` GitHub Actions workflow to build the universal
-       app and attach the zip to a draft release.
-6. [ ] Confirm the draft release carries the Linux artifacts from the second
-       job as well — `.deb`, `.rpm`, and `.AppImage` plus one `.sha256` file
-       each — alongside the macOS zip, and that every filename carries the
-       tag being cut.
-7. [ ] Confirm the draft release also carries the Windows artifact from the
-       third job — `Kallilex-vX.Y.Z-windows-x86_64-setup.exe` plus its
-       `.sha256` file — with the same tag in the filename.
-8. [ ] Run the gates in sections 1–5 above against the built release.
-9. [ ] Publish the draft release.
+5. [ ] Wait for the `Release` GitHub Actions workflow: three build jobs
+       (macOS, Linux, Windows) and a fourth, `publish-update-manifest`,
+       which assembles `latest.json` from the uploaded signatures.
+6. [ ] Confirm the draft release carries the macOS artifacts — the zip,
+       `Kallilex-vX.Y.Z-macos-universal.app.tar.gz`, and its `.sig`.
+7. [ ] Confirm the draft release carries the Linux artifacts — `.deb`,
+       `.rpm`, and `.AppImage` plus one `.sha256` file each, and
+       `Kallilex-vX.Y.Z-linux-x86_64.AppImage.sig` (deb/rpm `.sig` files
+       may be present too) — and that every filename carries the tag being
+       cut.
+8. [ ] Confirm the draft release carries the Windows artifacts —
+       `Kallilex-vX.Y.Z-windows-x86_64-setup.exe` plus its `.sha256` and
+       `.sig` files — with the same tag in the filename.
+9. [ ] Confirm `latest.json` is attached and lists exactly four platforms:
+       `darwin-aarch64`, `darwin-x86_64`, `linux-x86_64`, `windows-x86_64`,
+       each with a `url` under `releases/download/vX.Y.Z/` and a
+       `signature`. One `.sig` per installable artifact must exist; a
+       platform missing from the manifest would show as "available, not
+       installable" to those users for as long as the release is current.
+10. [ ] Run the gates in sections 1–5 above against the built release. A
+        draft is invisible to the app — only publishing makes the update
+        reachable — so the update-path gate in section 1 is run against the
+        published release of the previous version, not against this draft.
+11. [ ] Publish the draft release. Afterwards, `curl -sI` on each `url` in
+        `latest.json` answers with a redirect to GitHub's download storage,
+        and a check from the previous version offers this one.
+
+Unpublishing or deleting a published release removes it from every future
+check immediately: the app compares versions on each check and remembers no
+offers, so a bad build costs at most one check for whoever ran one during
+the window, and nothing else.
 
 ## 7. Privacy check
 
 - [ ] Confirm no telemetry/analytics code or dependency has been added.
 - [ ] Confirm any logs the app produces (if present) contain no selection
       content or other user text.
+- [ ] Confirm the update check still sends nothing but the release-list
+      request to `api.github.com` (no identifiers, no settings), and that
+      with the frequency set to *Never* the app makes no request on its own.
 
 ## 8. macOS release signing
 
@@ -252,3 +287,42 @@ repo. Note: rotation changes the signing identity, so every user's
 Accessibility grant is invalidated once — users must
 `tccutil reset Accessibility com.webcommits.kallilex` and re-grant (the README
 documents this).
+
+## 9. Update signing key
+
+In-app updates are verified with a minisign key pair created with
+`pnpm tauri signer generate`. The app installs a download only when its
+signature matches the public key compiled into the app; anything else is
+discarded before it is installed.
+
+How it is wired up:
+
+- The **public key** lives in the repo in `src-tauri/tauri.conf.json` under
+  `plugins.updater.pubkey`.
+- The **private key** and its **password** live in the GitHub Actions
+  secrets `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The originals are kept locally in
+  `~/.kallilex-signing/` on the release manager's machine, next to the
+  Apple certificate. Neither is ever committed or printed in a workflow log.
+- The release workflow passes both secrets as environment variables to the
+  three `tauri build` steps only, together with the overlay
+  `src-tauri/tauri.release.conf.json`, which turns on updater artifacts.
+  `tauri build` then writes one `.sig` next to each installable artifact,
+  the build jobs upload them, and the `publish-update-manifest` job
+  assembles `latest.json` from them.
+- The overlay is not part of `tauri.conf.json` on purpose: with updater
+  artifacts enabled, `tauri build` fails when the private key is absent.
+  Plain `pnpm tauri build` (CI and local development) stays unsigned and
+  needs no key.
+
+Testing the signing setup without cutting a release: run the `Release`
+workflow manually (`workflow_dispatch`); it builds all three platforms with
+signing enabled and uploads the bundles, including the `.sig` files, as
+workflow artifacts instead of creating a release.
+
+Rotating the key is **not** a normal operation. The public key is baked into
+every installed app, so a new key pair means every existing install rejects
+every future update and must be reinstalled by hand once. Rotate only if
+the private key is lost or compromised — losing it has the same effect,
+because no further release can be signed for the existing installs — and
+announce the rotation in the README and the release notes when you do.
