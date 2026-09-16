@@ -14,6 +14,7 @@ use crate::core::providers::{
 use crate::core::secrets::{KeyringSecretStore, SecretStore};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
 use crate::core::spellcheck::SpellcheckResult;
+use crate::core::updates::runtime::{self as update_runtime, UpdateStatus};
 use crate::core::ONBOARDING_WINDOW_LABEL;
 use crate::platform::{self, PlatformInfo};
 use crate::{ActionInFlight, CaptureState, PopoverDrag, ReplaceInFlight};
@@ -82,6 +83,14 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, Stri
 
     if saved.input_synthesis_enabled != previous.input_synthesis_enabled {
         platform::set_input_synthesis_enabled(saved.input_synthesis_enabled);
+    }
+
+    // A previously found update may no longer apply to the newly chosen
+    // channel (or may need re-resolving as notify-only/installable
+    // differently) — see `update_runtime::reset_for_channel_change`'s doc
+    // comment.
+    if saved.update_channel != previous.update_channel {
+        update_runtime::reset_for_channel_change(&app, saved.update_channel);
     }
 
     if let Some(new_shortcut) = new_shortcut {
@@ -493,4 +502,36 @@ pub fn reset_popover_position(app: AppHandle) -> Result<Settings, String> {
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 
     Ok(saved)
+}
+
+/// Read-only update status for the Settings window's Updates tab. Also
+/// backfills `lastCheckAt` from the persisted update-check state store the
+/// first time it's asked — see `update_runtime::get_status`'s doc comment.
+#[tauri::command]
+pub fn get_update_status(app: AppHandle) -> Result<UpdateStatus, String> {
+    Ok(update_runtime::get_status(&app))
+}
+
+/// Runs the shared two-stage update check (see
+/// `update_runtime::run_check`'s doc comment) and returns the resulting
+/// status. A no-op that returns the current status if a check is already
+/// in flight — this is also the scheduler's code path.
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> Result<UpdateStatus, String> {
+    Ok(update_runtime::run_check(&app).await)
+}
+
+/// Downloads, verifies and installs the update found by the most recent
+/// successful `check_for_updates`, then restarts Kallilex. Errors if no
+/// verified update is currently pending.
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    update_runtime::install(&app).await
+}
+
+/// Opens the currently available release's GitHub Releases page in the
+/// user's browser. Errors if nothing is currently available.
+#[tauri::command]
+pub fn open_update_release_page(app: AppHandle) -> Result<(), String> {
+    update_runtime::open_release_page(&app)
 }

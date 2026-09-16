@@ -38,6 +38,56 @@ export interface Settings {
 }
 
 /**
+ * Mirrors `UpdatePhase` in `src-tauri/src/core/updates/runtime.rs`.
+ */
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "upToDate"
+  | "available"
+  | "downloading"
+  | "error";
+
+/**
+ * Mirrors `DownloadProgress` in `src-tauri/src/core/updates/runtime.rs`.
+ */
+export interface DownloadProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+/**
+ * Mirrors `AvailableUpdate` in `src-tauri/src/core/updates/runtime.rs`.
+ * `installable` is `false` for a notify-only release (e.g. a `.deb`/`.rpm`
+ * install, or a debug build): the UI should offer the release page instead
+ * of a "Download & install" button.
+ */
+export interface AvailableUpdate {
+  version: string;
+  tag: string;
+  releaseUrl: string;
+  notes: string | null;
+  publishedAt: string | null;
+  installable: boolean;
+}
+
+/**
+ * Mirrors `UpdateStatus` in `src-tauri/src/core/updates/runtime.rs`: the
+ * Settings window's live view of Kallilex's update state, returned by
+ * `getUpdateStatus`/`checkForUpdates` and pushed on every change via the
+ * `update:status` event.
+ */
+export interface UpdateStatus {
+  currentVersion: string;
+  channel: "stable" | "preview";
+  lastCheckAt: number | null;
+  phase: UpdatePhase;
+  available: AvailableUpdate | null;
+  progress: DownloadProgress | null;
+  error: string | null;
+}
+
+/**
  * Mirrors `SourceApp` in `src-tauri/src/core/capture/mod.rs`: the
  * application a selection was captured from.
  */

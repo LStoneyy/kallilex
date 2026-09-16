@@ -2,19 +2,13 @@
 //! into "the one release this build should offer, if any" — channel
 //! selection, semver comparison against the running build, and the
 //! due-for-a-scheduled-check rule. No network call happens outside
-//! [`fetch_releases`], and nothing in this module calls that function
-//! itself: the scheduler that decides *when* to check, the command that
-//! exposes this to the frontend, and the plugin that downloads and installs
-//! a resolved release are later specs (17+). See [`state`] for the
-//! machine-local "when did we last check" bookkeeping that lives alongside
-//! this module but outside [`crate::core::settings::Settings`].
-//!
-//! Nothing outside this module calls into it yet — the scheduler, command,
-//! and plugin that will are spec-17 through spec-19 — so `cargo build`'s
-//! non-test target has no call site for any of this public API. Remove the
-//! blanket `allow` below once that wiring lands.
-#![allow(dead_code)]
+//! [`fetch_releases`]. See [`state`] for the machine-local "when did we
+//! last check" bookkeeping that lives alongside this module but outside
+//! [`crate::core::settings::Settings`], and [`runtime`] for the managed
+//! runtime state, commands, and scheduler that call into this module (the
+//! plugin that downloads and installs a resolved release is spec-19).
 
+pub mod runtime;
 pub mod state;
 
 use std::time::Duration;

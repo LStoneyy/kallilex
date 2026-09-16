@@ -18,10 +18,12 @@ use crate::core::capture::CaptureResult;
 use crate::core::clipboard::BackupLifecycle;
 use crate::core::onboarding::{evaluate_onboarding, OnboardingDisposition};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
+use crate::core::updates::runtime::UpdateRuntime;
 use crate::core::{ONBOARDING_WINDOW_LABEL, POPOVER_WINDOW_LABEL, SETTINGS_WINDOW_LABEL};
 
 const OPEN_MENU_ID: &str = "open";
 const SETTINGS_MENU_ID: &str = "settings";
+const UPDATES_MENU_ID: &str = "check_for_updates";
 const QUIT_MENU_ID: &str = "quit";
 
 /// Holds the most recent capture result: stored by the global-shortcut
@@ -568,6 +570,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -611,6 +615,10 @@ pub fn run() {
             commands::set_input_synthesis,
             commands::begin_popover_drag,
             commands::reset_popover_position,
+            commands::get_update_status,
+            commands::check_for_updates,
+            commands::install_update,
+            commands::open_update_release_page,
         ])
         // Registered on the builder, not inside `.setup()`: the windows
         // declared in `tauri.conf.json` are created while `Builder::build`
@@ -630,6 +638,7 @@ pub fn run() {
         .manage(ActionInFlight::new())
         .manage(platform::PortalShortcutTrigger::default())
         .manage(PopoverDrag::default())
+        .manage(UpdateRuntime::new(env!("CARGO_PKG_VERSION").to_string()))
         .setup(|app| {
             // Menu-bar-only app: no Dock icon, no app switcher entry.
             platform::setup(app);
@@ -694,6 +703,15 @@ pub fn run() {
                 .transpose()?;
             let settings_item =
                 MenuItem::with_id(app, SETTINGS_MENU_ID, "Settings", true, None::<&str>)?;
+            let updates_item = MenuItem::with_id(
+                app,
+                UPDATES_MENU_ID,
+                "Check for Updates…",
+                true,
+                None::<&str>,
+            )?;
+            app.state::<UpdateRuntime>()
+                .set_tray_item(updates_item.clone());
             let about_metadata = AboutMetadataBuilder::new()
                 .name(Some("Kallilex"))
                 .version(Some(app.package_info().version.to_string()))
@@ -710,6 +728,7 @@ pub fn run() {
                 menu_items.push(open_item);
             }
             menu_items.push(&settings_item);
+            menu_items.push(&updates_item);
             menu_items.push(&about_item);
             menu_items.push(&separator);
             menu_items.push(&quit_item);
@@ -724,6 +743,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     OPEN_MENU_ID => open_popover_from_tray(app),
                     SETTINGS_MENU_ID => show_settings(app),
+                    UPDATES_MENU_ID => core::updates::runtime::handle_tray_click(app),
                     QUIT_MENU_ID => app.exit(0),
                     _ => {}
                 })
@@ -805,6 +825,13 @@ pub fn run() {
                     }
                 });
             }
+
+            // First app-lifetime background task: periodically checks for
+            // updates per the user's chosen frequency — see
+            // `core::updates::runtime::spawn_scheduler`'s doc comment for
+            // why a loop (rather than an on-demand watchdog thread like the
+            // ones above) is the right shape here.
+            core::updates::runtime::spawn_scheduler(app.handle().clone());
 
             Ok(())
         })

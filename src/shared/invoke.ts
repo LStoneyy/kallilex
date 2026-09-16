@@ -15,6 +15,7 @@ import type {
   RunActionOutcome,
   Settings,
   SpellcheckResult,
+  UpdateStatus,
 } from "./types";
 
 /**
@@ -185,4 +186,39 @@ export async function beginPopoverDrag(): Promise<void> {
  */
 export async function resetPopoverPosition(): Promise<Settings> {
   return invoke<Settings>("reset_popover_position");
+}
+
+/**
+ * Read-only update status for the Settings window's Updates tab; also
+ * backfills `lastCheckAt` from the persisted update-check state on the
+ * first call. See `commands::get_update_status` in the Rust source.
+ */
+export async function getUpdateStatus(): Promise<UpdateStatus> {
+  return invoke<UpdateStatus>("get_update_status");
+}
+
+/**
+ * Runs the shared two-stage update check and returns the resulting status
+ * — a no-op that returns the current status if a check is already in
+ * flight. See `commands::check_for_updates` in the Rust source.
+ */
+export async function checkForUpdates(): Promise<UpdateStatus> {
+  return invoke<UpdateStatus>("check_for_updates");
+}
+
+/**
+ * Downloads, verifies and installs the update found by the most recent
+ * successful `checkForUpdates`, then restarts Kallilex. Rejects if no
+ * verified update is currently pending.
+ */
+export async function installUpdate(): Promise<void> {
+  return invoke<void>("install_update");
+}
+
+/**
+ * Opens the currently available release's GitHub Releases page in the
+ * user's browser. Rejects if nothing is currently available.
+ */
+export async function openUpdateReleasePage(): Promise<void> {
+  return invoke<void>("open_update_release_page");
 }

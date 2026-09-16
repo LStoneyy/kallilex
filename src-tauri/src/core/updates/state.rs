@@ -5,10 +5,9 @@
 //! out of `Settings` keeps the Settings window's fetch-then-spread saves
 //! and its round-trip tests untouched by something that changes daily.
 //!
-//! Nothing constructs [`TauriUpdateStateStore`] yet — that's spec-17's
-//! scheduler wiring — so `cargo build`'s non-test target has no call site
-//! for it. Remove the blanket `allow` below once that wiring lands.
-#![allow(dead_code)]
+//! [`TauriUpdateStateStore`] is constructed by [`crate::core::updates::runtime`]
+//! — the scheduler and the update commands' shared `run_check` — to read
+//! and write the timestamp this module defines.
 
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;

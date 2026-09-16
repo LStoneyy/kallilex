@@ -24,6 +24,10 @@ const {
   listPrompts,
   savePrompt,
   deletePrompt,
+  getUpdateStatus,
+  checkForUpdates,
+  installUpdate,
+  openUpdateReleasePage,
 } = vi.hoisted(() => ({
   accessibilityStatus: vi.fn(),
   openAccessibilitySettings: vi.fn(),
@@ -44,6 +48,10 @@ const {
   listPrompts: vi.fn(),
   savePrompt: vi.fn(),
   deletePrompt: vi.fn(),
+  getUpdateStatus: vi.fn(),
+  checkForUpdates: vi.fn(),
+  installUpdate: vi.fn(),
+  openUpdateReleasePage: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -66,6 +74,10 @@ vi.mock("../shared/invoke", () => ({
   listPrompts,
   savePrompt,
   deletePrompt,
+  getUpdateStatus,
+  checkForUpdates,
+  installUpdate,
+  openUpdateReleasePage,
 }));
 
 function defaultPrompts(): CustomPrompt[] {
