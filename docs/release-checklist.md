@@ -304,6 +304,11 @@ How it is wired up:
   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The originals are kept locally in
   `~/.kallilex-signing/` on the release manager's machine, next to the
   Apple certificate. Neither is ever committed or printed in a workflow log.
+  Set the key secret straight from the file
+  (`gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.kallilex-signing/updater.key`)
+  rather than by copying terminal output: zsh appends a `%` to output that
+  ends without a newline, and the build then fails with "failed to decode
+  base64 secret key" after signing the app.
 - The release workflow passes both secrets as environment variables to the
   three `tauri build` steps only, together with the overlay
   `src-tauri/tauri.release.conf.json`, which turns on updater artifacts.
