@@ -105,6 +105,8 @@ function defaultSettings(): Settings {
     onboardingCompleted: false,
     popoverPosition: null,
     prompts: defaultPrompts(),
+    updateChannel: "stable",
+    updateCheckFrequency: "daily",
   };
 }
 

@@ -12,11 +12,13 @@ mod tauri_store;
 #[cfg(test)]
 pub use in_memory::InMemorySettingsStore;
 pub use tauri_store::TauriStoreSettings;
+pub(crate) use tauri_store::STORE_FILE;
 
 use serde::{Deserialize, Serialize};
 
 use crate::core::prompts::CustomPrompt;
 use crate::core::providers::ProviderProfile;
+use crate::core::updates::{UpdateChannel, UpdateCheckFrequency};
 
 /// The platform's default global shortcut: ⌥⌘K on macOS, Ctrl+Alt+K
 /// elsewhere.
@@ -141,6 +143,34 @@ pub struct Settings {
     /// seeded default, not an explicitly empty one.
     #[serde(default = "crate::core::prompts::default_prompts")]
     pub prompts: Vec<CustomPrompt>,
+    /// Which GitHub release channel to check for updates against — see
+    /// `core::updates` for the resolution logic. Defaults via
+    /// [`crate::core::updates::default_update_channel`] rather than a bare
+    /// `#[serde(default)]` (which would silently resolve to `Stable` for
+    /// every existing install, including preview testers) because the
+    /// correct default is build-dependent, not fixed: a build whose own
+    /// version carries a semver pre-release suffix (`0.6.0-beta.1`)
+    /// defaults to `Preview` so a tester who installed one keeps following
+    /// pre-releases with no setup, while a build without one defaults to
+    /// `Stable` so a pre-release never lands on a regular install by
+    /// surprise. Settings persisted before this field existed have no
+    /// opinion on it, and "no opinion" must read as "keep following
+    /// whatever channel this build's own version implies" — see
+    /// [`crate::core::updates::channel_for_build_version`]. A persisted
+    /// choice always wins once one exists; this default only fires while
+    /// none does.
+    #[serde(default = "crate::core::updates::default_update_channel")]
+    pub update_channel: UpdateChannel,
+    /// How often Kallilex looks for updates: never, at launch, daily or
+    /// weekly — see `core::updates::is_check_due`. Plain `#[serde(default)]`
+    /// is correct here, unlike [`Settings::update_channel`] above:
+    /// [`UpdateCheckFrequency`]'s `Default` impl is `Daily`, and there is no
+    /// build-dependent signal for *how often* to check the way there is for
+    /// *which channel* — every install, new or upgraded from settings
+    /// persisted before this field existed, gets the same sensible default
+    /// until it says otherwise.
+    #[serde(default)]
+    pub update_check_frequency: UpdateCheckFrequency,
 }
 
 /// See [`Settings::input_synthesis_enabled`]'s doc comment for why this is a
@@ -164,6 +194,8 @@ impl Default for Settings {
             onboarding_completed: false,
             popover_position: None,
             prompts: crate::core::prompts::default_prompts(),
+            update_channel: crate::core::updates::default_update_channel(),
+            update_check_frequency: UpdateCheckFrequency::default(),
         }
     }
 }
@@ -241,6 +273,8 @@ mod tests {
                 label: "Translate".to_string(),
                 instruction: "Translate to French".to_string(),
             }],
+            update_channel: crate::core::updates::UpdateChannel::Preview,
+            update_check_frequency: crate::core::updates::UpdateCheckFrequency::Weekly,
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -347,6 +381,26 @@ mod tests {
         };
         set_settings(&store, with_prompts.clone()).unwrap();
         assert_eq!(get_settings(&store).unwrap().prompts, with_prompts.prompts);
+
+        let with_update_channel = Settings {
+            update_channel: crate::core::updates::UpdateChannel::Preview,
+            ..with_prompts.clone()
+        };
+        set_settings(&store, with_update_channel.clone()).unwrap();
+        assert_eq!(
+            get_settings(&store).unwrap().update_channel,
+            crate::core::updates::UpdateChannel::Preview
+        );
+
+        let with_update_check_frequency = Settings {
+            update_check_frequency: crate::core::updates::UpdateCheckFrequency::Weekly,
+            ..with_update_channel.clone()
+        };
+        set_settings(&store, with_update_check_frequency.clone()).unwrap();
+        assert_eq!(
+            get_settings(&store).unwrap().update_check_frequency,
+            crate::core::updates::UpdateCheckFrequency::Weekly
+        );
     }
 
     #[test]
@@ -453,6 +507,41 @@ mod tests {
             assert_eq!(actual.id, expected.id);
             assert_eq!(actual.label, expected.label);
         }
+    }
+
+    #[test]
+    fn pre_spec_16_persisted_json_without_update_fields_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null,
+            "inputSynthesisEnabled": true,
+            "autoCopyResult": false,
+            "onboardingCompleted": false,
+            "popoverPosition": null,
+            "prompts": []
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        // A missing `updateCheckFrequency` has no build-dependent signal to
+        // read, so it falls back to the fixed `Daily` default. A missing
+        // `updateChannel` is different: it must resolve to *this build's*
+        // channel default, not a fixed value — see `Settings::update_channel`'s
+        // doc comment — so an existing preview install upgrading across this
+        // field's introduction keeps following pre-releases.
+        assert_eq!(
+            settings.update_check_frequency,
+            crate::core::updates::UpdateCheckFrequency::Daily
+        );
+        assert_eq!(
+            settings.update_channel,
+            crate::core::updates::default_update_channel()
+        );
     }
 
     #[test]

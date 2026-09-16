@@ -28,6 +28,13 @@ export interface Settings {
    * this field existed — see `Settings::prompts`'s doc comment in the Rust
    * source. */
   prompts: CustomPrompt[];
+  /** Which GitHub release channel to check for updates against. Defaults
+   * to `"preview"` for a build whose own version carries a semver
+   * pre-release suffix, `"stable"` otherwise — see `Settings::update_channel`'s
+   * doc comment in the Rust source. */
+  updateChannel: "stable" | "preview";
+  /** How often Kallilex looks for updates. */
+  updateCheckFrequency: "never" | "onLaunch" | "daily" | "weekly";
 }
 
 /**

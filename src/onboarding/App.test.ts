@@ -61,6 +61,8 @@ function defaultSettings(): Settings {
     onboardingCompleted: false,
     popoverPosition: null,
     prompts: [],
+    updateChannel: "stable",
+    updateCheckFrequency: "daily",
   };
 }
 

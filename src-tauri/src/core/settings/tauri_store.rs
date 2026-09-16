@@ -3,7 +3,11 @@ use tauri_plugin_store::StoreExt;
 
 use super::{Settings, SettingsError, SettingsStore};
 
-const STORE_FILE: &str = "settings.json";
+/// Name of the `tauri-plugin-store` file settings (and, per
+/// [`crate::core::updates::state::TauriUpdateStateStore`], update-check
+/// state) are persisted to. `pub(crate)` so the update-state store can
+/// reuse it rather than opening a second store file.
+pub(crate) const STORE_FILE: &str = "settings.json";
 const SETTINGS_KEY: &str = "settings";
 
 /// [`SettingsStore`] implementation backed by `tauri-plugin-store`,

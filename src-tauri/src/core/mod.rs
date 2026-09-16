@@ -10,6 +10,7 @@ pub mod replace;
 pub mod secrets;
 pub mod settings;
 pub mod spellcheck;
+pub mod updates;
 
 /// Label of the popover window, shared between the tray/window wiring in
 /// `lib.rs` and the Tauri commands in `commands.rs`.

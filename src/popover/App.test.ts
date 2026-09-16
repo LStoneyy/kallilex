@@ -123,6 +123,8 @@ function defaultSettings(): Settings {
     onboardingCompleted: false,
     popoverPosition: null,
     prompts: seededPrompts(),
+    updateChannel: "stable",
+    updateCheckFrequency: "daily",
   };
 }
 
