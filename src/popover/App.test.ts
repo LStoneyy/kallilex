@@ -1897,4 +1897,382 @@ describe("popover App", () => {
     expect(beginPopoverDrag).not.toHaveBeenCalled();
     expect(startDragging).not.toHaveBeenCalled();
   });
+
+  // Keyboard shortcuts.
+
+  function pressDown(init: KeyboardEventInit) {
+    return fireEvent.keyDown(window, init);
+  }
+
+  async function renderWithCapture(capture: CaptureResult) {
+    captureSelection.mockResolvedValue(capture);
+    render(App);
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue(capture.text);
+    });
+    await waitFor(() => {
+      expect(getPlatformInfo).toHaveBeenCalled();
+    });
+  }
+
+  function configuredContext(): ActionContext {
+    return { configured: true, profileName: "Llama", privacy: "local" };
+  }
+
+  it("pressing a prompt's shortcut runs it with the matching instruction", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    runAction.mockResolvedValue({ status: "ok", text: "rewritten" });
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "2", metaKey: true });
+
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("some captured text", {
+        kind: "prompt",
+        instruction: seededPrompts()[1]!.instruction,
+      });
+    });
+  });
+
+  it("⌘↩ replaces, ⌘⇧C copies, and ⌘L opens the custom row and focuses it", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    await renderWithCapture({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    pressDown({ key: "Enter", metaKey: true });
+    await waitFor(() => {
+      expect(replaceBack).toHaveBeenCalledWith("some captured text");
+    });
+
+    pressDown({ key: "c", metaKey: true, shiftKey: true });
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalledWith("some captured text");
+    });
+
+    pressDown({ key: "l", metaKey: true });
+    const customInput = await screen.findByPlaceholderText("Describe what to do…");
+    await waitFor(() => {
+      expect(customInput).toHaveFocus();
+    });
+  });
+
+  it("⌘, opens Settings", async () => {
+    await renderWithCapture(emptyResult());
+
+    pressDown({ key: ",", metaKey: true });
+
+    await waitFor(() => {
+      expect(openSettings).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("the Check spelling shortcut runs it when bound, and does nothing when unbound (the default)", async () => {
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+    spellcheck.mockClear();
+
+    // Unbound by default — the chord must not trigger anything.
+    pressDown({ key: "s", metaKey: true });
+    expect(spellcheck).not.toHaveBeenCalled();
+  });
+
+  it("binding Check spelling makes its shortcut run it", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverShortcuts: { ...defaultSettings().popoverShortcuts, checkSpelling: "Mod+Shift+S" },
+    });
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+    spellcheck.mockClear();
+
+    pressDown({ key: "s", metaKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(spellcheck).toHaveBeenCalledWith("some captured text");
+    });
+  });
+
+  it("a user-changed binding replaces the default", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverShortcuts: { ...defaultSettings().popoverShortcuts, copy: "Mod+K" },
+    });
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    // The old default no longer does anything...
+    pressDown({ key: "c", metaKey: true, shiftKey: true });
+    expect(copyResult).not.toHaveBeenCalled();
+
+    // ...and the new binding does.
+    pressDown({ key: "k", metaKey: true });
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalledWith("some captured text");
+    });
+  });
+
+  it("a prompt shortcut does nothing (and flashes key-denied) when there's no text to act on", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    await renderWithCapture(emptyResult());
+
+    pressDown({ key: "1", metaKey: true });
+
+    expect(runAction).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Rewrite" })).toHaveClass("key-denied");
+  });
+
+  it("a prompt shortcut does nothing while another action is already busy", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    let resolveRun: ((outcome: { status: "ok"; text: string }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "1", metaKey: true });
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledTimes(1);
+    });
+
+    pressDown({ key: "2", metaKey: true });
+    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Shorten" })).toHaveClass("key-denied");
+
+    resolveRun?.({ status: "ok", text: "rewritten" });
+  });
+
+  it("the Replace shortcut does nothing (and flashes key-denied) without a remembered source app", async () => {
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "Enter", metaKey: true });
+
+    expect(replaceBack).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Replace" })).toHaveClass("key-denied");
+  });
+
+  it("a successful shortcut flashes key-pressed on its button", async () => {
+    await renderWithCapture({ text: "result text", reason: null, sourceApp: null });
+
+    pressDown({ key: "c", metaKey: true, shiftKey: true });
+
+    expect(screen.getByRole("button", { name: "Copy" })).toHaveClass("key-pressed");
+    await waitFor(() => {
+      expect(copyResult).toHaveBeenCalled();
+    });
+  });
+
+  it("⌘↩ in the custom field replaces instead of running the custom prompt, and a bare ↩ still runs it", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    runAction.mockResolvedValue({ status: "ok", text: "translated" });
+    await renderWithCapture({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: "com.example.app", pid: 123, name: "Example" },
+    });
+
+    const customButton = screen.getByRole("button", { name: "Custom" });
+    await fireEvent.click(customButton);
+    const customInput = screen.getByPlaceholderText("Describe what to do…");
+    await fireEvent.input(customInput, { target: { value: "Translate to French" } });
+
+    await fireEvent.keyDown(customInput, { key: "Enter", metaKey: true });
+    await waitFor(() => {
+      expect(replaceBack).toHaveBeenCalledWith("some captured text");
+    });
+    expect(runAction).not.toHaveBeenCalled();
+
+    await fireEvent.keyDown(customInput, { key: "Enter" });
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("some captured text", {
+        kind: "custom",
+        instruction: "Translate to French",
+      });
+    });
+  });
+
+  it("an AltGraph-reported combination never triggers a shortcut", async () => {
+    getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
+    getActionContext.mockResolvedValue(configuredContext());
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "@", code: "KeyQ", ctrlKey: true, altKey: true, modifierAltGraph: true });
+
+    expect(runAction).not.toHaveBeenCalled();
+    expect(copyResult).not.toHaveBeenCalled();
+    expect(replaceBack).not.toHaveBeenCalled();
+  });
+
+  it("a repeated keydown never triggers a shortcut", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "1", metaKey: true, repeat: true });
+
+    expect(runAction).not.toHaveBeenCalled();
+  });
+
+  it("works with Ctrl instead of ⌘ on Windows", async () => {
+    getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
+    getActionContext.mockResolvedValue(configuredContext());
+    runAction.mockResolvedValue({ status: "ok", text: "rewritten" });
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "1", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(runAction).toHaveBeenCalledWith("some captured text", {
+        kind: "prompt",
+        instruction: seededPrompts()[0]!.instruction,
+      });
+    });
+  });
+
+  it("focuses the textarea with the caret at the end after a fresh capture", async () => {
+    await renderWithCapture({ text: "hello world", reason: null, sourceApp: null });
+
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(textarea).toHaveFocus();
+    expect(textarea.selectionStart).toBe("hello world".length);
+    expect(textarea.selectionEnd).toBe("hello world".length);
+  });
+
+  it("re-focuses the textarea with the caret at the end once an AI action settles", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    let resolveRun: ((outcome: { status: "ok"; text: string }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    await waitFor(() => {
+      expect(textarea).toBeDisabled();
+    });
+
+    resolveRun?.({ status: "ok", text: "rewritten text" });
+
+    await waitFor(() => {
+      expect(textarea).toHaveFocus();
+    });
+    expect(textarea.selectionStart).toBe("rewritten text".length);
+  });
+
+  it("shows shortcut badges after holding Mod for 400ms, hides them on keyup, and never shows one for an unbound button", async () => {
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(window, { key: "Meta", metaKey: true });
+      await vi.advanceTimersByTimeAsync(399);
+      expect(document.querySelector(".shortcut-badge")).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(document.querySelectorAll(".shortcut-badge").length).toBeGreaterThan(0);
+      // Check spelling has no shortcut by default — no badge on its button.
+      const checkSpellingButton = screen.getByRole("button", { name: "Check spelling" });
+      expect(checkSpellingButton.querySelector(".shortcut-badge")).toBeNull();
+
+      await fireEvent.keyUp(window, { key: "Meta" });
+      expect(document.querySelector(".shortcut-badge")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hides shortcut badges on window blur", async () => {
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(window, { key: "Meta", metaKey: true });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(document.querySelectorAll(".shortcut-badge").length).toBeGreaterThan(0);
+
+      await fireEvent.blur(window);
+      expect(document.querySelector(".shortcut-badge")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an invalid stored shortcut (a bare key with no Mod) is never matched, so it doesn't eat the character while typing", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverShortcuts: { ...defaultSettings().popoverShortcuts, customPrompt: "L" },
+    });
+    await renderWithCapture(emptyResult());
+
+    const textarea = screen.getByRole("textbox");
+    const event = new KeyboardEvent("keydown", { key: "l", bubbles: true, cancelable: true });
+    textarea.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.queryByPlaceholderText("Describe what to do…")).not.toBeInTheDocument();
+  });
+
+  it("a stored lowercase shortcut still matches once canonicalized", async () => {
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      popoverShortcuts: { ...defaultSettings().popoverShortcuts, customPrompt: "mod+l" },
+    });
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    pressDown({ key: "l", metaKey: true });
+
+    const customInput = await screen.findByPlaceholderText("Describe what to do…");
+    await waitFor(() => {
+      expect(customInput).toHaveFocus();
+    });
+  });
+
+  it("the Replace shortcut does nothing and flashes nothing when Replace is hidden", async () => {
+    getPlatformInfo.mockResolvedValue({ ...windowsPlatformInfo(), replaceBackAvailable: false });
+    await renderWithCapture({
+      text: "some captured text",
+      reason: null,
+      sourceApp: { bundleId: null, pid: 123, name: "Notepad" },
+    });
+    expect(screen.queryByRole("button", { name: "Replace" })).not.toBeInTheDocument();
+
+    pressDown({ key: "Enter", ctrlKey: true });
+
+    expect(replaceBack).not.toHaveBeenCalled();
+    expect(document.querySelector(".key-pressed")).not.toBeInTheDocument();
+    expect(document.querySelector(".key-denied")).not.toBeInTheDocument();
+  });
+
+  it("does not steal focus back from a control the user moved to while an AI action was running", async () => {
+    getActionContext.mockResolvedValue(configuredContext());
+    let resolveRun: ((outcome: { status: "ok"; text: string }) => void) | undefined;
+    runAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    await renderWithCapture({ text: "some captured text", reason: null, sourceApp: null });
+
+    const rewriteButton = screen.getByRole("button", { name: "Rewrite" });
+    await fireEvent.click(rewriteButton);
+
+    const pinButton = screen.getByRole("button", { name: "Pin popover" });
+    pinButton.focus();
+    expect(pinButton).toHaveFocus();
+
+    resolveRun?.({ status: "ok", text: "rewritten text" });
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toHaveValue("rewritten text");
+    });
+    expect(pinButton).toHaveFocus();
+  });
 });

@@ -18,6 +18,8 @@
     spellcheck as spellcheckInvoke,
   } from "../shared/invoke";
   import { loadPlatformInfo } from "../shared/platform";
+  import { canonicalizeChord, chordFromEvent, formatChordText, validateChord } from "../shared/shortcuts";
+  import Kbd from "../shared/Kbd.svelte";
   import type {
     Action,
     ActionContext,
@@ -25,6 +27,7 @@
     CustomPrompt,
     Misspelling,
     PlatformInfo,
+    PopoverShortcuts,
     SourceApp,
   } from "../shared/types";
 
@@ -69,6 +72,17 @@
   // the same way `pinned` is above — it can change while the user was away
   // in Settings' Prompts tab.
   let prompts = $state<CustomPrompt[]>([]);
+  // The popover's per-action keyboard shortcuts, refreshed alongside
+  // `prompts` above so the two keep building the same `keymap` together.
+  // Defaults to every slot unbound until the first `refreshContext()`
+  // resolves — matching `prompts`' own empty-until-loaded convention.
+  let popoverShortcuts = $state<PopoverShortcuts>({
+    replace: null,
+    copy: null,
+    customPrompt: null,
+    openSettings: null,
+    checkSpelling: null,
+  });
   // The user's opt-out from Wayland input synthesis. Defaults to `true` (permissive) so nothing flashes away before the
   // first `refreshContext()` resolves, matching `spellcheckEnabled`'s
   // convention above.
@@ -90,6 +104,15 @@
   // drives the top/bottom scroll-shadow pseudo-elements.
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
+  // Whether a button's shortcut badge should be showing — true while the
+  // `Mod` key has been held alone for ≥ 400ms, see `armHintTimer`/`hideHints`
+  // below.
+  let showHints = $state(false);
+  // Per-button key-press feedback, keyed by a stable id (`prompt:<id>`,
+  // `replace`, `copy`, `custom`, `spelling`) rather than a DOM query, since
+  // the button a shortcut targets may not even be mounted by anything else
+  // that could hold a reference to it directly. See `flash` below.
+  let flashState = $state<Record<string, "pressed" | "denied">>({});
 
   let unlisten: UnlistenFn | undefined;
   let unlistenFocus: UnlistenFn | undefined;
@@ -98,6 +121,12 @@
   let editorEl: HTMLDivElement | undefined;
   let textareaEl: HTMLTextAreaElement | undefined;
   let backdropEl: HTMLDivElement | undefined;
+  let customInputEl: HTMLInputElement | undefined = $state();
+
+  // Not `$state`: both only ever drive a `setTimeout`/`clearTimeout` pair,
+  // never render directly — same convention as `copiedTimeoutId` above.
+  let modHoldTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  const flashTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
 
   // Guards a spellcheck response that resolves after the text it was
   // computed for has been superseded (a fresh capture, a newer on-demand
@@ -213,6 +242,7 @@
     autoCopyResult = settings.autoCopyResult;
     pinned = settings.popoverPinned;
     prompts = settings.prompts;
+    popoverShortcuts = settings.popoverShortcuts;
     actionContext = context;
     if (context.configured) {
       showConfiguredHint = false;
@@ -276,6 +306,19 @@
     // extents, otherwise this would read the previous capture's layout.
     await tick();
     updateScrollShadows();
+    focusTextareaCaretEnd();
+  }
+
+  /** Focuses the capture textarea with the caret at the end of its current
+   * value — a no-op if it isn't mounted or already lost to something else by
+   * the time this runs. Called after a fresh capture, after an AI action
+   * settles, and on window focus gain when nothing else already has focus;
+   * see each call site for why. */
+  function focusTextareaCaretEnd() {
+    if (!textareaEl) return;
+    textareaEl.focus();
+    const end = textareaEl.value.length;
+    textareaEl.setSelectionRange(end, end);
   }
 
   onMount(() => {
@@ -307,6 +350,17 @@
         if (focused) {
           actionError = null;
           void refreshContext();
+          // Covers a reopen that doesn't go through `capture:done` (a tray
+          // click): if nothing else already claimed focus, put the caret
+          // back where a keyboard user expects it.
+          if (document.activeElement === document.body || document.activeElement === null) {
+            void tick().then(() => focusTextareaCaretEnd());
+          }
+        } else {
+          // Holding `Mod` and then switching away (Alt-Tab, another app's
+          // window) must not leave the hint badges showing over a popover
+          // the user isn't even looking at.
+          hideHints();
         }
       })
       .then((fn) => {
@@ -324,6 +378,12 @@
     unlistenFocus?.();
     if (copiedTimeoutId !== undefined) {
       clearTimeout(copiedTimeoutId);
+    }
+    if (modHoldTimeoutId !== undefined) {
+      clearTimeout(modHoldTimeoutId);
+    }
+    for (const id of Object.keys(flashTimeouts)) {
+      clearTimeout(flashTimeouts[id]);
     }
   });
 
@@ -429,6 +489,163 @@
   const canCopy = $derived(text.trim() !== "" && !busy);
   const canRunAction = $derived(text.trim() !== "" && !busy && actionContext !== null);
 
+  // `null` until `platformInfo` resolves — every shortcut-handling path
+  // below treats that the same as "no shortcuts yet" rather than guessing a
+  // platform, since guessing wrong would mean matching the wrong modifier
+  // key for `Mod`.
+  const os = $derived(platformInfo?.os ?? null);
+
+  type ShortcutAction =
+    | { kind: "prompt"; prompt: CustomPrompt }
+    | {
+        kind: "action";
+        action: "replace" | "copy" | "customPrompt" | "openSettings" | "checkSpelling";
+      };
+
+  /** Canonicalizes a stored shortcut and returns it only if it's actually
+   * valid, else `null` — settings on disk can hold a value this app would
+   * never write itself (a hand edit, or a chord left over from before it
+   * was reserved), and a bare-key chord like `"L"` would otherwise sit in
+   * the keymap eating that character every time the user types it. Validity
+   * doesn't depend on `os` (only the wording of the rejection reason
+   * does), so any platform works here. */
+  function validBoundChord(raw: string): string | null {
+    const canonical = canonicalizeChord(raw);
+    if (!canonical) return null;
+    return validateChord(canonical, "macos") === null ? canonical : null;
+  }
+
+  // Built straight from the stored chord strings — matching doesn't need
+  // `os` at all, only turning a live keystroke into one of these strings
+  // does (see `handleWindowKeydown`).
+  const keymap = $derived.by(() => {
+    const map = new Map<string, ShortcutAction>();
+    const actionShortcuts: Array<
+      [string | null, "replace" | "copy" | "customPrompt" | "openSettings" | "checkSpelling"]
+    > = [
+      [popoverShortcuts.replace, "replace"],
+      [popoverShortcuts.copy, "copy"],
+      [popoverShortcuts.customPrompt, "customPrompt"],
+      [popoverShortcuts.openSettings, "openSettings"],
+      [popoverShortcuts.checkSpelling, "checkSpelling"],
+    ];
+    for (const [chord, action] of actionShortcuts) {
+      if (!chord) continue;
+      const canonical = validBoundChord(chord);
+      if (canonical) map.set(canonical, { kind: "action", action });
+    }
+    for (const prompt of prompts) {
+      if (!prompt.shortcut) continue;
+      const canonical = validBoundChord(prompt.shortcut);
+      if (canonical) map.set(canonical, { kind: "prompt", prompt });
+    }
+    return map;
+  });
+
+  /** Flashes `.key-pressed` (~150ms) or `.key-denied` (~300ms) on whichever
+   * button `id` names, restarting the timer if it's already flashing — the
+   * visible response every shortcut press gives, whether or not it actually
+   * ran anything. */
+  function flash(id: string, kind: "pressed" | "denied") {
+    const existing = flashTimeouts[id];
+    if (existing !== undefined) clearTimeout(existing);
+    flashState = { ...flashState, [id]: kind };
+    flashTimeouts[id] = setTimeout(
+      () => {
+        delete flashTimeouts[id];
+        const { [id]: _removed, ...rest } = flashState;
+        flashState = rest;
+      },
+      kind === "pressed" ? 150 : 300,
+    );
+  }
+
+  /** Runs whatever `action` a matched chord points at, through the same
+   * guard its button already enforces via `disabled` — a keyboard-triggered
+   * call can never bypass it just because there's no click event involved.
+   * See each case for the guard it mirrors. */
+  function dispatchAction(action: ShortcutAction) {
+    if (action.kind === "prompt") {
+      const id = `prompt:${action.prompt.id}`;
+      if (!canRunAction) {
+        flash(id, "denied");
+        return;
+      }
+      flash(id, "pressed");
+      // `runAiAction` itself shows the "No AI provider" hint when nothing
+      // is configured — same as clicking the button would.
+      void runAiAction({ kind: "prompt", instruction: action.prompt.instruction });
+      return;
+    }
+
+    switch (action.action) {
+      case "replace":
+        // Replace being hidden (no platform support, or input synthesis
+        // switched off) means there's no button to flash and nothing to run.
+        if (!showReplace) return;
+        if (!canReplace) {
+          flash("replace", "denied");
+          return;
+        }
+        flash("replace", "pressed");
+        void handleReplaceClick();
+        return;
+      case "copy":
+        if (!canCopy) {
+          flash("copy", "denied");
+          return;
+        }
+        flash("copy", "pressed");
+        void handleCopyClick();
+        return;
+      case "customPrompt":
+        if (busy) {
+          flash("custom", "denied");
+          return;
+        }
+        flash("custom", "pressed");
+        void openCustomForShortcut();
+        return;
+      case "openSettings":
+        // No visible button for this one — just run it.
+        void handleOpenSettingsClick();
+        return;
+      case "checkSpelling":
+        flash("spelling", "pressed");
+        handleCheckSpellingClick();
+        return;
+    }
+  }
+
+  /** `title` text for a button with a configurable shortcut: the label
+   * alone when unbound or before `os` is known, `"Label (⌘1)"` once it is. */
+  function shortcutTitle(label: string, chord: string | null): string {
+    if (!chord || os === null) return label;
+    return `${label} (${formatChordText(chord, os)})`;
+  }
+
+  function modKeyName(currentOs: NonNullable<typeof os>): "Meta" | "Control" {
+    return currentOs === "macos" ? "Meta" : "Control";
+  }
+
+  /** Hides the shortcut-badge hints and cancels the hold timer that would
+   * have shown them — called on the mod key's own `keyup`, on any other
+   * `keydown`, and on window blur (see `handleWindowKeydown`, the
+   * `svelte:window` handler below, and `onFocusChanged` above). */
+  function hideHints() {
+    if (modHoldTimeoutId !== undefined) {
+      clearTimeout(modHoldTimeoutId);
+      modHoldTimeoutId = undefined;
+    }
+    showHints = false;
+  }
+
+  function handleWindowKeyup(event: KeyboardEvent) {
+    if (os !== null && event.key === modKeyName(os)) {
+      hideHints();
+    }
+  }
+
   type PrivacyBadge = { text: string; class: string };
 
   function privacyBadge(context: ActionContext | null): PrivacyBadge | null {
@@ -515,6 +732,20 @@
       if (generation === captureGeneration) {
         busy = false;
         aiRunning = false;
+        // The textarea was `disabled` for the duration of the request and
+        // dropped focus as a result — every outcome (ok, error, cancelled,
+        // not configured) hands it back so a keyboard user can keep editing
+        // or immediately press the Replace shortcut. But only if nothing
+        // else already has focus: if the user clicked another control (Pin,
+        // Check spelling, …) while the request was in flight, re-stealing
+        // focus from it would be surprising, so this only fires when focus
+        // is still sitting on `body`/nothing, or already on the textarea.
+        void tick().then(() => {
+          const active = document.activeElement;
+          if (active === document.body || active === null || active === textareaEl) {
+            focusTextareaCaretEnd();
+          }
+        });
       }
     }
   }
@@ -527,6 +758,14 @@
 
   function handleCustomKeydown(event: KeyboardEvent) {
     if (event.key !== "Enter") return;
+    // A bare Enter runs the custom prompt; Enter with any modifier (⌘↩ most
+    // importantly) is left alone so it falls through to the window-level
+    // handler below, where ⌘↩ means Replace — without this check, binding
+    // Replace to ⌘↩ would run the custom prompt and replace at the same
+    // time whenever the custom field has focus.
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) {
+      return;
+    }
     runCustomAction();
   }
 
@@ -622,36 +861,86 @@
     }
   }
 
-  function toggleCustom() {
+  async function toggleCustom() {
     customOpen = !customOpen;
     if (!customOpen) {
       customValue = "";
+      return;
     }
+    await tick();
+    customInputEl?.focus();
+  }
+
+  /** Opens the custom row for the `Mod+L`-style shortcut — unlike
+   * `toggleCustom`, it only ever opens it (a shortcut must never close a row
+   * the user is about to type into) and always (re)focuses the input,
+   * whether or not the row was already open. */
+  async function openCustomForShortcut() {
+    customOpen = true;
+    await tick();
+    customInputEl?.focus();
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
-    if (event.key !== "Escape") return;
-    if (aiRunning) {
-      // First Escape while an AI action is in flight cancels it instead of
-      // closing the popover; a second Escape then falls through to the
-      // normal behavior below.
-      void handleCancelClick();
+    if (event.key === "Escape") {
+      if (aiRunning) {
+        // First Escape while an AI action is in flight cancels it instead of
+        // closing the popover; a second Escape then falls through to the
+        // normal behavior below.
+        void handleCancelClick();
+        return;
+      }
+      if (popup) {
+        popup = null;
+        return;
+      }
+      if (customOpen) {
+        customOpen = false;
+        customValue = "";
+        return;
+      }
+      void hidePopover();
       return;
     }
-    if (popup) {
-      popup = null;
-      return;
+
+    if (os !== null && event.key === modKeyName(os)) {
+      // Only arm the hold timer on a fresh press — holding the key down
+      // generally doesn't repeat `keydown` for a lone modifier, but nothing
+      // here depends on that; a repeat simply finds the timer (or
+      // `showHints`) already set and does nothing further.
+      if (!event.repeat && modHoldTimeoutId === undefined && !showHints) {
+        modHoldTimeoutId = setTimeout(() => {
+          showHints = true;
+          modHoldTimeoutId = undefined;
+        }, 400);
+      }
+    } else {
+      // Any other key, pressed while `Mod` may still be held, means the
+      // user is mid-shortcut (or just typing) rather than pausing to look —
+      // hide the hints instead of leaving them up for the rest of the hold.
+      hideHints();
     }
-    if (customOpen) {
-      customOpen = false;
-      customValue = "";
-      return;
-    }
-    void hidePopover();
+
+    if (os === null) return;
+    const chord = chordFromEvent(event, os);
+    if (chord === null) return;
+    const action = keymap.get(chord);
+    if (!action) return;
+    // This runs regardless of which element currently has focus (the text
+    // field, the custom field, or a button) — `chordFromEvent` already
+    // ignores IME composition and AltGraph, so it never steals a character
+    // the user is actually typing.
+    event.preventDefault();
+    dispatchAction(action);
   }
 </script>
 
-<svelte:window onkeydown={handleWindowKeydown} onclick={handleWindowClick} />
+<svelte:window
+  onkeydown={handleWindowKeydown}
+  onkeyup={handleWindowKeyup}
+  onclick={handleWindowClick}
+  onblur={hideHints}
+/>
 
 <main class="popover">
   {#if reason === "permissionMissing"}
@@ -671,8 +960,20 @@
       <span class="char-count-placeholder"></span>
     {/if}
     <div class="toolbar-actions">
-      <button type="button" class="check-spelling" onclick={handleCheckSpellingClick}>
+      <button
+        type="button"
+        class="check-spelling"
+        class:key-pressed={flashState.spelling === "pressed"}
+        class:key-denied={flashState.spelling === "denied"}
+        title={shortcutTitle("Check spelling", popoverShortcuts.checkSpelling)}
+        onclick={handleCheckSpellingClick}
+      >
         Check spelling
+        {#if showHints && os !== null && popoverShortcuts.checkSpelling}
+          <span class="shortcut-badge" aria-hidden="true">
+            <Kbd chord={popoverShortcuts.checkSpelling} {os} />
+          </span>
+        {/if}
       </button>
       <button
         type="button"
@@ -743,21 +1044,36 @@
       <button
         type="button"
         class="action-button"
-        title={prompt.label}
+        class:key-pressed={flashState[`prompt:${prompt.id}`] === "pressed"}
+        class:key-denied={flashState[`prompt:${prompt.id}`] === "denied"}
+        title={shortcutTitle(prompt.label, prompt.shortcut)}
         disabled={!canRunAction}
         onclick={() => void runAiAction({ kind: "prompt", instruction: prompt.instruction })}
       >
         {prompt.label}
+        {#if showHints && os !== null && prompt.shortcut}
+          <span class="shortcut-badge" aria-hidden="true">
+            <Kbd chord={prompt.shortcut} {os} />
+          </span>
+        {/if}
       </button>
     {/each}
     <button
       type="button"
       class="action-button"
       class:active={customOpen}
+      class:key-pressed={flashState.custom === "pressed"}
+      class:key-denied={flashState.custom === "denied"}
+      title={shortcutTitle("Custom", popoverShortcuts.customPrompt)}
       disabled={busy}
-      onclick={toggleCustom}
+      onclick={() => void toggleCustom()}
     >
       Custom
+      {#if showHints && os !== null && popoverShortcuts.customPrompt}
+        <span class="shortcut-badge" aria-hidden="true">
+          <Kbd chord={popoverShortcuts.customPrompt} {os} />
+        </span>
+      {/if}
     </button>
   </div>
 
@@ -768,6 +1084,7 @@
         type="text"
         placeholder="Describe what to do…"
         bind:value={customValue}
+        bind:this={customInputEl}
         onkeydown={handleCustomKeydown}
         disabled={busy}
       />
@@ -809,19 +1126,35 @@
       <button
         type="button"
         class="result-button"
+        class:key-pressed={flashState.replace === "pressed"}
+        class:key-denied={flashState.replace === "denied"}
+        title={shortcutTitle("Replace", popoverShortcuts.replace)}
         disabled={!canReplace}
         onclick={() => void handleReplaceClick()}
       >
         Replace
+        {#if showHints && os !== null && popoverShortcuts.replace}
+          <span class="shortcut-badge" aria-hidden="true">
+            <Kbd chord={popoverShortcuts.replace} {os} />
+          </span>
+        {/if}
       </button>
     {/if}
     <button
       type="button"
       class="result-button"
+      class:key-pressed={flashState.copy === "pressed"}
+      class:key-denied={flashState.copy === "denied"}
+      title={shortcutTitle("Copy", popoverShortcuts.copy)}
       disabled={!canCopy}
       onclick={() => void handleCopyClick()}
     >
       {copied ? "Copied ✓" : "Copy"}
+      {#if showHints && os !== null && popoverShortcuts.copy}
+        <span class="shortcut-badge" aria-hidden="true">
+          <Kbd chord={popoverShortcuts.copy} {os} />
+        </span>
+      {/if}
     </button>
     {#if actionError}
       <span class="action-error">{actionError}</span>
@@ -936,6 +1269,7 @@
   }
 
   .check-spelling {
+    position: relative;
     border: none;
     background: transparent;
     color: var(--color-ash);
@@ -1119,6 +1453,7 @@
   }
 
   .action-button {
+    position: relative;
     flex: 1 1 auto;
     min-width: 84px;
     white-space: nowrap;
@@ -1255,6 +1590,7 @@
   }
 
   .result-button {
+    position: relative;
     border: 1px solid color-mix(in srgb, var(--color-verdigris) 55%, transparent);
     background-color: color-mix(in srgb, var(--color-verdigris) 16%, transparent);
     color: var(--color-marble);
@@ -1320,6 +1656,59 @@
 
   .privacy-badge.unknown {
     color: var(--color-ash);
+  }
+
+  /* The hold-⌘-to-see-shortcuts hint: absolutely positioned inside its
+     button's own top-right corner (the button is `position: relative`), so
+     it never affects layout — important since `.action-row` scrolls and
+     must not clip it — and never intercepts the click/keydown the button
+     itself handles. */
+  .shortcut-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    pointer-events: none;
+    line-height: 1;
+  }
+
+  /* The visible response to a shortcut press: a quick highlight when it ran
+     (`.key-pressed`), or a shake when its guard rejected it (`.key-denied`)
+     — both cleared again by `flash()` in the script after ~150ms/~300ms. */
+  .key-pressed {
+    border-color: var(--color-verdigris);
+    background-color: color-mix(in srgb, var(--color-verdigris) 32%, transparent);
+  }
+
+  @keyframes key-deny-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-4px);
+    }
+    40% {
+      transform: translateX(4px);
+    }
+    60% {
+      transform: translateX(-3px);
+    }
+    80% {
+      transform: translateX(3px);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .key-denied {
+      animation: key-deny-shake 300ms ease-in-out;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .key-denied {
+      outline: 2px solid var(--color-attic-clay);
+      outline-offset: 1px;
+    }
   }
 
   /* Micro-interaction polish shared across the popover's clickable
