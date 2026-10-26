@@ -63,6 +63,14 @@ function defaultSettings(): Settings {
     prompts: [],
     updateChannel: "stable",
     updateCheckFrequency: "daily",
+    popoverShortcuts: {
+      replace: "Mod+Enter",
+      copy: "Mod+Shift+C",
+      customPrompt: "Mod+L",
+      openSettings: "Mod+,",
+      checkSpelling: null,
+    },
+    promptShortcutsSeeded: true,
   };
 }
 

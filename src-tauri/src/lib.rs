@@ -608,6 +608,8 @@ pub fn run() {
             commands::list_prompts,
             commands::save_prompt,
             commands::delete_prompt,
+            commands::assign_shortcut,
+            commands::reset_popover_shortcuts,
             commands::test_connection,
             commands::open_settings,
             commands::get_wayland_shortcut_trigger,
@@ -693,6 +695,13 @@ pub fn run() {
             if let Ok(OnboardingDisposition::Show) = evaluate_onboarding(&settings_store) {
                 show_onboarding(app.handle());
             }
+
+            // One-time `Mod+1`…`Mod+9` prompt-shortcut migration for an
+            // install upgrading from before shortcuts existed — see
+            // `core::shortcuts::seed_prompt_shortcuts`'s doc comment. Errors
+            // swallowed the same way as `evaluate_onboarding` above: a
+            // broken settings read/write must not fail the whole launch.
+            let _ = core::shortcuts::seed_prompt_shortcuts(&settings_store);
 
             // SNI trays are menu-oriented and may not deliver left-click
             // events at all, so platforms that want it (Linux) get an

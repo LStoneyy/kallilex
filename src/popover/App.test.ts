@@ -93,18 +93,21 @@ function seededPrompts(): CustomPrompt[] {
       label: "Rewrite",
       instruction:
         "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone.",
+      shortcut: "Mod+1",
     },
     {
       id: "builtin-shorten",
       label: "Shorten",
       instruction:
         "Make the user's text noticeably shorter while keeping its essential meaning and tone.",
+      shortcut: "Mod+2",
     },
     {
       id: "builtin-improve-clarity",
       label: "Improve clarity",
       instruction:
         "Make the user's text clearer and easier to understand without changing its meaning.",
+      shortcut: "Mod+3",
     },
   ];
 }
@@ -125,6 +128,14 @@ function defaultSettings(): Settings {
     prompts: seededPrompts(),
     updateChannel: "stable",
     updateCheckFrequency: "daily",
+    popoverShortcuts: {
+      replace: "Mod+Enter",
+      copy: "Mod+Shift+C",
+      customPrompt: "Mod+L",
+      openSettings: "Mod+,",
+      checkSpelling: null,
+    },
+    promptShortcutsSeeded: true,
   };
 }
 

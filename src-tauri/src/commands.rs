@@ -13,6 +13,7 @@ use crate::core::providers::{
 };
 use crate::core::secrets::{KeyringSecretStore, SecretStore};
 use crate::core::settings::{self, Settings, TauriStoreSettings};
+use crate::core::shortcuts::{self, ShortcutTarget};
 use crate::core::spellcheck::SpellcheckResult;
 use crate::core::updates::runtime::{self as update_runtime, UpdateStatus};
 use crate::core::ONBOARDING_WINDOW_LABEL;
@@ -59,12 +60,18 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 /// and (when switched off) any already-open RemoteDesktop session is
 /// dropped as part of that call.
 #[tauri::command]
-pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
+pub fn set_settings(app: AppHandle, mut settings: Settings) -> Result<Settings, String> {
     use std::str::FromStr;
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    use tauri_plugin_global_shortcut::Shortcut;
 
     let store = TauriStoreSettings::new(app.clone());
     let previous = settings::get_settings(&store).map_err(|e| e.to_string())?;
+
+    // Popover/prompt shortcuts are only re-validated (and canonicalized)
+    // when they actually changed — see `validate_shortcut_changes`'s doc
+    // comment for why a stray invalid value left over from elsewhere must
+    // never block an unrelated save.
+    shortcuts::validate_shortcut_changes(&previous, &mut settings)?;
 
     let shortcut_changed =
         !platform::use_portal_global_shortcut() && settings.shortcut != previous.shortcut;
@@ -94,17 +101,96 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, Stri
     }
 
     if let Some(new_shortcut) = new_shortcut {
-        if let Ok(old_shortcut) = Shortcut::from_str(&previous.shortcut) {
-            let _ = app.global_shortcut().unregister(old_shortcut);
-        }
-        if let Err(err) = app.global_shortcut().register(new_shortcut) {
-            return Err(format!(
-                "Settings were saved, but the new shortcut could not be registered: {err}"
-            ));
-        }
+        apply_global_shortcut_registration(&app, &previous.shortcut, new_shortcut)?;
     }
 
     Ok(saved)
+}
+
+/// Unregisters whatever `previous_accelerator` parses to (best-effort — a
+/// parse failure there is silently ignored, same as before this was
+/// factored out) and registers `new_shortcut` in its place. Shared by
+/// `set_settings` and `assign_shortcut`'s `global` target so both apply the
+/// exact same sequence, with the exact same "saved either way, error
+/// reported only for the registration step" semantics — see
+/// `set_settings`'s doc comment.
+fn apply_global_shortcut_registration(
+    app: &AppHandle,
+    previous_accelerator: &str,
+    new_shortcut: tauri_plugin_global_shortcut::Shortcut,
+) -> Result<(), String> {
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    if let Ok(old_shortcut) = Shortcut::from_str(previous_accelerator) {
+        let _ = app.global_shortcut().unregister(old_shortcut);
+    }
+    if let Err(err) = app.global_shortcut().register(new_shortcut) {
+        return Err(format!(
+            "Settings were saved, but the new shortcut could not be registered: {err}"
+        ));
+    }
+    Ok(())
+}
+
+/// Assigns (or, with `shortcut: None`, clears) the shortcut bound to
+/// `target` — a popover action, a prompt, or the global "open Kallilex"
+/// shortcut. See [`shortcuts::assign_shortcut_core`] for the conflict/
+/// take-over rules.
+///
+/// The `global` target is special-cased here rather than in the core
+/// function: it's unavailable when [`platform::use_portal_global_shortcut`]
+/// is true (the GlobalShortcuts portal, not this plugin, owns the trigger
+/// there), its value is a Tauri accelerator string rather than popover-chord
+/// grammar, and a successful assignment goes through the same unregister/
+/// register sequence `set_settings` uses via
+/// [`apply_global_shortcut_registration`].
+#[tauri::command]
+pub fn assign_shortcut(
+    app: AppHandle,
+    target: ShortcutTarget,
+    shortcut: Option<String>,
+    take_over: bool,
+) -> Result<Settings, String> {
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::Shortcut;
+
+    let store = TauriStoreSettings::new(app.clone());
+
+    if target == ShortcutTarget::Global {
+        if platform::use_portal_global_shortcut() {
+            return Err(
+                "The global shortcut is managed by your system on this session.".to_string(),
+            );
+        }
+
+        let accelerator = shortcut
+            .clone()
+            .ok_or_else(|| "The global shortcut can't be removed.".to_string())?;
+        let new_shortcut = Shortcut::from_str(&accelerator).map_err(|e| {
+            format!("Kallilex couldn't understand the shortcut \"{accelerator}\": {e}")
+        })?;
+
+        let previous = settings::get_settings(&store).map_err(|e| e.to_string())?;
+
+        let saved = shortcuts::assign_shortcut_core(&store, target, shortcut, take_over)
+            .map_err(|e| e.to_string())?;
+
+        apply_global_shortcut_registration(&app, &previous.shortcut, new_shortcut)?;
+
+        return Ok(saved);
+    }
+
+    shortcuts::assign_shortcut_core(&store, target, shortcut, take_over).map_err(|e| e.to_string())
+}
+
+/// Resets every popover shortcut to its default and re-seeds the first nine
+/// prompts with `Mod+1`…`Mod+9`; the global shortcut is untouched. See
+/// [`shortcuts::reset_popover_shortcuts_core`].
+#[tauri::command]
+pub fn reset_popover_shortcuts(app: AppHandle) -> Result<Settings, String> {
+    let store = TauriStoreSettings::new(app);
+    shortcuts::reset_popover_shortcuts_core(&store).map_err(|e| e.to_string())
 }
 
 /// The GlobalShortcuts portal-reported human-readable trigger for the
@@ -368,11 +454,18 @@ pub fn list_prompts(app: AppHandle) -> Result<Vec<CustomPrompt>, String> {
 }
 
 /// Creates or updates a user-managed prompt; see
-/// [`prompts::save_prompt_core`] for the id-generation and upsert rules.
+/// [`prompts::save_prompt_core`] for the id-generation, upsert and
+/// shortcut-conflict rules. `take_over_shortcut` defaults to `false` when
+/// omitted.
 #[tauri::command]
-pub fn save_prompt(app: AppHandle, prompt: CustomPrompt) -> Result<Vec<CustomPrompt>, String> {
+pub fn save_prompt(
+    app: AppHandle,
+    prompt: CustomPrompt,
+    take_over_shortcut: Option<bool>,
+) -> Result<Vec<CustomPrompt>, String> {
     let store = TauriStoreSettings::new(app);
-    prompts::save_prompt_core(&store, prompt).map_err(|e| e.to_string())
+    prompts::save_prompt_core(&store, prompt, take_over_shortcut.unwrap_or(false))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -534,4 +627,46 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn open_update_release_page(app: AppHandle) -> Result<(), String> {
     update_runtime::open_release_page(&app)
+}
+
+#[cfg(test)]
+mod tests {
+    //! Which forms `tauri_plugin_global_shortcut::Shortcut::from_str`
+    //! accepts for a representative sample of accelerator strings a
+    //! keyboard-driven global-shortcut recorder would emit — verified here
+    //! once so the frontend side can rely on it without re-deriving it from
+    //! the `global-hotkey` crate's parser by hand.
+
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::Shortcut;
+
+    #[test]
+    fn every_sampled_accelerator_form_parses() {
+        // Every one of these parses today: `global-hotkey`'s parser treats
+        // `Cmd`/`Command`/`Super` as uniformly mapping to its `SUPER`
+        // modifier bit and `Ctrl`/`Control` to `CONTROL` regardless of the
+        // *current* target OS (the OS-appropriate meaning of those bits is
+        // resolved later, at registration), and it accepts a bare letter/
+        // digit ("K", "1") exactly as readily as the `code`-based spelling
+        // ("KeyK", "Digit1") — so the recorder is free to prefer whichever
+        // form reads more naturally without worrying about a platform split
+        // here.
+        let forms = [
+            "Ctrl+Alt+Shift+Cmd+K",
+            "Alt+Cmd+K",
+            "Ctrl+Alt+KeyK",
+            "Ctrl+Alt+1",
+            "Ctrl+Alt+Digit1",
+            "Cmd+Shift+F6",
+            "Ctrl+Alt+Comma",
+            "Ctrl+Alt+Enter",
+        ];
+
+        for form in forms {
+            assert!(
+                Shortcut::from_str(form).is_ok(),
+                "expected {form:?} to parse as a global-shortcut accelerator"
+            );
+        }
+    }
 }

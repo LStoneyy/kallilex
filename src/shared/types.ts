@@ -35,7 +35,42 @@ export interface Settings {
   updateChannel: "stable" | "preview";
   /** How often Kallilex looks for updates. */
   updateCheckFrequency: "never" | "onLaunch" | "daily" | "weekly";
+  /** The popover's per-action keyboard shortcuts (Replace, Copy, Custom
+   * prompt, Open Settings, Check spelling). See `PopoverShortcuts`'s doc
+   * comment in the Rust source for how a missing field differs from an
+   * explicit `null`. */
+  popoverShortcuts: PopoverShortcuts;
+  /** Whether the one-time `Mod+1`…`Mod+9` prompt-shortcut migration has
+   * already run — see `Settings::prompt_shortcuts_seeded`'s doc comment in
+   * the Rust source. */
+  promptShortcutsSeeded: boolean;
 }
+
+/**
+ * Mirrors `PopoverShortcuts` in `src-tauri/src/core/shortcuts.rs`: the
+ * popover's per-action keyboard shortcuts, stored as `[Mod+][Alt+][Shift+]Key`
+ * chord strings (`Mod` is ⌘ on macOS, Ctrl elsewhere) — `null` means
+ * unbound.
+ */
+export interface PopoverShortcuts {
+  replace: string | null;
+  copy: string | null;
+  customPrompt: string | null;
+  openSettings: string | null;
+  checkSpelling: string | null;
+}
+
+/**
+ * Mirrors `ShortcutTarget` in `src-tauri/src/core/shortcuts.rs`: what a
+ * shortcut is bound to, passed to `assignShortcut`.
+ */
+export type ShortcutTarget =
+  | {
+      kind: "action";
+      action: "replace" | "copy" | "customPrompt" | "openSettings" | "checkSpelling";
+    }
+  | { kind: "prompt"; id: string }
+  | { kind: "global" };
 
 /**
  * Mirrors `UpdatePhase` in `src-tauri/src/core/updates/runtime.rs`.
@@ -164,6 +199,8 @@ export interface CustomPrompt {
   id: string;
   label: string;
   instruction: string;
+  /** This prompt's popover keyboard shortcut, or `null` if unset. */
+  shortcut: string | null;
 }
 
 /**

@@ -75,10 +75,11 @@ control that captures key presses instead of asking for typed text.
 - Stored as strings with the grammar `[Mod+][Alt+][Shift+]Key`, in that
   fixed modifier order. `Mod` means ⌘ on macOS and Ctrl on Windows/Linux, so
   defaults and stored values are platform-neutral.
-- `Key` is one of: `A`–`Z`, `0`–`9`, `F1`–`F12`, `Enter`, or a single
-  printable punctuation character as the layout produces it unshifted
-  (e.g. `,` `.` `-`). Arrows, Space, Tab, Escape, Backspace and Delete are not
-  bindable.
+- `Key` is one of: `A`–`Z`, `0`–`9`, `F1`–`F12`, `Enter`, or one of the
+  punctuation keys `, . - = ; ' / \ [ ] ` # <` as the layout produces them
+  unshifted. Shifted glyphs (`!`, `@`, `?` …) are never key tokens — Shift is
+  its own flag — so two strings can't name the same physical keypress.
+  Arrows, Space, Tab, Escape, Backspace and Delete are not bindable.
 - A shortcut must contain `Mod`, except a bare `F1`–`F12` (optionally with
   `Shift`/`Alt`), which is allowed without a modifier.
 - Not bindable at all: macOS ⌃ (Control) — ⌃A/⌃E/⌃K are text-navigation keys
@@ -192,8 +193,8 @@ Shift+Tab (focus order), ↩ in the custom field (run). Pin has no shortcut.
     keyboard is `Z`. Otherwise derive from `event.code` (`KeyA` → `A`,
     `Digit1` → `1`) — this covers ⌥ on macOS (`event.key` is `å`) and Shift
     on digits (`event.key` is `!`). `Enter` and `F1`–`F12` from `event.key`;
-    other single printable characters from `event.key` when no Shift/Alt is
-    held.
+    one of the bindable punctuation keys from `event.key` when no Shift/Alt
+    is held; anything else is unbindable (`null`).
 - `formatChord(chord, os): string[]` — display tokens: macOS `⌘ ⌥ ⇧` plus
   `↩` for Enter; elsewhere `Ctrl`, `Alt`, `Shift`, `Enter`. Rendered by a
   small `Kbd.svelte` (joined with `+` off macOS).

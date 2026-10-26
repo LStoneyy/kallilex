@@ -447,10 +447,11 @@
     id: string;
     label: string;
     instruction: string;
+    shortcut: string | null;
   };
 
   function emptyPromptDraft(): PromptDraft {
-    return { id: "", label: "", instruction: "" };
+    return { id: "", label: "", instruction: "", shortcut: null };
   }
 
   let promptView = $state<"list" | "form">("list");
@@ -468,7 +469,12 @@
 
   function openEditPrompt(prompt: CustomPrompt) {
     promptDeleteConfirmId = null;
-    promptDraft = { id: prompt.id, label: prompt.label, instruction: prompt.instruction };
+    promptDraft = {
+      id: prompt.id,
+      label: prompt.label,
+      instruction: prompt.instruction,
+      shortcut: prompt.shortcut,
+    };
     promptFormError = null;
     promptView = "form";
   }
@@ -485,6 +491,7 @@
         id: promptDraft.id,
         label: promptDraft.label,
         instruction: promptDraft.instruction,
+        shortcut: promptDraft.shortcut,
       });
       promptView = "list";
     } catch (error) {

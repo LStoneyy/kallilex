@@ -9,6 +9,7 @@ pub mod providers;
 pub mod replace;
 pub mod secrets;
 pub mod settings;
+pub mod shortcuts;
 pub mod spellcheck;
 pub mod updates;
 

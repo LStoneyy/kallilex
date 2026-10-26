@@ -102,20 +102,33 @@ function defaultPrompts(): CustomPrompt[] {
       label: "Rewrite",
       instruction:
         "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone.",
+      shortcut: "Mod+1",
     },
     {
       id: "builtin-shorten",
       label: "Shorten",
       instruction:
         "Make the user's text noticeably shorter while keeping its essential meaning and tone.",
+      shortcut: "Mod+2",
     },
     {
       id: "builtin-improve-clarity",
       label: "Improve clarity",
       instruction:
         "Make the user's text clearer and easier to understand without changing its meaning.",
+      shortcut: "Mod+3",
     },
   ];
+}
+
+function defaultPopoverShortcuts(): Settings["popoverShortcuts"] {
+  return {
+    replace: "Mod+Enter",
+    copy: "Mod+Shift+C",
+    customPrompt: "Mod+L",
+    openSettings: "Mod+,",
+    checkSpelling: null,
+  };
 }
 
 function defaultSettings(): Settings {
@@ -134,6 +147,8 @@ function defaultSettings(): Settings {
     prompts: defaultPrompts(),
     updateChannel: "stable",
     updateCheckFrequency: "daily",
+    popoverShortcuts: defaultPopoverShortcuts(),
+    promptShortcutsSeeded: true,
   };
 }
 
@@ -429,7 +444,7 @@ describe("settings App", () => {
   it("adding a prompt calls savePrompt and shows the new entry", async () => {
     savePrompt.mockResolvedValue([
       ...defaultPrompts(),
-      { id: "prompt-new", label: "Translate", instruction: "Translate to French." },
+      { id: "prompt-new", label: "Translate", instruction: "Translate to French.", shortcut: null },
     ]);
 
     render(App);
@@ -452,6 +467,7 @@ describe("settings App", () => {
         id: "",
         label: "Translate",
         instruction: "Translate to French.",
+        shortcut: null,
       });
     });
     expect(await screen.findByText("Translate")).toBeInTheDocument();
@@ -469,6 +485,29 @@ describe("settings App", () => {
     expect(labelInput).toHaveValue("Rewrite");
     const instructionInput = screen.getByLabelText("Instruction");
     expect(instructionInput).toHaveValue(defaultPrompts()[0]!.instruction);
+  });
+
+  it("editing a prompt and saving preserves its existing shortcut", async () => {
+    savePrompt.mockResolvedValue(defaultPrompts());
+
+    render(App);
+    await openPromptsTab();
+
+    await screen.findByText("Rewrite");
+    const editButtons = screen.getAllByRole("button", { name: "Edit" });
+    await fireEvent.click(editButtons[0]!);
+
+    const saveButton = await screen.findByRole("button", { name: "Save" });
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(savePrompt).toHaveBeenCalledWith({
+        id: "builtin-rewrite",
+        label: "Rewrite",
+        instruction: defaultPrompts()[0]!.instruction,
+        shortcut: "Mod+1",
+      });
+    });
   });
 
   it("deleting a prompt requires a second confirming click, then calls deletePrompt", async () => {

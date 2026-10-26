@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::prompts::CustomPrompt;
 use crate::core::providers::ProviderProfile;
+use crate::core::shortcuts::PopoverShortcuts;
 use crate::core::updates::{UpdateChannel, UpdateCheckFrequency};
 
 /// The platform's default global shortcut: ⌥⌘K on macOS, Ctrl+Alt+K
@@ -171,6 +172,25 @@ pub struct Settings {
     /// until it says otherwise.
     #[serde(default)]
     pub update_check_frequency: UpdateCheckFrequency,
+    /// The popover's per-action keyboard shortcuts (Replace, Copy, Custom
+    /// prompt, Open Settings, Check spelling). Plain `#[serde(default)]` is
+    /// correct here — `PopoverShortcuts` already carries its own
+    /// `impl Default` with the defaults table, and a *missing* key (an
+    /// older `settings.json`) has the same "no opinion, use the defaults"
+    /// reading as a brand-new install; see that type's doc comment for how
+    /// it tells a missing field apart from an explicit `null`.
+    #[serde(default)]
+    pub popover_shortcuts: PopoverShortcuts,
+    /// Whether the one-time `Mod+1`…`Mod+9` prompt-shortcut migration (see
+    /// `core::shortcuts::seed_prompt_shortcuts`) has already run. Plain
+    /// `#[serde(default)]` (`false`) is correct: settings persisted before
+    /// this field existed belong to installs the migration hasn't touched
+    /// yet, so "no opinion persisted" must mean "run it once" —
+    /// `Settings::default()` below sets this `true` instead, since a fresh
+    /// install's prompts (`default_prompts()`) already come pre-seeded and
+    /// the migration would have nothing left to do.
+    #[serde(default)]
+    pub prompt_shortcuts_seeded: bool,
 }
 
 /// See [`Settings::input_synthesis_enabled`]'s doc comment for why this is a
@@ -196,6 +216,8 @@ impl Default for Settings {
             prompts: crate::core::prompts::default_prompts(),
             update_channel: crate::core::updates::default_update_channel(),
             update_check_frequency: UpdateCheckFrequency::default(),
+            popover_shortcuts: PopoverShortcuts::default(),
+            prompt_shortcuts_seeded: true,
         }
     }
 }
@@ -272,9 +294,18 @@ mod tests {
                 id: "prompt-1".to_string(),
                 label: "Translate".to_string(),
                 instruction: "Translate to French".to_string(),
+                shortcut: Some("Mod+9".to_string()),
             }],
             update_channel: crate::core::updates::UpdateChannel::Preview,
             update_check_frequency: crate::core::updates::UpdateCheckFrequency::Weekly,
+            popover_shortcuts: PopoverShortcuts {
+                replace: Some("Mod+Enter".to_string()),
+                copy: None,
+                custom_prompt: Some("Mod+L".to_string()),
+                open_settings: Some("Mod+,".to_string()),
+                check_spelling: Some("F6".to_string()),
+            },
+            prompt_shortcuts_seeded: true,
         };
 
         let returned = set_settings(&store, saved.clone()).expect("save should succeed");
@@ -376,6 +407,7 @@ mod tests {
                 id: "prompt-1".to_string(),
                 label: "Translate".to_string(),
                 instruction: "Translate to French".to_string(),
+                shortcut: Some("Mod+9".to_string()),
             }],
             ..with_popover_position.clone()
         };
@@ -401,6 +433,23 @@ mod tests {
             get_settings(&store).unwrap().update_check_frequency,
             crate::core::updates::UpdateCheckFrequency::Weekly
         );
+
+        let with_popover_shortcuts = Settings {
+            popover_shortcuts: PopoverShortcuts {
+                replace: None,
+                ..PopoverShortcuts::default()
+            },
+            ..with_update_check_frequency.clone()
+        };
+        set_settings(&store, with_popover_shortcuts.clone()).unwrap();
+        assert_eq!(get_settings(&store).unwrap().popover_shortcuts.replace, None);
+
+        let with_prompt_shortcuts_seeded = Settings {
+            prompt_shortcuts_seeded: true,
+            ..with_popover_shortcuts.clone()
+        };
+        set_settings(&store, with_prompt_shortcuts_seeded.clone()).unwrap();
+        assert!(get_settings(&store).unwrap().prompt_shortcuts_seeded);
     }
 
     #[test]
@@ -542,6 +591,58 @@ mod tests {
             settings.update_channel,
             crate::core::updates::default_update_channel()
         );
+    }
+
+    #[test]
+    fn settings_json_from_before_shortcuts_existed_still_deserializes() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "waylandRestoreToken": null,
+            "inputSynthesisEnabled": true,
+            "autoCopyResult": false,
+            "onboardingCompleted": false,
+            "popoverPosition": null,
+            "prompts": []
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        // A missing `popoverShortcuts` key has no opinion at all, so it
+        // reads as "use the defaults" — same as a fresh install.
+        assert_eq!(settings.popover_shortcuts, PopoverShortcuts::default());
+        // A missing `promptShortcutsSeeded` means the migration hasn't run
+        // for this install yet.
+        assert!(!settings.prompt_shortcuts_seeded);
+    }
+
+    #[test]
+    fn an_explicit_null_popover_shortcut_field_stays_none_while_others_default() {
+        let json = r#"{
+            "activeProfileId": null,
+            "shortcut": "Alt+Cmd+K",
+            "spellcheckEnabled": true,
+            "popoverPinned": false,
+            "accessibilityOnboardingShown": true,
+            "profiles": [],
+            "popoverShortcuts": { "replace": null }
+        }"#;
+
+        let settings: Settings = serde_json::from_str(json).expect("should deserialize");
+
+        // The field explicitly written as `null` stays removed...
+        assert_eq!(settings.popover_shortcuts.replace, None);
+        // ...while every field simply absent from the JSON object still
+        // takes its default.
+        let defaults = PopoverShortcuts::default();
+        assert_eq!(settings.popover_shortcuts.copy, defaults.copy);
+        assert_eq!(settings.popover_shortcuts.custom_prompt, defaults.custom_prompt);
+        assert_eq!(settings.popover_shortcuts.open_settings, defaults.open_settings);
+        assert_eq!(settings.popover_shortcuts.check_spelling, defaults.check_spelling);
     }
 
     #[test]

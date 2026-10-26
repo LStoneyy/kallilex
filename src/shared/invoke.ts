@@ -14,6 +14,7 @@ import type {
   ProviderProfile,
   RunActionOutcome,
   Settings,
+  ShortcutTarget,
   SpellcheckResult,
   UpdateStatus,
 } from "./types";
@@ -101,10 +102,42 @@ export async function listPrompts(): Promise<CustomPrompt[]> {
 /**
  * Creates or updates a user-managed prompt; see
  * `prompts::save_prompt_core`'s doc comment in the Rust source for the
- * id-generation and upsert rules. Returns the fresh prompt list.
+ * id-generation, upsert and shortcut-conflict rules. `takeOverShortcut`
+ * (default `false`) clears a conflicting holder of `prompt.shortcut` in the
+ * same save instead of rejecting it. Returns the fresh prompt list.
  */
-export async function savePrompt(prompt: CustomPrompt): Promise<CustomPrompt[]> {
-  return invoke<CustomPrompt[]>("save_prompt", { prompt });
+export async function savePrompt(
+  prompt: CustomPrompt,
+  takeOverShortcut = false,
+): Promise<CustomPrompt[]> {
+  return invoke<CustomPrompt[]>("save_prompt", { prompt, takeOverShortcut });
+}
+
+/**
+ * Assigns (`shortcut` a chord string) or clears (`shortcut: null`) the
+ * keyboard shortcut bound to `target` — a popover action, a prompt, or the
+ * global "open Kallilex" shortcut. `takeOver` (default `false`) clears a
+ * conflicting holder in the same save instead of rejecting the change; the
+ * global shortcut can never be taken over this way, regardless of
+ * `takeOver`. See `commands::assign_shortcut`'s doc comment in the Rust
+ * source.
+ */
+export async function assignShortcut(
+  target: ShortcutTarget,
+  shortcut: string | null,
+  takeOver = false,
+): Promise<Settings> {
+  return invoke<Settings>("assign_shortcut", { target, shortcut, takeOver });
+}
+
+/**
+ * Resets every popover shortcut to its default and re-seeds the first nine
+ * prompts with `Mod+1`…`Mod+9`; the global shortcut is untouched. See
+ * `shortcuts::reset_popover_shortcuts_core`'s doc comment in the Rust
+ * source.
+ */
+export async function resetPopoverShortcuts(): Promise<Settings> {
+  return invoke<Settings>("reset_popover_shortcuts");
 }
 
 export async function deletePrompt(id: string): Promise<CustomPrompt[]> {
