@@ -51,6 +51,16 @@ Kallilex does not crash, and no secret is left on the clipboard afterwards.
 - [ ] Password/secure field checked — capture fails or falls back gracefully,
       no crash, no secret leaked to the clipboard afterwards.
 
+Keyboard shortcuts:
+
+- [ ] Full workflow without the mouse: global shortcut (⌥⌘K) → edit text →
+      ⌘1 (or another saved prompt) → ⌘↩ (Replace) puts the result back;
+      ⌘⇧C (Copy) copies the result; ⌘L opens the custom field with cursor in
+      it and ↩ runs it; holding ⌘ shows the badges; recording, take-over and
+      reset in Settings → Shortcuts work.
+- [ ] On a German layout, ⌥L still types @ in the popover, and Z/Y show the
+      printed labels in Settings → Shortcuts.
+
 ## 3. Linux manual matrix
 
 Verify portal support per compositor. For each environment, launch the app and
@@ -102,6 +112,18 @@ portals are active in Settings → Accessibility.
       shortcut *does* bind, that README caveat is wrong and must be corrected
       before publishing.
 
+Keyboard shortcuts:
+
+- [ ] Full workflow without the mouse on X11: global shortcut (Ctrl+Alt+K) →
+      edit text → Ctrl+1 (or another saved prompt) → Ctrl+Enter (Replace) puts
+      the result back; Ctrl+Shift+C (Copy) copies the result; Ctrl+L opens the
+      custom field with cursor in it and ↩ runs it; holding Ctrl shows the
+      badges; recording, take-over and reset in Settings → Shortcuts work.
+- [ ] Same flow on one Wayland compositor (GNOME or KDE).
+- [ ] On Wayland, the global shortcut row in Settings → Shortcuts stays
+      read-only (portal manages it).
+- [ ] A Ctrl+Alt+F-key shows the warning in Settings → Shortcuts.
+
 ## 4. Windows manual matrix
 
 For each app: select some text, trigger capture (default Ctrl+Alt+K), confirm
@@ -142,6 +164,17 @@ afterwards.
       on every platform — so verify it in the dev tools rather than
       expecting a visible message).
 
+Keyboard shortcuts:
+
+- [ ] Full workflow without the mouse: global shortcut (Ctrl+Alt+K) → edit
+      text → Ctrl+1 (or another saved prompt) → Ctrl+Enter (Replace) puts the
+      result back; Ctrl+Shift+C (Copy) copies the result; Ctrl+L opens the
+      custom field with cursor in it and ↩ runs it; holding Ctrl shows the
+      badges; recording, take-over and reset in Settings → Shortcuts work.
+- [ ] On a German layout with AltGr, AltGr+Q still types @ in the popover.
+- [ ] Ctrl+Alt+K can be recorded as the global shortcut in Settings →
+      Shortcuts.
+
 ## 5. Clean-install smoke runs
 
 ### 5a. Clean Mac
@@ -163,6 +196,9 @@ Run this on a Mac (or a fresh user account) that has never run Kallilex:
       stable release certificate — see section 8.)
 - [ ] Full workflow works: select text → ⌥⌘K → run an action → Replace puts
       the result back into the source app.
+- [ ] Onboarding's last step ("You're all set") mentions popover shortcuts
+      (shows that ⌘1 runs the first prompt, ⌘↩ replaces, ⌘⇧C copies, and ⌘
+      held shows all shortcuts).
 
 ### 5b. Clean Linux machine
 

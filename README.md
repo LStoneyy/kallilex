@@ -15,10 +15,10 @@ Kallilex lives quietly in the macOS menu bar, the Linux tray, or the Windows not
 The workflow is:
 
 1. Select text in any application.
-2. Press the global shortcut (**⌥⌘K** on macOS, **Ctrl+Alt+K** on Linux and Windows; configurable in Settings).
+2. Press the global shortcut (**⌥⌘K** on macOS, **Ctrl+Alt+K** on Linux and Windows; configurable in Settings → Shortcuts).
 3. Kallilex captures the selection automatically and opens a popover with that text.
-4. Run a local spell check or an AI action: **Rewrite**, **Shorten**, **Improve clarity**, or a custom prompt.
-5. **Copy** the result to the clipboard, or **Replace** it back into the app you started from.
+4. Run a local spell check or an AI action: **Rewrite**, **Shorten**, **Improve clarity**, or a custom prompt — or press **⌘1**, **⌘2** … (Ctrl+1, Ctrl+2 … on Linux and Windows) to run any saved prompt.
+5. **Copy** the result to the clipboard (**⌘⇧C** / Ctrl+Shift+C), or **Replace** it back (**⌘↩** / Ctrl+Enter) into the app you started from.
 
 Kallilex stays fast, unobtrusive, privacy-conscious, free, and open source.
 
@@ -109,6 +109,29 @@ The popover shows the captured text as editable content, plus:
 - a privacy badge showing whether the active AI provider is **Local**, **LAN**, or **Cloud**, derived from its base URL before any request is sent.
 
 There is no diff view in v1 — running an action replaces the editable text in the popover with the result, in place.
+
+### Keyboard
+
+Every popover action has a keyboard shortcut. The cursor starts in the text field, so you can select text, press the global shortcut, and run an action entirely from the keyboard.
+
+| Action | macOS | Linux and Windows |
+| --- | --- | --- |
+| Saved prompts 1–9, in list order | ⌘1 … ⌘9 | Ctrl+1 … Ctrl+9 |
+| Replace | ⌘↩ | Ctrl+Enter |
+| Copy | ⌘⇧C | Ctrl+Shift+C |
+| Custom prompt (opens the custom field with the cursor in it; ↩ runs it) | ⌘L | Ctrl+L |
+| Open Settings | ⌘, | Ctrl+, |
+| Check spelling | (no default) | (no default) |
+
+Fixed keys: **Esc** cancels a running action, then closes the custom field or suggestions, then closes the popover. **Tab** moves focus between buttons. **↩** in the custom field runs it.
+
+Hold **⌘** (Ctrl on Linux/Windows) for a moment to see each button's shortcut as a small badge; tooltips show it too.
+
+A shortcut whose action isn't possible right now makes its button shake briefly. After an AI action the cursor goes back to the text field, so ⌘1 followed by ⌘↩ rewrites and replaces in two key presses.
+
+All shortcuts, including the global one, are changed in **Settings → Shortcuts** by pressing the keys you want. A combination that is already in use can be taken over from its current action; the one that opens Kallilex can't. **Reset popover shortcuts** restores the popover and prompt defaults and leaves the global shortcut alone. The Prompts tab shows each prompt's shortcut, and new prompts get the next free ⌘1–⌘9. Installs upgrading from an earlier version get ⌘1–⌘9 for their existing prompts once.
+
+Rules: a shortcut needs ⌘/Ctrl, except F1–F12 alone. Editing keys (⌘C/V/X/A/Z, ⌘⇧Z, ⌘Y), ⌘Q/W/H/M, ⌘R/P/F/G and F5/F7/F12 are reserved. On macOS ⌃ (Control) isn't usable for popover shortcuts (⌃A/⌃E/⌃K move the cursor in text fields), and ⌥ without ⌘ isn't either (⌥ types characters such as @ on German layouts). On Windows, key presses with AltGr never trigger a popover shortcut, so AltGr+Q still types @; on layouts with AltGr this also means Ctrl+Alt combinations can't be recorded for the popover. On Linux, Ctrl+Alt+F-keys can be set but trigger a warning since many desktops use them to switch virtual terminals.
 
 ## Results: Copy or Replace
 
