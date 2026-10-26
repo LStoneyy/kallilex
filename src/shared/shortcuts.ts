@@ -10,9 +10,19 @@
  * `[Mod+][Alt+][Shift+]Key`, `Mod` meaning ⌘ on macOS and Ctrl elsewhere —
  * is defined there; this module mirrors it rather than owning it, and the
  * Rust side stays authoritative for anything actually written to disk.
+ *
+ * The global shortcut lives in a second, overlapping grammar — a Tauri
+ * accelerator string rather than a popover chord, because that's what the
+ * OS itself parses — so it gets its own event-to-string direction
+ * (`acceleratorFromEvent`), its own display tokens (`formatAccelerator`),
+ * and a bridge back into chord space (`chordFromAccelerator`, mirroring
+ * `chord_for_global`) so the two grammars can still be compared. `holderOf`/
+ * `holderOfAccelerator`/`describeTarget`/`nextFreePromptShortcut` are the
+ * instant-feedback mirrors of the equivalent Rust lookups, used by
+ * `ShortcutRecorder.svelte` and (eventually) the Shortcuts tab.
  */
 
-import type { PlatformInfo } from "./types";
+import type { PlatformInfo, Settings, ShortcutTarget } from "./types";
 
 export type Os = PlatformInfo["os"];
 
@@ -316,4 +326,403 @@ export function validateChord(raw: string, os: Os): string | null {
   const result = parseChordDetailed(raw);
   if (!result.ok) return result.error;
   return validateParsedChord(result.chord, os);
+}
+
+/**
+ * Maps `event.code` (the *physical* key) to the token
+ * `acceleratorFromEvent` emits for it: `KeyA`-`KeyZ` to a bare letter,
+ * `Digit0`-`Digit9` to a bare digit, `F1`-`F12`/`Enter`/`Space` as
+ * themselves, and the punctuation codes Tauri's own parser already
+ * recognizes by name, emitted unchanged. Anything else (arrows, Tab,
+ * Escape, …) has no accelerator token and returns `null`.
+ */
+const ACCELERATOR_PUNCTUATION_CODES = new Set([
+  "Comma",
+  "Period",
+  "Minus",
+  "Equal",
+  "Semicolon",
+  "Quote",
+  "Slash",
+  "Backslash",
+  "BracketLeft",
+  "BracketRight",
+  "Backquote",
+]);
+
+function acceleratorKeyFromCode(code: string): string | null {
+  const letterMatch = /^Key([A-Z])$/.exec(code);
+  if (letterMatch) return letterMatch[1]!;
+  const digitMatch = /^Digit([0-9])$/.exec(code);
+  if (digitMatch) return digitMatch[1]!;
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code;
+  if (code === "Enter" || code === "Space") return code;
+  if (ACCELERATOR_PUNCTUATION_CODES.has(code)) return code;
+  return null;
+}
+
+/**
+ * Records the **global** shortcut from a live `keydown`, in Tauri's
+ * accelerator format (`Ctrl+Alt+Shift+Cmd+K` order, `Cmd` only on macOS) —
+ * the counterpart to `chordFromEvent` for the one shortcut the OS itself
+ * matches rather than the popover. The OS matches a registered global
+ * shortcut on *physical* keys, so unlike `chordFromEvent` the key always
+ * comes from `event.code`, never `event.key` — this is also why, on
+ * non-macOS, `metaKey` (the Windows/Super key) is never allowed: there is no
+ * accelerator token for it at all, not even one that would simply go
+ * unmatched.
+ *
+ * Deliberately does *not* reject `event.getModifierState("AltGraph")` the
+ * way `chordFromEvent` does: on a German (or other AltGr) Windows layout,
+ * physically pressing Ctrl+Alt reports `AltGraph` as part of the event, and
+ * `Ctrl+Alt+K` is the non-macOS default global shortcut. Rejecting AltGraph
+ * here would make that default impossible to ever (re-)record on such a
+ * layout — the popover's own chords stay AltGraph-sensitive (see
+ * `chordFromEvent`'s doc comment) because *that* rejection protects typing;
+ * nothing is typed into the global shortcut.
+ */
+export function acceleratorFromEvent(event: KeyboardEvent, os: Os): string | null {
+  if (event.repeat || event.isComposing) return null;
+  if (MODIFIER_ONLY_KEYS.has(event.key)) return null;
+  if (os !== "macos" && event.metaKey) return null;
+
+  const key = acceleratorKeyFromCode(event.code ?? "");
+  if (key === null) return null;
+
+  const cmd = os === "macos" && event.metaKey;
+  if (!event.ctrlKey && !event.altKey && !cmd) return null;
+
+  const parts: string[] = [];
+  if (event.ctrlKey) parts.push("Ctrl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+  if (cmd) parts.push("Cmd");
+  parts.push(key);
+  return parts.join("+");
+}
+
+/** The punctuation character a global-accelerator token names, keyed by its
+ * lowercased name — shared by `formatAccelerator` (as a display character)
+ * and `chordFromAccelerator` (as a chord's `Punct` key), the same way
+ * `parse_global_key` in `core/shortcuts.rs` recognizes them. */
+const ACCELERATOR_PUNCTUATION: Record<string, string> = {
+  comma: ",",
+  period: ".",
+  minus: "-",
+  equal: "=",
+  semicolon: ";",
+  quote: "'",
+  slash: "/",
+  backslash: "\\",
+  bracketleft: "[",
+  bracketright: "]",
+  backquote: "`",
+};
+
+interface AcceleratorKeyToken {
+  kind: "letter" | "digit" | "function" | "enter" | "space" | "punct";
+  value: string;
+}
+
+/** Parses one non-modifier accelerator token (`K`, `KeyK`, `1`, `Digit1`,
+ * `F6`, `Comma`, `Enter`/`Return`, `Space`, …), mirroring
+ * `parse_global_key` in `core/shortcuts.rs` closely enough to agree on
+ * every token it recognizes — `kind` additionally distinguishes `Enter`
+ * (→ `↩` on macOS) and `Space` (never a chord key) for `formatAccelerator`
+ * and `chordFromAccelerator` respectively. */
+function parseAcceleratorKeyToken(token: string): AcceleratorKeyToken | null {
+  const lower = token.toLowerCase();
+  if (lower === "enter" || lower === "return") return { kind: "enter", value: "Enter" };
+  if (lower === "space") return { kind: "space", value: "Space" };
+
+  const letterMatch = /^key([a-z])$/i.exec(token);
+  if (letterMatch) return { kind: "letter", value: letterMatch[1]!.toUpperCase() };
+  const digitMatch = /^digit([0-9])$/i.exec(token);
+  if (digitMatch) return { kind: "digit", value: digitMatch[1]! };
+  const functionMatch = /^f([1-9]|1[0-2])$/i.exec(token);
+  if (functionMatch) return { kind: "function", value: `F${functionMatch[1]}` };
+
+  if (token.length === 1) {
+    if (/[a-zA-Z]/.test(token)) return { kind: "letter", value: token.toUpperCase() };
+    if (/[0-9]/.test(token)) return { kind: "digit", value: token };
+  }
+
+  if (lower in ACCELERATOR_PUNCTUATION) {
+    return { kind: "punct", value: ACCELERATOR_PUNCTUATION[lower]! };
+  }
+
+  return null;
+}
+
+/**
+ * Display tokens for a stored Tauri accelerator string — the
+ * `acceleratorFromEvent` counterpart to `formatChord`, for the global
+ * shortcut row. Tokens are case-insensitive; `Cmd`/`Command`/`Super`/`Meta`/
+ * `CmdOrCtrl`/`CommandOrControl` are all accepted as the "super" modifier
+ * family, `Ctrl`/`Control` as the literal Ctrl key, `Alt`/`Option` as Alt —
+ * `CmdOrCtrl`/`CommandOrControl` additionally collapse onto whichever one
+ * this OS would actually show (⌘ on macOS, Ctrl elsewhere), since the user
+ * never sees the platform-neutral spelling, only what their own OS does
+ * with it. Returns `[accelerator]` unchanged when it doesn't parse — there
+ * is nothing sensible to tokenize, but something must still be shown.
+ */
+export function formatAccelerator(accelerator: string, os: Os): string[] {
+  const macos = os === "macos";
+  let ctrl = false;
+  let alt = false;
+  let shift = false;
+  let superMod = false;
+  let key: AcceleratorKeyToken | null = null;
+
+  for (const token of accelerator.split("+")) {
+    if (token === "") return [accelerator];
+    switch (token.toLowerCase()) {
+      case "cmdorctrl":
+      case "commandorcontrol":
+        if (macos) superMod = true;
+        else ctrl = true;
+        break;
+      case "cmd":
+      case "command":
+      case "super":
+      case "meta":
+        superMod = true;
+        break;
+      case "ctrl":
+      case "control":
+        ctrl = true;
+        break;
+      case "alt":
+      case "option":
+        alt = true;
+        break;
+      case "shift":
+        shift = true;
+        break;
+      default: {
+        if (key !== null) return [accelerator];
+        const parsed = parseAcceleratorKeyToken(token);
+        if (parsed === null) return [accelerator];
+        key = parsed;
+      }
+    }
+  }
+
+  if (key === null) return [accelerator];
+
+  const tokens: string[] = [];
+  if (macos) {
+    if (ctrl) tokens.push("⌃");
+    if (alt) tokens.push("⌥");
+    if (shift) tokens.push("⇧");
+    if (superMod) tokens.push("⌘");
+    tokens.push(key.kind === "enter" ? "↩" : key.value);
+  } else {
+    if (ctrl) tokens.push("Ctrl");
+    if (alt) tokens.push("Alt");
+    if (shift) tokens.push("Shift");
+    if (superMod) tokens.push("Super");
+    tokens.push(key.value);
+  }
+  return tokens;
+}
+
+/**
+ * TS mirror of `chord_for_global` in `core/shortcuts.rs`: maps a global
+ * accelerator string onto the same canonical chord space `parseChord`
+ * occupies for the current OS, so "equals the global shortcut" is a chord
+ * comparison rather than a string one. `CmdOrCtrl`/`CommandOrControl` always
+ * become `Mod`, since both platforms have *some* key for it; a literal
+ * `Cmd`/`Super`/`Meta` only becomes `Mod` on macOS (elsewhere there is no
+ * popover equivalent for the Super key), and a literal `Ctrl`/`Control`
+ * only becomes `Mod` off macOS (macOS ⌃ has no popover equivalent either) —
+ * in both of those cases this returns `null`, not a chord with `mod: false`,
+ * because the accelerator still names a real, distinct modifier that must
+ * never silently collapse onto a popover chord that omits it.
+ */
+export function chordFromAccelerator(accelerator: string, os: Os): string | null {
+  const macos = os === "macos";
+  let mod = false;
+  let alt = false;
+  let shift = false;
+  let key: string | null = null;
+
+  for (const token of accelerator.split("+")) {
+    if (token === "") return null;
+    switch (token.toLowerCase()) {
+      case "cmdorctrl":
+      case "commandorcontrol":
+        mod = true;
+        break;
+      case "cmd":
+      case "command":
+      case "super":
+      case "meta":
+        if (!macos) return null;
+        mod = true;
+        break;
+      case "ctrl":
+      case "control":
+        if (macos) return null;
+        mod = true;
+        break;
+      case "alt":
+      case "option":
+        alt = true;
+        break;
+      case "shift":
+        shift = true;
+        break;
+      default: {
+        if (key !== null) return null;
+        const parsed = parseAcceleratorKeyToken(token);
+        if (parsed === null || parsed.kind === "space") return null;
+        key = parsed.value;
+      }
+    }
+  }
+
+  if (key === null) return null;
+  return stringifyChord(mod, alt, shift, key);
+}
+
+/** The popover-action half of `ShortcutTarget["action"]`, listed once so
+ * `holderOf`/`holderOfAccelerator`/`nextFreePromptShortcut` all walk the
+ * same five slots in the same order. */
+const POPOVER_ACTIONS = [
+  "replace",
+  "copy",
+  "customPrompt",
+  "openSettings",
+  "checkSpelling",
+] as const;
+
+const ACTION_LABELS: Record<(typeof POPOVER_ACTIONS)[number], string> = {
+  replace: "Replace",
+  copy: "Copy",
+  customPrompt: "Custom prompt",
+  openSettings: "Open Settings",
+  checkSpelling: "Check spelling",
+};
+
+function targetsEqual(a: ShortcutTarget, b: ShortcutTarget): boolean {
+  if (a.kind === "action" && b.kind === "action") return a.action === b.action;
+  if (a.kind === "prompt" && b.kind === "prompt") return a.id === b.id;
+  return a.kind === "global" && b.kind === "global";
+}
+
+/**
+ * The display name for whatever `target` points at — a popover action's
+ * fixed label, a prompt's own label (or "a prompt" if it no longer exists),
+ * or "Open Kallilex" for the global shortcut. Used by the recorder for
+ * conflict messages and by the Shortcuts tab for row labels.
+ */
+export function describeTarget(settings: Settings, target: ShortcutTarget): string {
+  switch (target.kind) {
+    case "action":
+      return ACTION_LABELS[target.action];
+    case "prompt":
+      return settings.prompts.find((p) => p.id === target.id)?.label ?? "a prompt";
+    case "global":
+      return "Open Kallilex";
+  }
+}
+
+/**
+ * Whichever target currently holds `chord` — a popover action, a prompt, or
+ * the global shortcut (via `chordFromAccelerator`, not a string comparison)
+ * — or `null` if it's free. Stored values are compared canonically
+ * (`canonicalizeChord`), so a differently-ordered or differently-cased
+ * stored string still counts as the same chord; a stored value that doesn't
+ * parse at all is silently skipped rather than reported as a holder, same
+ * as the Rust side. `exclude` is the target being edited — it must never
+ * conflict with its own current value.
+ */
+export function holderOf(
+  settings: Settings,
+  chord: string,
+  os: Os,
+  exclude?: ShortcutTarget,
+): ShortcutTarget | null {
+  const canonical = canonicalizeChord(chord);
+  if (!canonical) return null;
+
+  for (const action of POPOVER_ACTIONS) {
+    const target: ShortcutTarget = { kind: "action", action };
+    if (exclude && targetsEqual(exclude, target)) continue;
+    const raw = settings.popoverShortcuts[action];
+    if (raw !== null && canonicalizeChord(raw) === canonical) return target;
+  }
+
+  for (const prompt of settings.prompts) {
+    const target: ShortcutTarget = { kind: "prompt", id: prompt.id };
+    if (exclude && targetsEqual(exclude, target)) continue;
+    if (prompt.shortcut !== null && canonicalizeChord(prompt.shortcut) === canonical) return target;
+  }
+
+  const globalTarget: ShortcutTarget = { kind: "global" };
+  if (!(exclude && targetsEqual(exclude, globalTarget))) {
+    if (chordFromAccelerator(settings.shortcut, os) === canonical) return globalTarget;
+  }
+
+  return null;
+}
+
+/**
+ * Which popover action or prompt the *global* accelerator `accelerator`
+ * would collide with, were it saved — the recorder for the global shortcut
+ * needs this instead of `holderOf` because the candidate it records is an
+ * accelerator string, not a chord, and because the global shortcut can
+ * never conflict with itself. Returns `null` when the accelerator doesn't
+ * map into chord space at all (nothing to collide with) or nothing holds
+ * it.
+ */
+export function holderOfAccelerator(
+  settings: Settings,
+  accelerator: string,
+  os: Os,
+): ShortcutTarget | null {
+  const chord = chordFromAccelerator(accelerator, os);
+  if (chord === null) return null;
+
+  for (const action of POPOVER_ACTIONS) {
+    const raw = settings.popoverShortcuts[action];
+    if (raw !== null && canonicalizeChord(raw) === chord) return { kind: "action", action };
+  }
+  for (const prompt of settings.prompts) {
+    if (prompt.shortcut !== null && canonicalizeChord(prompt.shortcut) === chord) {
+      return { kind: "prompt", id: prompt.id };
+    }
+  }
+  return null;
+}
+
+/**
+ * The first of `Mod+1`…`Mod+9` that `holderOf` reports free — what a newly
+ * created prompt is pre-filled with, and `null` once all nine are taken (a
+ * new prompt then simply starts unbound).
+ */
+export function nextFreePromptShortcut(settings: Settings, os: Os): string | null {
+  for (let n = 1; n <= 9; n++) {
+    const candidate = `Mod+${n}`;
+    if (holderOf(settings, candidate, os) === null) return candidate;
+  }
+  return null;
+}
+
+/**
+ * A non-blocking warning for an otherwise-valid chord, shown alongside a
+ * successful commit rather than instead of one. Linux-only today:
+ * `Mod+Alt+F1`-`F12` is allowed (see `core/shortcuts.rs`'s rules) but many
+ * desktops reserve Ctrl+Alt+F-keys for switching virtual terminals, so a
+ * user binding one should at least know why it might not reach Kallilex.
+ */
+export function shortcutWarning(chord: string, os: Os): string | null {
+  if (os !== "linux") return null;
+  const parsed = parseChord(chord);
+  if (!parsed) return null;
+  if (parsed.mod && parsed.alt && !parsed.shift && /^F([1-9]|1[0-2])$/.test(parsed.key)) {
+    return "Many Linux desktops use Ctrl+Alt+F-keys to switch virtual terminals.";
+  }
+  return null;
 }

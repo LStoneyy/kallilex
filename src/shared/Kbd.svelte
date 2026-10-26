@@ -1,17 +1,20 @@
 <script lang="ts">
   import { formatChord, type Os } from "./shortcuts";
 
-  // `chord` is a stored `[Mod+][Alt+][Shift+]Key` string; rendering is
-  // entirely `formatChord`'s call — this component only lays its tokens out
-  // as `<kbd>` elements, macOS tight against each other, everywhere else
-  // with a `+` between.
-  let { chord, os }: { chord: string; os: Os } = $props();
+  // `chord` is a stored `[Mod+][Alt+][Shift+]Key` string, formatted via
+  // `formatChord`; this component only lays the resulting tokens out as
+  // `<kbd>` elements, macOS tight against each other, everywhere else with a
+  // `+` between. `tokens` lets a caller pass already-formatted display
+  // tokens instead (the global shortcut's accelerator grammar has no chord
+  // string to format, so `ShortcutRecorder` resolves it with
+  // `formatAccelerator` itself) — exactly one of `chord`/`tokens` is given.
+  let { chord, tokens, os }: { chord?: string; tokens?: string[]; os: Os } = $props();
 
-  const tokens = $derived(formatChord(chord, os));
+  const resolvedTokens = $derived(tokens ?? (chord !== undefined ? formatChord(chord, os) : []));
 </script>
 
 <span class="kbd-chord">
-  {#each tokens as token, index (index)}
+  {#each resolvedTokens as token, index (index)}
     {#if index > 0 && os !== "macos"}<span class="kbd-sep">+</span>{/if}
     <kbd>{token}</kbd>
   {/each}
