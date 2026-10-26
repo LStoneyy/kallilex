@@ -60,7 +60,7 @@ function defaultSettings(): Settings {
     autoCopyResult: false,
     onboardingCompleted: false,
     popoverPosition: null,
-    prompts: [],
+    prompts: [{ id: "rewrite", label: "Rewrite", instruction: "Rewrite this.", shortcut: "Mod+1" }],
     updateChannel: "stable",
     updateCheckFrequency: "daily",
     popoverShortcuts: {
@@ -386,13 +386,31 @@ describe("onboarding App", () => {
   });
 
   describe("Finish step", () => {
-    async function goToFinishStep() {
-      getPlatformInfo.mockResolvedValue(x11PlatformInfo());
+    async function goToFinishStep(platformInfo: PlatformInfo = x11PlatformInfo()) {
+      getPlatformInfo.mockResolvedValue(platformInfo);
       render(App);
       await clickButton("Get started");
+      if (platformInfo.permissionRequired) {
+        await screen.findByText("Accessibility permission");
+        await clickButton("Continue");
+      } else if (platformInfo.os === "windows") {
+        await screen.findByText("Windows spell check");
+        await clickButton("Continue");
+      } else if (platformInfo.session === "wayland") {
+        await screen.findByText("Automatic paste-back");
+        await clickButton("Continue");
+      }
       await screen.findByText("Set up AI actions");
       await clickButton("Skip for now");
       await screen.findByText("You're all set");
+    }
+
+    async function expectShortcutHint(expected: string) {
+      await waitFor(() => {
+        const hints = document.querySelectorAll("p.hint");
+        const last = hints[hints.length - 1];
+        expect(last?.textContent?.replace(/\s+/g, " ").trim()).toBe(expected);
+      });
     }
 
     it("defaults the autostart toggle to off and toggling calls enableAutostart", async () => {
@@ -430,6 +448,59 @@ describe("onboarding App", () => {
       await clickButton("Done");
 
       expect(completeOnboarding).toHaveBeenCalledTimes(1);
+    });
+
+    it("recaps the real shortcuts with macOS chords", async () => {
+      await goToFinishStep(macosPlatformInfo());
+
+      await expectShortcutHint(
+        "In the popover, ⌘1 runs your first prompt, ⌘↩ replaces and ⌘⇧C copies — hold ⌘ to see every shortcut. Change them in Settings → Shortcuts.",
+      );
+    });
+
+    it("uses Ctrl chords and hold-Ctrl wording on Windows", async () => {
+      await goToFinishStep(windowsPlatformInfo());
+
+      await expectShortcutHint(
+        "In the popover, Ctrl+1 runs your first prompt, Ctrl+Enter replaces and Ctrl+Shift+C copies — hold Ctrl to see every shortcut. Change them in Settings → Shortcuts.",
+      );
+    });
+
+    it("omits Replace when paste-back isn't available", async () => {
+      await goToFinishStep({ ...macosPlatformInfo(), replaceBackAvailable: false });
+
+      await expectShortcutHint(
+        "In the popover, ⌘1 runs your first prompt and ⌘⇧C copies — hold ⌘ to see every shortcut. Change them in Settings → Shortcuts.",
+      );
+    });
+
+    it("omits an unbound shortcut from the recap", async () => {
+      getSettings.mockResolvedValue({
+        ...defaultSettings(),
+        popoverShortcuts: { ...defaultSettings().popoverShortcuts, copy: null },
+      });
+      await goToFinishStep(macosPlatformInfo());
+
+      await expectShortcutHint(
+        "In the popover, ⌘1 runs your first prompt and ⌘↩ replaces — hold ⌘ to see every shortcut. Change them in Settings → Shortcuts.",
+      );
+    });
+
+    it("falls back to a plain sentence when nothing is bound", async () => {
+      getSettings.mockResolvedValue({
+        ...defaultSettings(),
+        prompts: [],
+        popoverShortcuts: {
+          replace: null,
+          copy: null,
+          customPrompt: null,
+          openSettings: null,
+          checkSpelling: null,
+        },
+      });
+      await goToFinishStep(macosPlatformInfo());
+
+      await expectShortcutHint("Change your shortcuts in Settings → Shortcuts.");
     });
   });
 });

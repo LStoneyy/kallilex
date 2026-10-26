@@ -14,6 +14,7 @@
     testConnection,
   } from "../shared/invoke";
   import { loadPlatformInfo } from "../shared/platform";
+  import { formatChordText } from "../shared/shortcuts";
   import type { PlatformInfo, Preset, ProviderProfile, Settings } from "../shared/types";
 
   const POLL_INTERVAL_MS = 1000;
@@ -200,6 +201,57 @@
       autostartError = error instanceof Error ? error.message : String(error);
     }
   }
+
+  // ---- finish step: shortcuts recap ---------------------------------------
+
+  // A plain-text run (`code: false`) or a chord to render in a `<code>`
+  // (`code: true`) — built up front so the template never has to reason about
+  // spacing or punctuation itself.
+  type HintSegment = { code: boolean; text: string };
+
+  // Lists the bound shortcuts worth recapping (first prompt, Replace, Copy —
+  // in that order, skipping Replace where paste-back isn't available and
+  // skipping anything unbound), then stitches them into one sentence. Falls
+  // back to a shortcuts-exist-but-none-shown sentence when nothing qualifies,
+  // since "press <nothing> to do <nothing>" would read as broken rather than
+  // informative.
+  function finishHintSegments(settings: Settings, platformInfo: PlatformInfo): HintSegment[] {
+    const parts: { shortcut: string; suffix: string }[] = [];
+    const promptShortcut = settings.prompts[0]?.shortcut;
+    if (promptShortcut) {
+      parts.push({ shortcut: promptShortcut, suffix: "runs your first prompt" });
+    }
+    if (platformInfo.replaceBackAvailable && settings.popoverShortcuts.replace) {
+      parts.push({ shortcut: settings.popoverShortcuts.replace, suffix: "replaces" });
+    }
+    if (settings.popoverShortcuts.copy) {
+      parts.push({ shortcut: settings.popoverShortcuts.copy, suffix: "copies" });
+    }
+
+    if (parts.length === 0) {
+      return [{ code: false, text: "Change your shortcuts in Settings → Shortcuts." }];
+    }
+
+    const os = platformInfo.os;
+    const segments: HintSegment[] = [{ code: false, text: "In the popover, " }];
+    parts.forEach((part, index) => {
+      if (index > 0) {
+        segments.push({ code: false, text: index === parts.length - 1 ? " and " : ", " });
+      }
+      segments.push({ code: true, text: formatChordText(part.shortcut, os) });
+      segments.push({ code: false, text: ` ${part.suffix}` });
+    });
+    const modKey = os === "macos" ? "⌘" : "Ctrl";
+    segments.push({
+      code: false,
+      text: ` — hold ${modKey} to see every shortcut. Change them in Settings → Shortcuts.`,
+    });
+    return segments;
+  }
+
+  const finishHint = $derived(
+    settings && platformInfo ? finishHintSegments(settings, platformInfo) : null,
+  );
 
   function handleDone() {
     // The window closes from the Rust side (`complete_onboarding` calls
@@ -389,6 +441,13 @@
         <p class="error">{autostartError}</p>
       {/if}
       <p class="hint">Try it now: select some text and press <code>{defaultShortcut}</code>.</p>
+      {#if finishHint}
+        <p class="hint">
+          {#each finishHint as segment, index (index)}
+            {#if segment.code}<code>{segment.text}</code>{:else}{segment.text}{/if}
+          {/each}
+        </p>
+      {/if}
       <div class="footer">
         <button type="button" onclick={handleDone}>Done</button>
       </div>
