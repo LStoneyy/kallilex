@@ -24,7 +24,19 @@ Kallilex stays fast, unobtrusive, privacy-conscious, free, and open source.
 
 ## Installation (macOS)
 
-Kallilex ships as a macOS app, distributed as a zip on [GitHub Releases](../../releases).
+Kallilex ships as a macOS app. Install it with Homebrew, or download the zip from [GitHub Releases](../../releases).
+
+### Homebrew
+
+```sh
+brew install --cask lstoneyy/tap/kallilex
+```
+
+Using the full name taps [LStoneyy/homebrew-tap](https://github.com/LStoneyy/homebrew-tap) and trusts the cask in one step; Homebrew 7 and later refuse casks from taps you have not trusted. The first launch needs the same one-time approval as the download (step 3 below), and the Accessibility permission as in step 4. Kallilex keeps updating itself from inside the app, so `brew upgrade` leaves it alone.
+
+To remove it, run `brew uninstall --cask kallilex`, or `brew uninstall --zap --cask kallilex` to also remove its settings and the login item. API keys stay in the Keychain either way.
+
+### Download
 
 1. Download `Kallilex-vX.Y.Z-macos-universal.zip` from the latest release.
 2. Unzip it and drag `Kallilex.app` to `/Applications`.
@@ -33,7 +45,7 @@ Kallilex ships as a macOS app, distributed as a zip on [GitHub Releases](../../r
 
 Releases are signed with a stable self-signed certificate, so the Accessibility permission survives app updates. When updating from v0.4.0 or earlier (which were ad-hoc signed), the old permission entry is stale and the checkbox will not stick — run `tccutil reset Accessibility com.webcommits.kallilex` once (or remove the Kallilex entry in the Accessibility list), then grant the permission again.
 
-Notarized builds and a Homebrew cask are on the roadmap; see [Later](#later).
+Notarized builds are on the roadmap; see [Later](#later).
 
 ## Linux
 
@@ -224,7 +236,6 @@ CI (`.github/workflows/ci.yml`) runs `pnpm check` (Svelte/TypeScript typecheck),
 ## Later
 
 - Developer-ID signing and notarization;
-- Homebrew cask;
 - richer diff view and one-click suggestion acceptance;
 - user-defined rewrite presets;
 - per-app presets;

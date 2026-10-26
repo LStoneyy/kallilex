@@ -269,6 +269,11 @@ Run this on a machine (or fresh user account) that has never run Kallilex:
 11. [ ] Publish the draft release. Afterwards, `curl -sI` on each `url` in
         `latest.json` answers with a redirect to GitHub's download storage,
         and a check from the previous version offers this one.
+12. [ ] For a stable release, confirm the `Homebrew` workflow ran on
+        publishing and that `LStoneyy/homebrew-tap` has a `kallilex X.Y.Z`
+        commit with the new version and checksum. Pre-releases are skipped by
+        design. If the run failed, fix the cause and re-run it with
+        `gh workflow run homebrew.yml -f tag=vX.Y.Z`.
 
 Unpublishing or deleting a published release removes it from every future
 check immediately: the app compares versions on each check and remembers no
@@ -367,3 +372,31 @@ every future update and must be reinstalled by hand once. Rotate only if
 the private key is lost or compromised — losing it has the same effect,
 because no further release can be signed for the existing installs — and
 announce the rotation in the README and the release notes when you do.
+
+## 10. Homebrew tap
+
+The cask lives in
+[LStoneyy/homebrew-tap](https://github.com/LStoneyy/homebrew-tap) as
+`Casks/kallilex.rb`. Users install it with `brew install --cask
+lstoneyy/tap/kallilex`.
+
+- The `Homebrew` workflow (`.github/workflows/homebrew.yml`) runs when a
+  release is published, skips pre-releases and any tag that is not `vX.Y.Z`,
+  downloads `Kallilex-vX.Y.Z-macos-universal.zip`, and lets
+  `scripts/bump-homebrew-cask.sh` rewrite `version` and `sha256`. The script
+  refuses downgrades and a changed checksum for a version the tap already
+  has; a re-run for the current version ends without a commit.
+- It pushes with the secret `HOMEBREW_TAP_TOKEN`: a fine-grained personal
+  access token limited to the tap repository with *Contents: Read and
+  write*. **It expires on 2027-10-26.** Before then, create a new token with
+  the same scope and set it from a file: `gh secret set HOMEBREW_TAP_TOKEN
+  -R LStoneyy/kallilex < token-file`, then delete the file. An expired token
+  shows up as a failed "Checkout the tap" step.
+- The cask is not notarized and stays in the user's quarantine: the first
+  launch needs "Open Anyway", like the zip. Homebrew carries that approval
+  over to later upgrades as long as the signing certificate stays the same
+  (section 8). Do not add a `postflight` that strips the quarantine
+  attribute.
+- The cask sets `auto_updates true`; the in-app updater stays the primary
+  update path. Brew users who want Homebrew to update it anyway use `brew
+  upgrade --greedy`.
