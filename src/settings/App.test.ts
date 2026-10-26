@@ -35,6 +35,8 @@ const {
   checkForUpdates,
   installUpdate,
   openUpdateReleasePage,
+  assignShortcut,
+  resetPopoverShortcuts,
 } = vi.hoisted(() => ({
   accessibilityStatus: vi.fn(),
   openAccessibilitySettings: vi.fn(),
@@ -59,6 +61,8 @@ const {
   checkForUpdates: vi.fn(),
   installUpdate: vi.fn(),
   openUpdateReleasePage: vi.fn(),
+  assignShortcut: vi.fn(),
+  resetPopoverShortcuts: vi.fn(),
 }));
 
 vi.mock("../shared/invoke", () => ({
@@ -85,6 +89,8 @@ vi.mock("../shared/invoke", () => ({
   checkForUpdates,
   installUpdate,
   openUpdateReleasePage,
+  assignShortcut,
+  resetPopoverShortcuts,
 }));
 
 const { listen } = vi.hoisted(() => ({
@@ -236,6 +242,8 @@ describe("settings App", () => {
     checkForUpdates.mockClear();
     installUpdate.mockClear();
     openUpdateReleasePage.mockClear();
+    assignShortcut.mockClear();
+    resetPopoverShortcuts.mockClear();
     listen.mockClear();
 
     accessibilityStatus.mockResolvedValue(false);
@@ -263,6 +271,11 @@ describe("settings App", () => {
 
   async function openAccessibilityTab() {
     const tab = await screen.findByRole("button", { name: "Accessibility" });
+    await fireEvent.click(tab);
+  }
+
+  async function openShortcutsTab() {
+    const tab = await screen.findByRole("button", { name: "Shortcuts" });
     await fireEvent.click(tab);
   }
 
@@ -444,7 +457,7 @@ describe("settings App", () => {
   it("adding a prompt calls savePrompt and shows the new entry", async () => {
     savePrompt.mockResolvedValue([
       ...defaultPrompts(),
-      { id: "prompt-new", label: "Translate", instruction: "Translate to French.", shortcut: null },
+      { id: "prompt-new", label: "Translate", instruction: "Translate to French.", shortcut: "Mod+4" },
     ]);
 
     render(App);
@@ -462,15 +475,66 @@ describe("settings App", () => {
     const saveButton = screen.getByRole("button", { name: "Save" });
     await fireEvent.click(saveButton);
 
+    // ⌘1-⌘3 are already taken by the three seeded prompts, so the new one
+    // was pre-filled with the next free slot.
     await waitFor(() => {
-      expect(savePrompt).toHaveBeenCalledWith({
-        id: "",
-        label: "Translate",
-        instruction: "Translate to French.",
-        shortcut: null,
-      });
+      expect(savePrompt).toHaveBeenCalledWith(
+        {
+          id: "",
+          label: "Translate",
+          instruction: "Translate to French.",
+          shortcut: "Mod+4",
+        },
+        false,
+      );
     });
     expect(await screen.findByText("Translate")).toBeInTheDocument();
+  });
+
+  it("the new-prompt form is pre-filled with the next free ⌘N", async () => {
+    render(App);
+    await openPromptsTab();
+
+    const addButton = await screen.findByRole("button", { name: "Add prompt" });
+    await fireEvent.click(addButton);
+
+    expect(
+      await screen.findByLabelText(
+        "Shortcut for this prompt: ⌘4. Press Enter to record a new one.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("the new-prompt form leaves the shortcut unset once all nine slots are taken", async () => {
+    listPrompts.mockResolvedValue(
+      Array.from({ length: 9 }, (_, i) => ({
+        id: `prompt-${i + 1}`,
+        label: `Prompt ${i + 1}`,
+        instruction: "Do something.",
+        shortcut: `Mod+${i + 1}`,
+      })),
+    );
+    getSettings.mockResolvedValue({
+      ...defaultSettings(),
+      prompts: Array.from({ length: 9 }, (_, i) => ({
+        id: `prompt-${i + 1}`,
+        label: `Prompt ${i + 1}`,
+        instruction: "Do something.",
+        shortcut: `Mod+${i + 1}`,
+      })),
+    });
+
+    render(App);
+    await openPromptsTab();
+
+    const addButton = await screen.findByRole("button", { name: "Add prompt" });
+    await fireEvent.click(addButton);
+
+    expect(
+      await screen.findByLabelText(
+        "Shortcut for this prompt: not set. Press Enter to record a new one.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("editing a prompt prefills the form with its current values", async () => {
@@ -501,12 +565,15 @@ describe("settings App", () => {
     await fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(savePrompt).toHaveBeenCalledWith({
-        id: "builtin-rewrite",
-        label: "Rewrite",
-        instruction: defaultPrompts()[0]!.instruction,
-        shortcut: "Mod+1",
-      });
+      expect(savePrompt).toHaveBeenCalledWith(
+        {
+          id: "builtin-rewrite",
+          label: "Rewrite",
+          instruction: defaultPrompts()[0]!.instruction,
+          shortcut: "Mod+1",
+        },
+        false,
+      );
     });
   });
 
@@ -586,38 +653,62 @@ describe("settings App", () => {
     expect(await screen.findByText("Prompt label must not be empty.")).toBeInTheDocument();
   });
 
-  it("saving the shortcut calls setSettings with the new shortcut", async () => {
+  it("recording a new global shortcut calls assignShortcut with the accelerator", async () => {
+    assignShortcut.mockResolvedValue({ ...defaultSettings(), shortcut: "Shift+Cmd+K" });
+
     render(App);
+    await openShortcutsTab();
 
-    const shortcutInput = await screen.findByPlaceholderText("Alt+Cmd+K");
-    await fireEvent.input(shortcutInput, { target: { value: "Cmd+Shift+K" } });
-
-    const saveButton = screen.getByRole("button", { name: "Save" });
-    await fireEvent.click(saveButton);
+    const recorderButton = await screen.findByRole("button", {
+      name: /Open Kallilex \(global\)/,
+    });
+    await fireEvent.click(recorderButton);
+    await fireEvent.keyDown(recorderButton, {
+      key: "k",
+      code: "KeyK",
+      metaKey: true,
+      shiftKey: true,
+    });
 
     await waitFor(() => {
-      expect(setSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ shortcut: "Cmd+Shift+K" }),
-      );
+      expect(assignShortcut).toHaveBeenCalledWith({ kind: "global" }, "Shift+Cmd+K", false);
     });
   });
 
-  it("a rejected shortcut save shows the returned message", async () => {
-    setSettings.mockRejectedValueOnce(
-      new Error('Kallilex couldn\'t understand the shortcut "garbage": parse error'),
+  it("a rejected global shortcut save shows the returned message and re-fetches settings", async () => {
+    assignShortcut.mockRejectedValueOnce(
+      new Error(
+        "Settings were saved, but the new shortcut could not be registered: already in use",
+      ),
     );
 
     render(App);
+    await openShortcutsTab();
 
-    const shortcutInput = await screen.findByPlaceholderText("Alt+Cmd+K");
-    await fireEvent.input(shortcutInput, { target: { value: "garbage" } });
+    expect(getSettings).toHaveBeenCalledTimes(1);
 
-    const saveButton = screen.getByRole("button", { name: "Save" });
-    await fireEvent.click(saveButton);
+    const recorderButton = await screen.findByRole("button", {
+      name: /Open Kallilex \(global\)/,
+    });
+    await fireEvent.click(recorderButton);
+    await fireEvent.keyDown(recorderButton, {
+      key: "k",
+      code: "KeyK",
+      metaKey: true,
+      shiftKey: true,
+    });
 
     expect(
-      await screen.findByText('Kallilex couldn\'t understand the shortcut "garbage": parse error'),
+      await screen.findByText(
+        "Settings were saved, but the new shortcut could not be registered: already in use",
+      ),
     ).toBeInTheDocument();
+    // The command can save the shortcut and still fail to register it at
+    // the OS level — local state is re-fetched either way so it never
+    // disagrees with what was actually persisted.
+    await waitFor(() => {
+      expect(getSettings).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("toggling spellcheck calls setSettings with the flipped flag", async () => {
@@ -671,7 +762,7 @@ describe("settings App", () => {
     });
   });
 
-  it("reflects the platform's default shortcut in the hint and input placeholder", async () => {
+  it("reflects the platform's default shortcut in the hint", async () => {
     getPlatformInfo.mockResolvedValue({
       ...macosPlatformInfo(),
       os: "linux",
@@ -679,9 +770,8 @@ describe("settings App", () => {
     });
 
     render(App);
+    await openShortcutsTab();
 
-    const shortcutInput = await screen.findByPlaceholderText("Ctrl+Alt+K");
-    expect(shortcutInput).toBeInTheDocument();
     expect(await screen.findByText("Ctrl+Alt+K", { selector: "code" })).toBeInTheDocument();
   });
 
@@ -703,13 +793,12 @@ describe("settings App", () => {
     expect(accessibilityStatus).not.toHaveBeenCalled();
   });
 
-  it("reflects Windows' default shortcut in the hint and input placeholder", async () => {
+  it("reflects Windows' default shortcut in the hint", async () => {
     getPlatformInfo.mockResolvedValue(windowsPlatformInfo());
 
     render(App);
+    await openShortcutsTab();
 
-    const shortcutInput = await screen.findByPlaceholderText("Ctrl+Alt+K");
-    expect(shortcutInput).toBeInTheDocument();
     expect(await screen.findByText("Ctrl+Alt+K", { selector: "code" })).toBeInTheDocument();
   });
 
@@ -798,12 +887,15 @@ describe("settings App", () => {
     getWaylandShortcutTrigger.mockResolvedValue("CTRL+ALT+k");
 
     render(App);
+    await openShortcutsTab();
 
     expect(await screen.findByText("CTRL+ALT+k", { selector: "code" })).toBeInTheDocument();
     expect(
       screen.getByText(/This shortcut is managed by your system/),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Open Kallilex \(global\)/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a not-bound hint when the portal declined or hasn't confirmed the shortcut", async () => {
@@ -817,11 +909,14 @@ describe("settings App", () => {
     getWaylandShortcutTrigger.mockResolvedValue(null);
 
     render(App);
+    await openShortcutsTab();
 
     expect(
       await screen.findByText(/Not currently bound/),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Open Kallilex \(global\)/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("picks up a later-confirmed portal trigger by polling, since the bind can still be pending when the window mounts", async () => {
@@ -836,6 +931,7 @@ describe("settings App", () => {
     getWaylandShortcutTrigger.mockResolvedValue(null);
 
     render(App);
+    await openShortcutsTab();
 
     await vi.waitFor(() => {
       expect(getWaylandShortcutTrigger).toHaveBeenCalledTimes(1);
@@ -849,7 +945,7 @@ describe("settings App", () => {
     expect(screen.queryByText(/Not currently bound/)).not.toBeInTheDocument();
   });
 
-  it("keeps the free-text shortcut input on Wayland when the compositor has no GlobalShortcuts portal", async () => {
+  it("keeps the shortcut recorder on Wayland when the compositor has no GlobalShortcuts portal", async () => {
     getPlatformInfo.mockResolvedValue({
       ...macosPlatformInfo(),
       os: "linux",
@@ -859,8 +955,11 @@ describe("settings App", () => {
     });
 
     render(App);
+    await openShortcutsTab();
 
-    expect(await screen.findByPlaceholderText("Alt+Cmd+K")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Open Kallilex \(global\)/ }),
+    ).toBeInTheDocument();
     expect(getWaylandShortcutTrigger).not.toHaveBeenCalled();
   });
 
@@ -1111,6 +1210,314 @@ describe("settings App", () => {
     expect(screen.queryByText(/switched off in Settings/)).not.toBeInTheDocument();
   });
 
+  describe("Shortcuts tab", () => {
+    it("General tab no longer shows a shortcut section", async () => {
+      render(App);
+      await screen.findByRole("heading", { name: "Autostart" });
+      expect(screen.queryByRole("heading", { name: "Shortcut" })).not.toBeInTheDocument();
+    });
+
+    it("renders every row with its formatted tokens", async () => {
+      render(App);
+      await openShortcutsTab();
+
+      expect(
+        await screen.findByRole("button", { name: /Open Kallilex \(global\)/ }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Replace: ⌘↩/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Copy: ⌘⇧C/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Custom prompt: ⌘L/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Check spelling: not set/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Open Settings: ⌘,/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Rewrite: ⌘1/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Shorten: ⌘2/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Improve clarity: ⌘3/ })).toBeInTheDocument();
+    });
+
+    it("shows the Replace hint when replaceBackAvailable is false, while still editable", async () => {
+      getPlatformInfo.mockResolvedValue({ ...macosPlatformInfo(), replaceBackAvailable: false });
+
+      render(App);
+      await openShortcutsTab();
+
+      expect(await screen.findByText("Not available on this system")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Replace: ⌘↩/ })).toBeInTheDocument();
+    });
+
+    it("shows the no-prompts hint when there are none", async () => {
+      listPrompts.mockResolvedValue([]);
+      getSettings.mockResolvedValue({ ...defaultSettings(), prompts: [] });
+
+      render(App);
+      await openShortcutsTab();
+
+      expect(
+        await screen.findByText("No prompts yet — add them in the Prompts tab."),
+      ).toBeInTheDocument();
+    });
+
+    it("recording a free chord on Replace calls assignShortcut with the action target", async () => {
+      assignShortcut.mockResolvedValue(defaultSettings());
+
+      render(App);
+      await openShortcutsTab();
+
+      const replaceButton = await screen.findByRole("button", { name: /Replace: ⌘↩/ });
+      await fireEvent.click(replaceButton);
+      await fireEvent.keyDown(replaceButton, { key: "k", code: "KeyK", metaKey: true });
+
+      await waitFor(() => {
+        expect(assignShortcut).toHaveBeenCalledWith(
+          { kind: "action", action: "replace" },
+          "Mod+K",
+          false,
+        );
+      });
+    });
+
+    it("a reserved chord shows the reason and does not call assignShortcut", async () => {
+      render(App);
+      await openShortcutsTab();
+
+      const copyButton = await screen.findByRole("button", { name: /Copy: ⌘⇧C/ });
+      await fireEvent.click(copyButton);
+      await fireEvent.keyDown(copyButton, { key: "c", code: "KeyC", metaKey: true });
+
+      expect(await screen.findByText("⌘C is reserved for copying text.")).toBeInTheDocument();
+      expect(assignShortcut).not.toHaveBeenCalled();
+    });
+
+    it("a taken chord shows the conflict line, and Take over calls assignShortcut with takeOver: true", async () => {
+      assignShortcut.mockResolvedValue(defaultSettings());
+
+      render(App);
+      await openShortcutsTab();
+
+      const customPromptButton = await screen.findByRole("button", { name: /Custom prompt: ⌘L/ });
+      await fireEvent.click(customPromptButton);
+      await fireEvent.keyDown(customPromptButton, { key: "1", code: "Digit1", metaKey: true });
+
+      expect(await screen.findByText('⌘1 is used by "Rewrite".')).toBeInTheDocument();
+      await fireEvent.click(screen.getByText("Take over"));
+
+      await waitFor(() => {
+        expect(assignShortcut).toHaveBeenCalledWith(
+          { kind: "action", action: "customPrompt" },
+          "Mod+1",
+          true,
+        );
+      });
+    });
+
+    it("a conflict with the global shortcut blocks with its own message instead of offering Take over", async () => {
+      render(App);
+      await openShortcutsTab();
+
+      const replaceButton = await screen.findByRole("button", { name: /Replace: ⌘↩/ });
+      await fireEvent.click(replaceButton);
+      // The default macOS global shortcut, Alt+Cmd+K, maps onto Mod+Alt+K.
+      await fireEvent.keyDown(replaceButton, {
+        key: "k",
+        code: "KeyK",
+        metaKey: true,
+        altKey: true,
+      });
+
+      expect(await screen.findByText("Already used to open Kallilex.")).toBeInTheDocument();
+      expect(screen.queryByText("Take over")).not.toBeInTheDocument();
+      expect(assignShortcut).not.toHaveBeenCalled();
+    });
+
+    it("↺ resets a changed popover shortcut to its default, and ✕ clears it", async () => {
+      assignShortcut.mockResolvedValue(defaultSettings());
+      getSettings.mockResolvedValue({
+        ...defaultSettings(),
+        popoverShortcuts: { ...defaultPopoverShortcuts(), replace: "Mod+K" },
+      });
+
+      render(App);
+      await openShortcutsTab();
+
+      const resetButton = await screen.findByLabelText("Reset shortcut for Replace to its default");
+      await fireEvent.click(resetButton);
+      await waitFor(() => {
+        expect(assignShortcut).toHaveBeenCalledWith(
+          { kind: "action", action: "replace" },
+          "Mod+Enter",
+          false,
+        );
+      });
+
+      const clearButton = await screen.findByLabelText("Clear shortcut for Replace");
+      await fireEvent.click(clearButton);
+      await waitFor(() => {
+        expect(assignShortcut).toHaveBeenCalledWith(
+          { kind: "action", action: "replace" },
+          null,
+          false,
+        );
+      });
+    });
+
+    it("Reset popover shortcuts needs two clicks and calls resetPopoverShortcuts", async () => {
+      resetPopoverShortcuts.mockResolvedValue(defaultSettings());
+
+      render(App);
+      await openShortcutsTab();
+
+      const resetButton = await screen.findByRole("button", { name: "Reset popover shortcuts" });
+      await fireEvent.click(resetButton);
+      expect(resetPopoverShortcuts).not.toHaveBeenCalled();
+
+      const confirmButton = await screen.findByRole("button", { name: "Confirm reset?" });
+      await fireEvent.click(confirmButton);
+
+      await waitFor(() => {
+        expect(resetPopoverShortcuts).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("recording a chord on a prompt row calls assignShortcut with the prompt target", async () => {
+      assignShortcut.mockResolvedValue(defaultSettings());
+
+      render(App);
+      await openShortcutsTab();
+
+      const rewriteButton = await screen.findByRole("button", { name: /Rewrite: ⌘1/ });
+      await fireEvent.click(rewriteButton);
+      await fireEvent.keyDown(rewriteButton, { key: "9", code: "Digit9", metaKey: true });
+
+      await waitFor(() => {
+        expect(assignShortcut).toHaveBeenCalledWith(
+          { kind: "prompt", id: "builtin-rewrite" },
+          "Mod+9",
+          false,
+        );
+      });
+    });
+
+    it("switches to the Shortcuts tab on a settings:show-tab event", async () => {
+      const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+      listen.mockImplementation((event: string, handler: (event: { payload: unknown }) => void) => {
+        handlers[event] = handler;
+        return Promise.resolve(() => {});
+      });
+
+      render(App);
+      await screen.findByRole("button", { name: "General" });
+
+      handlers["settings:show-tab"]({ payload: "shortcuts" });
+
+      expect(await screen.findByRole("heading", { name: "Shortcuts" })).toBeInTheDocument();
+    });
+  });
+
+  describe("Prompts tab shortcuts", () => {
+    it("shows the shortcut chip on a prompt row", async () => {
+      render(App);
+      await openPromptsTab();
+
+      const label = await screen.findByText("Rewrite");
+      const row = label.closest("li")!;
+      expect(within(row).getByText("⌘")).toBeInTheDocument();
+      expect(within(row).getByText("1")).toBeInTheDocument();
+    });
+
+    it("deleting a prompt frees its shortcut for the next new-prompt prefill", async () => {
+      deletePrompt.mockResolvedValue(defaultPrompts().filter((p) => p.id !== "builtin-shorten"));
+
+      render(App);
+      await openPromptsTab();
+
+      await screen.findByText("Shorten");
+      const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+      // Prompts render in list order: Rewrite (Mod+1), Shorten (Mod+2), …
+      await fireEvent.click(deleteButtons[1]!);
+      const confirmButton = await screen.findByRole("button", { name: "Confirm delete?" });
+      await fireEvent.click(confirmButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText("Shorten")).not.toBeInTheDocument();
+      });
+
+      const addButton = await screen.findByRole("button", { name: "Add prompt" });
+      await fireEvent.click(addButton);
+
+      // Mod+2 is free again now that Shorten (its old holder) is gone — the
+      // deleted prompt's shortcut must not still read as held via a stale
+      // `settings.prompts`.
+      expect(
+        await screen.findByRole("button", { name: /this prompt: ⌘2/ }),
+      ).toBeInTheDocument();
+    });
+
+    it("the new-prompt form is pre-filled with the next free ⌘N", async () => {
+      render(App);
+      await openPromptsTab();
+
+      const addButton = await screen.findByRole("button", { name: "Add prompt" });
+      await fireEvent.click(addButton);
+
+      expect(
+        await screen.findByRole("button", { name: /this prompt: ⌘4/ }),
+      ).toBeInTheDocument();
+    });
+
+    it("leaves the new-prompt shortcut unset once all nine slots are taken", async () => {
+      const nineTaken: CustomPrompt[] = Array.from({ length: 9 }, (_, i) => ({
+        id: `prompt-${i + 1}`,
+        label: `Prompt ${i + 1}`,
+        instruction: "Do something.",
+        shortcut: `Mod+${i + 1}`,
+      }));
+      listPrompts.mockResolvedValue(nineTaken);
+      getSettings.mockResolvedValue({ ...defaultSettings(), prompts: nineTaken });
+
+      render(App);
+      await openPromptsTab();
+
+      const addButton = await screen.findByRole("button", { name: "Add prompt" });
+      await fireEvent.click(addButton);
+
+      expect(
+        await screen.findByRole("button", { name: /this prompt: not set/ }),
+      ).toBeInTheDocument();
+    });
+
+    it("Take over in the form stages the take-over and Save passes takeOverShortcut: true", async () => {
+      savePrompt.mockResolvedValue(defaultPrompts());
+
+      render(App);
+      await openPromptsTab();
+
+      await screen.findByText("Rewrite");
+      const editButtons = screen.getAllByRole("button", { name: "Edit" });
+      await fireEvent.click(editButtons[1]!); // Shorten, currently Mod+2
+
+      const shortcutButton = await screen.findByRole("button", { name: /Shorten: ⌘2/ });
+      await fireEvent.click(shortcutButton);
+      await fireEvent.keyDown(shortcutButton, { key: "1", code: "Digit1", metaKey: true });
+
+      expect(await screen.findByText('⌘1 is used by "Rewrite".')).toBeInTheDocument();
+      await fireEvent.click(screen.getByText("Take over"));
+
+      const saveButton = await screen.findByRole("button", { name: "Save" });
+      await fireEvent.click(saveButton);
+
+      await waitFor(() => {
+        expect(savePrompt).toHaveBeenCalledWith(
+          {
+            id: "builtin-shorten",
+            label: "Shorten",
+            instruction: defaultPrompts()[1]!.instruction,
+            shortcut: "Mod+1",
+          },
+          true,
+        );
+      });
+    });
+  });
+
   describe("Updates tab", () => {
     it("renders the current version and the saved channel badge", async () => {
       getSettings.mockResolvedValue({ ...defaultSettings(), updateChannel: "preview" });
@@ -1318,9 +1725,9 @@ describe("settings App", () => {
 
       handlers["settings:show-tab"]({ payload: "bogus" });
 
-      // Still on General: its shortcut heading is present, the Updates
+      // Still on General: its Autostart heading is present, the Updates
       // version line is not.
-      expect(await screen.findByRole("heading", { name: "Shortcut" })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "Autostart" })).toBeInTheDocument();
       expect(screen.queryByText("Kallilex 0.6.0-beta.1")).not.toBeInTheDocument();
     });
 

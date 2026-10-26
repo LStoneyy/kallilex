@@ -3,6 +3,7 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import {
     accessibilityStatus,
+    assignShortcut,
     checkForUpdates,
     deletePrompt,
     deleteProfile,
@@ -19,6 +20,7 @@
     openAccessibilitySettings,
     openUpdateReleasePage,
     resetPopoverPosition,
+    resetPopoverShortcuts,
     saveProfile,
     savePrompt,
     setActiveProfile,
@@ -26,6 +28,16 @@
     testConnection,
   } from "../shared/invoke";
   import { loadPlatformInfo } from "../shared/platform";
+  import Kbd from "../shared/Kbd.svelte";
+  import ShortcutRecorder from "../shared/ShortcutRecorder.svelte";
+  import {
+    describeTarget,
+    holderOf,
+    holderOfAccelerator,
+    nextFreePromptShortcut,
+    shortcutWarning,
+    validateChord,
+  } from "../shared/shortcuts";
   import type {
     CustomPrompt,
     HeaderEntry,
@@ -33,14 +45,22 @@
     Preset,
     ProviderProfile,
     Settings,
+    ShortcutTarget,
     UpdateStatus,
   } from "../shared/types";
 
   const POLL_INTERVAL_MS = 1000;
 
-  type Tab = "general" | "providers" | "prompts" | "updates" | "accessibility";
+  type Tab = "general" | "shortcuts" | "providers" | "prompts" | "updates" | "accessibility";
 
-  const KNOWN_TABS: readonly Tab[] = ["general", "providers", "prompts", "updates", "accessibility"];
+  const KNOWN_TABS: readonly Tab[] = [
+    "general",
+    "shortcuts",
+    "providers",
+    "prompts",
+    "updates",
+    "accessibility",
+  ];
 
   const checkTimeFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -56,22 +76,28 @@
   let activeTab = $state<Tab>("general");
 
   // Switches tabs and clears the Prompts tab's armed delete-confirmation
-  // (see `promptDeleteConfirmId` below) so it never carries over — leaving
-  // the tab it was armed on, then coming back later, must not greet the
-  // user with a leftover "Confirm delete?" for a click they made in a past
-  // visit to the tab.
+  // (see `promptDeleteConfirmId` below) and the Shortcuts tab's armed reset
+  // confirmation (see `popoverShortcutsResetArmed` below) so neither ever
+  // carries over — leaving the tab it was armed on, then coming back later,
+  // must not greet the user with a leftover "Confirm …?" for a click they
+  // made in a past visit to the tab.
   function selectTab(tab: Tab) {
     activeTab = tab;
     promptDeleteConfirmId = null;
+    popoverShortcutsResetArmed = false;
   }
 
   // ---- platform info ----------------------------------------------------
 
   // `null` until `loadPlatformInfo()` resolves; the macOS-shaped fallback
-  // below keeps the shortcut hint/placeholder looking right in the
-  // meantime, since macOS is the default look.
+  // below keeps the shortcut hint looking right in the meantime, since
+  // macOS is the default look.
   let platformInfo = $state<PlatformInfo | null>(null);
   const defaultShortcut = $derived(platformInfo?.defaultShortcut ?? "Alt+Cmd+K");
+  // `null` until platform info resolves — every shortcut recorder on the
+  // Shortcuts tab needs the OS to format and validate chords, so rows there
+  // wait on this rather than guessing macOS and re-rendering later.
+  const os = $derived(platformInfo?.os ?? null);
 
   // The Wayland GlobalShortcuts portal, when the running
   // compositor offers it, is the sole owner of the "capture" shortcut: the
@@ -102,15 +128,9 @@
 
   async function loadSettings() {
     settings = await getSettings();
-    shortcutDraft = settings.shortcut;
   }
 
-  // ---- General: shortcut ------------------------------------------------
-
-  let shortcutDraft = $state("");
-  let shortcutSaving = $state(false);
-  let shortcutError = $state<string | null>(null);
-  let shortcutSaved = $state(false);
+  // ---- Shortcuts: global shortcut ----------------------------------------
 
   // Portal-reported trigger for the read-only display (see
   // `portalManagedShortcut`). The settings window is created hidden at app
@@ -122,23 +142,116 @@
   // that ends at runtime (cleared back to `null`), and mid-run rebinds.
   let portalTrigger = $state<string | null>(null);
 
-  async function handleSaveShortcut() {
-    shortcutError = null;
-    shortcutSaved = false;
-    shortcutSaving = true;
+  // The shape `ShortcutRecorder`'s `findConflict` expects — defined here
+  // rather than imported since the component only re-exports its props'
+  // types, not this inline interface.
+  interface ShortcutConflict {
+    holder: string;
+    canTakeOver: boolean;
+    message?: string;
+  }
+
+  // Shared conflict lookup behind every chord recorder on this tab (popover
+  // actions, prompt rows, and the prompt form): the global shortcut can
+  // never be taken over from a popover binding, so it gets its own
+  // non-generic message and `canTakeOver: false`; anything else is always
+  // takeable, since `assignShortcut`/`savePrompt` clear the other holder
+  // atomically.
+  function chordConflict(candidate: string, exclude?: ShortcutTarget): ShortcutConflict | null {
+    if (!settings || os === null) return null;
+    const holder = holderOf(settings, candidate, os, exclude);
+    if (!holder) return null;
+    if (holder.kind === "global") {
+      return {
+        holder: "Open Kallilex",
+        canTakeOver: false,
+        message: "Already used to open Kallilex.",
+      };
+    }
+    return { holder: describeTarget(settings, holder), canTakeOver: true };
+  }
+
+  // The global shortcut's own conflict lookup takes an accelerator
+  // candidate, not a chord, and — unlike every other row — *can* take a
+  // combination over from a popover action or prompt (the reverse can
+  // never happen, see `chordConflict` above).
+  function globalShortcutConflict(candidate: string): ShortcutConflict | null {
+    if (!settings || os === null) return null;
+    const holder = holderOfAccelerator(settings, candidate, os);
+    if (!holder) return null;
+    return { holder: describeTarget(settings, holder), canTakeOver: true };
+  }
+
+  async function handleGlobalShortcutCommit(value: string | null, takeOver: boolean) {
     try {
-      // Always re-fetch immediately before mutating, so a stale in-memory
-      // `settings` (e.g. profiles changed from the Providers tab) never
-      // gets clobbered by this save.
-      const fresh = await getSettings();
-      const updated: Settings = { ...fresh, shortcut: shortcutDraft };
-      settings = await setSettings(updated);
-      shortcutDraft = settings.shortcut;
-      shortcutSaved = true;
+      settings = await assignShortcut({ kind: "global" }, value, takeOver);
     } catch (error) {
-      shortcutError = error instanceof Error ? error.message : String(error);
+      // The backend can save the new shortcut and still fail to register
+      // it (e.g. another app already holds it at the OS level) — re-fetch
+      // either way so local state never disagrees with what was actually
+      // persisted, then rethrow so the recorder still shows the message.
+      try {
+        settings = await getSettings();
+      } catch {
+        // Best effort — the original error below is shown regardless.
+      }
+      throw error;
+    }
+  }
+
+  // ---- Shortcuts: popover actions -----------------------------------------
+
+  type PopoverAction = keyof Settings["popoverShortcuts"];
+
+  function actionConflict(candidate: string, action: PopoverAction): ShortcutConflict | null {
+    return chordConflict(candidate, { kind: "action", action });
+  }
+
+  async function handleActionShortcutCommit(
+    action: PopoverAction,
+    value: string | null,
+    takeOver: boolean,
+  ) {
+    settings = await assignShortcut({ kind: "action", action }, value, takeOver);
+  }
+
+  // ---- Shortcuts: prompt rows ---------------------------------------------
+
+  function promptConflict(candidate: string, id: string): ShortcutConflict | null {
+    return chordConflict(candidate, { kind: "prompt", id });
+  }
+
+  async function handlePromptShortcutCommit(id: string, value: string | null, takeOver: boolean) {
+    const updated = await assignShortcut({ kind: "prompt", id }, value, takeOver);
+    settings = updated;
+    prompts = updated.prompts;
+  }
+
+  // ---- Shortcuts: reset popover shortcuts ---------------------------------
+
+  // Two-click armed button, the same pattern as the Prompts tab's delete
+  // confirmation below — `selectTab` disarms it the same way too.
+  let popoverShortcutsResetArmed = $state(false);
+  let popoverShortcutsResetError = $state<string | null>(null);
+
+  function handleResetPopoverShortcutsClick() {
+    if (popoverShortcutsResetArmed) {
+      void confirmResetPopoverShortcuts();
+    } else {
+      popoverShortcutsResetArmed = true;
+    }
+  }
+
+  async function confirmResetPopoverShortcuts() {
+    popoverShortcutsResetError = null;
+    try {
+      const updated = await resetPopoverShortcuts();
+      settings = updated;
+      prompts = updated.prompts;
+    } catch (error) {
+      popoverShortcutsResetError = error instanceof Error ? error.message : String(error);
     } finally {
-      shortcutSaving = false;
+      popoverShortcutsResetArmed = false;
     }
   }
 
@@ -434,6 +547,10 @@
     promptListError = null;
     try {
       prompts = await deletePrompt(id);
+      // A deleted prompt can free up its shortcut — keep `settings.prompts`
+      // in step so conflict checks and the next-free-⌘N prefill elsewhere
+      // on this window don't still see the shortcut as held.
+      if (settings) settings = { ...settings, prompts };
     } catch (error) {
       promptListError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -458,17 +575,29 @@
   let promptDraft = $state<PromptDraft>(emptyPromptDraft());
   let promptFormError = $state<string | null>(null);
   let promptFormSaving = $state(false);
+  // Set by the form's own shortcut recorder (`confirmOnCommit={false}`, so it
+  // only stages a value rather than saving immediately) when the staged
+  // value was accepted via "Take over" — passed through to `savePrompt` on
+  // Save, same as `assignShortcut`'s own `takeOver` parameter elsewhere on
+  // this window.
+  let promptShortcutTakeOver = $state(false);
 
   function openAddPrompt() {
     promptListError = null;
     promptDeleteConfirmId = null;
-    promptDraft = emptyPromptDraft();
     promptFormError = null;
+    promptShortcutTakeOver = false;
+    // A new prompt gets the next free ⌘1–⌘9 automatically — once settings
+    // and the OS are known; otherwise it simply starts unbound, like an
+    // all-nine-taken prompt would.
+    const shortcut = settings && os !== null ? nextFreePromptShortcut(settings, os) : null;
+    promptDraft = { ...emptyPromptDraft(), shortcut };
     promptView = "form";
   }
 
   function openEditPrompt(prompt: CustomPrompt) {
     promptDeleteConfirmId = null;
+    promptShortcutTakeOver = false;
     promptDraft = {
       id: prompt.id,
       label: prompt.label,
@@ -481,18 +610,45 @@
 
   function handleCancelPromptForm() {
     promptView = "list";
+    promptShortcutTakeOver = false;
+  }
+
+  // The prompt form's own recorder only stages a value (see
+  // `promptShortcutTakeOver` above) — it never talks to the backend itself,
+  // so this is synchronous.
+  function handlePromptDraftShortcutCommit(value: string | null, takeOver: boolean) {
+    promptDraft.shortcut = value;
+    promptShortcutTakeOver = takeOver;
+  }
+
+  function promptFormShortcutConflict(candidate: string): ShortcutConflict | null {
+    const exclude: ShortcutTarget | undefined = promptDraft.id
+      ? { kind: "prompt", id: promptDraft.id }
+      : undefined;
+    return chordConflict(candidate, exclude);
   }
 
   async function handleSavePrompt() {
     promptFormError = null;
     promptFormSaving = true;
     try {
-      prompts = await savePrompt({
-        id: promptDraft.id,
-        label: promptDraft.label,
-        instruction: promptDraft.instruction,
-        shortcut: promptDraft.shortcut,
-      });
+      prompts = await savePrompt(
+        {
+          id: promptDraft.id,
+          label: promptDraft.label,
+          instruction: promptDraft.instruction,
+          shortcut: promptDraft.shortcut,
+        },
+        promptShortcutTakeOver,
+      );
+      // A saved shortcut can have freed or taken over another row's
+      // binding elsewhere on the Shortcuts tab — refresh so it doesn't show
+      // stale state until something else happens to reload it.
+      try {
+        settings = await getSettings();
+      } catch {
+        // Best effort — the prompt list itself already reflects the save.
+      }
       promptView = "list";
     } catch (error) {
       promptFormError = error instanceof Error ? error.message : String(error);
@@ -675,6 +831,14 @@
     <button
       type="button"
       class="tab"
+      class:active={activeTab === "shortcuts"}
+      onclick={() => selectTab("shortcuts")}
+    >
+      Shortcuts
+    </button>
+    <button
+      type="button"
+      class="tab"
       class:active={activeTab === "providers"}
       onclick={() => selectTab("providers")}
     >
@@ -709,45 +873,6 @@
   <div class="tab-content">
     {#if activeTab === "general"}
       <section class="general">
-        <h2>Shortcut</h2>
-        {#if portalManagedShortcut}
-          <p class="hint">
-            The global shortcut that opens Kallilex from anywhere.
-          </p>
-          {#if portalTrigger}
-            <p><code>{portalTrigger}</code></p>
-            <p class="hint">
-              This shortcut is managed by your system — change it in your desktop's keyboard
-              settings.
-            </p>
-          {:else}
-            <p class="hint">
-              Not currently bound — your system declined or hasn't confirmed the shortcut. You can
-              still open Kallilex from the tray.
-            </p>
-          {/if}
-        {:else}
-          <p class="hint">
-            The global shortcut that opens Kallilex from anywhere, e.g. <code>{defaultShortcut}</code>.
-          </p>
-          <div class="row">
-            <input
-              class="text-input"
-              type="text"
-              bind:value={shortcutDraft}
-              placeholder={defaultShortcut}
-            />
-            <button type="button" disabled={shortcutSaving} onclick={() => void handleSaveShortcut()}>
-              {shortcutSaving ? "Saving…" : "Save"}
-            </button>
-          </div>
-          {#if shortcutError}
-            <p class="error">{shortcutError}</p>
-          {:else if shortcutSaved}
-            <p class="confirm">Shortcut saved and active.</p>
-          {/if}
-        {/if}
-
         <h2>Autostart</h2>
         <label class="toggle-row">
           <input
@@ -835,6 +960,164 @@
         </div>
         {#if resetPositionError}
           <p class="error">{resetPositionError}</p>
+        {/if}
+      </section>
+    {:else if activeTab === "shortcuts"}
+      <section class="shortcuts">
+        {#if os === null || settings === null}
+          <p class="hint">Loading…</p>
+        {:else}
+          <h2>Shortcuts</h2>
+          {#if portalManagedShortcut}
+            <p class="hint">
+              The global shortcut that opens Kallilex from anywhere.
+            </p>
+            {#if portalTrigger}
+              <p><code>{portalTrigger}</code></p>
+              <p class="hint">
+                This shortcut is managed by your system — change it in your desktop's keyboard
+                settings.
+              </p>
+            {:else}
+              <p class="hint">
+                Not currently bound — your system declined or hasn't confirmed the shortcut. You can
+                still open Kallilex from the tray.
+              </p>
+            {/if}
+          {:else}
+            <p class="hint">
+              The global shortcut that opens Kallilex from anywhere, e.g. <code>{defaultShortcut}</code>.
+            </p>
+            <div class="shortcut-row">
+              <span class="shortcut-label">Open Kallilex (global)</span>
+              <ShortcutRecorder
+                value={settings.shortcut}
+                {os}
+                mode="accelerator"
+                label="Open Kallilex (global)"
+                clearable={false}
+                defaultValue={platformInfo?.defaultShortcut ?? null}
+                validate={() => null}
+                findConflict={globalShortcutConflict}
+                onCommit={handleGlobalShortcutCommit}
+              />
+            </div>
+          {/if}
+
+          <h2>In the popover</h2>
+          <div class="shortcut-row">
+            <span class="shortcut-label">Replace</span>
+            <ShortcutRecorder
+              value={settings.popoverShortcuts.replace}
+              {os}
+              mode="chord"
+              label="Replace"
+              defaultValue="Mod+Enter"
+              validate={(candidate) => validateChord(candidate, os)}
+              findConflict={(candidate) => actionConflict(candidate, "replace")}
+              warn={(candidate) => shortcutWarning(candidate, os)}
+              onCommit={(value, takeOver) => handleActionShortcutCommit("replace", value, takeOver)}
+            />
+          </div>
+          {#if platformInfo && !platformInfo.replaceBackAvailable}
+            <p class="hint">Not available on this system</p>
+          {/if}
+
+          <div class="shortcut-row">
+            <span class="shortcut-label">Copy</span>
+            <ShortcutRecorder
+              value={settings.popoverShortcuts.copy}
+              {os}
+              mode="chord"
+              label="Copy"
+              defaultValue="Mod+Shift+C"
+              validate={(candidate) => validateChord(candidate, os)}
+              findConflict={(candidate) => actionConflict(candidate, "copy")}
+              warn={(candidate) => shortcutWarning(candidate, os)}
+              onCommit={(value, takeOver) => handleActionShortcutCommit("copy", value, takeOver)}
+            />
+          </div>
+
+          <div class="shortcut-row">
+            <span class="shortcut-label">Custom prompt</span>
+            <ShortcutRecorder
+              value={settings.popoverShortcuts.customPrompt}
+              {os}
+              mode="chord"
+              label="Custom prompt"
+              defaultValue="Mod+L"
+              validate={(candidate) => validateChord(candidate, os)}
+              findConflict={(candidate) => actionConflict(candidate, "customPrompt")}
+              warn={(candidate) => shortcutWarning(candidate, os)}
+              onCommit={(value, takeOver) =>
+                handleActionShortcutCommit("customPrompt", value, takeOver)}
+            />
+          </div>
+
+          <div class="shortcut-row">
+            <span class="shortcut-label">Check spelling</span>
+            <ShortcutRecorder
+              value={settings.popoverShortcuts.checkSpelling}
+              {os}
+              mode="chord"
+              label="Check spelling"
+              validate={(candidate) => validateChord(candidate, os)}
+              findConflict={(candidate) => actionConflict(candidate, "checkSpelling")}
+              warn={(candidate) => shortcutWarning(candidate, os)}
+              onCommit={(value, takeOver) =>
+                handleActionShortcutCommit("checkSpelling", value, takeOver)}
+            />
+          </div>
+
+          <div class="shortcut-row">
+            <span class="shortcut-label">Open Settings</span>
+            <ShortcutRecorder
+              value={settings.popoverShortcuts.openSettings}
+              {os}
+              mode="chord"
+              label="Open Settings"
+              defaultValue="Mod+,"
+              validate={(candidate) => validateChord(candidate, os)}
+              findConflict={(candidate) => actionConflict(candidate, "openSettings")}
+              warn={(candidate) => shortcutWarning(candidate, os)}
+              onCommit={(value, takeOver) =>
+                handleActionShortcutCommit("openSettings", value, takeOver)}
+            />
+          </div>
+
+          <h2>Prompts</h2>
+          {#if prompts.length === 0}
+            <p class="hint">No prompts yet — add them in the Prompts tab.</p>
+          {:else}
+            {#each prompts as prompt (prompt.id)}
+              <div class="shortcut-row">
+                <span class="shortcut-label">{prompt.label}</span>
+                <ShortcutRecorder
+                  value={prompt.shortcut}
+                  {os}
+                  mode="chord"
+                  label={prompt.label}
+                  validate={(candidate) => validateChord(candidate, os)}
+                  findConflict={(candidate) => promptConflict(candidate, prompt.id)}
+                  warn={(candidate) => shortcutWarning(candidate, os)}
+                  onCommit={(value, takeOver) =>
+                    handlePromptShortcutCommit(prompt.id, value, takeOver)}
+                />
+              </div>
+            {/each}
+          {/if}
+
+          <p class="hint">
+            Always: Esc cancels or closes · Tab moves focus · ↩ runs a custom prompt
+          </p>
+          <div class="row">
+            <button type="button" onclick={handleResetPopoverShortcutsClick}>
+              {popoverShortcutsResetArmed ? "Confirm reset?" : "Reset popover shortcuts"}
+            </button>
+          </div>
+          {#if popoverShortcutsResetError}
+            <p class="error">{popoverShortcutsResetError}</p>
+          {/if}
         {/if}
       </section>
     {:else if activeTab === "providers"}
@@ -990,6 +1273,9 @@
                   <span class="profile-name">{prompt.label}</span>
                   <span class="profile-model">{prompt.instruction}</span>
                 </div>
+                {#if prompt.shortcut && os !== null}
+                  <Kbd chord={prompt.shortcut} {os} />
+                {/if}
                 <button type="button" onclick={() => openEditPrompt(prompt)}>Edit</button>
                 <button
                   type="button"
@@ -1014,6 +1300,22 @@
               bind:value={promptDraft.instruction}
             ></textarea>
           </label>
+          <div class="field">
+            <span>Shortcut</span>
+            {#if os !== null}
+              <ShortcutRecorder
+                value={promptDraft.shortcut}
+                {os}
+                mode="chord"
+                label={promptDraft.label.trim() !== "" ? promptDraft.label : "this prompt"}
+                confirmOnCommit={false}
+                validate={(candidate) => validateChord(candidate, os)}
+                findConflict={promptFormShortcutConflict}
+                warn={(candidate) => shortcutWarning(candidate, os)}
+                onCommit={handlePromptDraftShortcutCommit}
+              />
+            {/if}
+          </div>
 
           {#if promptFormError}
             <p class="error">{promptFormError}</p>
@@ -1530,5 +1832,19 @@
   .prompt-instruction {
     min-height: 70px;
     resize: vertical;
+  }
+
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    max-width: 400px;
+    margin-bottom: 6px;
+  }
+
+  .shortcut-label {
+    font-size: 13px;
+    color: var(--color-marble);
   }
 </style>
