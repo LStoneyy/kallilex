@@ -157,8 +157,14 @@ end
   section with the command and the same Gatekeeper note; "Homebrew cask"
   removed from "Later"; the "on the roadmap" sentence keeps only
   notarization.
-- Website: both "Coming soon" notes removed (hero panel and install card);
-  the command stays as it is.
+- Install command everywhere (README, website, tap README):
+  `brew install --cask lstoneyy/tap/kallilex`. Homebrew 7 refuses to load
+  casks from a tap the user has not trusted; installing by the fully
+  qualified name taps and trusts the cask in one go, whereas
+  `brew tap lstoneyy/tap && brew install --cask kallilex` fails with
+  "Refusing to load cask … from untrusted tap".
+- Website: both "Coming soon" notes removed (hero panel and install card)
+  and the command (shown text and `data-copy`) replaced as above.
 - `docs/release-checklist.md`: after publishing a stable release, check that
   the Homebrew workflow ran and that the tap carries the new version and
   checksum.
@@ -174,7 +180,7 @@ end
   against a copy of the cask with a fake version.
 - Maintainer, on a Mac without Kallilex in `/Applications` (or after moving
   it aside):
-  - `brew tap lstoneyy/tap && brew install --cask kallilex` installs 0.7.0;
+  - `brew install --cask lstoneyy/tap/kallilex` installs 0.7.0;
     the caveat is shown;
   - first launch is blocked, "Open Anyway" works, Accessibility can be
     granted, the shortcut flow works;
