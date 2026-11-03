@@ -46,13 +46,14 @@ struct ProviderListView: View {
                                                 .accessibilityIdentifier("provider.row.\(profile.id).active")
                                         }
                                     }
-                                    PrivacyBadge(profile: profile)
+                                    PrivacyBadge(profile: profile, interactive: false)
                                 }
                                 Spacer()
                             }
-                            .foregroundStyle(.primary)
+                            .contentShape(Rectangle())
                             .opacity(profile.enabled ? 1 : 0.5)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("provider.row.\(profile.id)")
                         .swipeActions {
                             Button(role: .destructive) {

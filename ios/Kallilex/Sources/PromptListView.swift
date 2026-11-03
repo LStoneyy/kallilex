@@ -42,7 +42,9 @@ struct PromptListView: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("prompt.row.\(prompt.id)")
                         .swipeActions {
                             Button(role: .destructive) {

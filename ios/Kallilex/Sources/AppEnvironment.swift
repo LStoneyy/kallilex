@@ -1,5 +1,8 @@
 import Foundation
 import KallilexKit
+#if DEBUG
+import Security
+#endif
 
 /// Why `AppEnvironment.start()` couldn't produce a working environment.
 /// `KallilexApp` shows a `StartupErrorView` with specific copy for the two
@@ -121,6 +124,9 @@ final class AppEnvironment: Sendable {
     /// Never throws — every failure (App Group unavailable, an unsupported
     /// schema version, or anything else) is reported through the `Result`.
     static func start() -> Result<(environment: AppEnvironment, recoveredFromCorruption: Bool), AppStartupError> {
+        #if DEBUG
+        applyUITestLaunchArguments()
+        #endif
         do {
             let settingsStore = try AppGroupSettingsStore(appGroupId: InfoPlist.kallilexAppGroup)
             let secretStore = KeychainSecretStore(accessGroup: InfoPlist.kallilexKeychainAccessGroup)
@@ -156,6 +162,65 @@ final class AppEnvironment: Sendable {
         #endif
         return ActionRunner.defaultProviderFactory
     }
+
+    #if DEBUG
+    /// The Keychain service `KeychainSecretStore` uses for provider API keys,
+    /// so `-uiTestResetState` clears exactly what the app stores.
+    private static let uiTestKeychainService = KeychainSecretStore.defaultService
+
+    /// Applies the two UI-test-only launch arguments (ios-06 part 2),
+    /// before any `SettingsStore`/`SecretStore` is created, so every test
+    /// starts from known state:
+    /// - `-uiTestResetState`: deletes `settings.json`, any
+    ///   `settings.corrupt-*.json` backup, and every stored API key, so
+    ///   each test starts from a fresh install.
+    /// - `-uiTestCorruptSettings`: writes an unparseable `settings.json`,
+    ///   so the corruption-recovery path (and its one-time alert) can be
+    ///   exercised deterministically. Applied after the reset above, so
+    ///   combining both arguments always yields exactly one corrupt file.
+    private static func applyUITestLaunchArguments() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-uiTestResetState") || arguments.contains("-uiTestCorruptSettings") else {
+            return
+        }
+        guard let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: InfoPlist.kallilexAppGroup
+        ) else {
+            return
+        }
+        if arguments.contains("-uiTestResetState") {
+            resetUITestState(in: container)
+        }
+        if arguments.contains("-uiTestCorruptSettings") {
+            writeCorruptSettingsFile(in: container)
+        }
+    }
+
+    private static func resetUITestState(in container: URL) {
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: container.appendingPathComponent("settings.json"))
+        if let contents = try? fileManager.contentsOfDirectory(at: container, includingPropertiesForKeys: nil) {
+            for url in contents where url.lastPathComponent.hasPrefix("settings.corrupt-") {
+                try? fileManager.removeItem(at: url)
+            }
+        }
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: uiTestKeychainService,
+        ]
+        let accessGroup = InfoPlist.kallilexKeychainAccessGroup
+        if !accessGroup.isEmpty {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        SecItemDelete(query as CFDictionary)
+    }
+
+    private static func writeCorruptSettingsFile(in container: URL) {
+        try? FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
+        let data = Data("{not valid json".utf8)
+        try? data.write(to: container.appendingPathComponent("settings.json"), options: .atomic)
+    }
+    #endif
 }
 
 #if DEBUG

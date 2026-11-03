@@ -64,15 +64,24 @@ jobs:
             -derivedDataPath ../build/kit \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Build Kallilex app (embeds and builds the extension)
+      - name: Build and test Kallilex app (embeds and builds the extension, runs UI tests)
         run: |
-          xcodebuild build \
+          xcodebuild test \
             -project ios/Kallilex.xcodeproj \
             -scheme Kallilex \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIM_ID" \
             -derivedDataPath ios/build/app \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            -resultBundlePath ios/build/KallilexUITests.xcresult
+
+      - name: Upload UI test result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KallilexUITests-result-bundle
+          path: ios/build/KallilexUITests.xcresult
 
       - name: Verify app and extension share the same App Group
         run: |

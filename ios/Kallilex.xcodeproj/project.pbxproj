@@ -21,6 +21,13 @@
 			remoteGlobalIDString = 3995F444AA98065D47FEF360;
 			remoteInfo = ShareExtension;
 		};
+		4B04CE6298160C4CC4907CF7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F3C37EA7E0ACA645825C993 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 07500AE4354AFD943A849C4C;
+			remoteInfo = Kallilex;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -40,9 +47,11 @@
 /* Begin PBXFileReference section */
 		FACF963AD6EA85BCD1F54CBB /* Kallilex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kallilex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		1FEF687DD4999C4FAA4CAFAF /* KallilexUITests.xctest */ = {isa = PBXFileReference; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; path = KallilexUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B20436A5C4B331E4A4CEBFB /* Common.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Common.xcconfig; sourceTree = "<group>"; };
 		6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Kallilex.xcconfig; sourceTree = "<group>"; };
 		F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ShareExtension.xcconfig; sourceTree = "<group>"; };
+		23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = KallilexUITests.xcconfig; sourceTree = "<group>"; };
 		CA9DE0CDCBA3DE53DDF0F376 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -60,6 +69,11 @@
 		02318A735DAD1DF028FF8137 /* Sources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ShareExtension/Sources;
+			sourceTree = "<group>";
+		};
+		23DCD9F80679E09EEB3B4573 /* KallilexUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KallilexUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -82,6 +96,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5BBD1BA9D908C3E7094DC16A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -91,6 +112,7 @@
 				DB92A431E6578C4E8A925529 /* Sources */,
 				92AA3F5446DB2A7F6AFE3EF3 /* Resources */,
 				02318A735DAD1DF028FF8137 /* Sources */,
+				23DCD9F80679E09EEB3B4573 /* KallilexUITests */,
 				A8A9A184B9A443CC46C1DB0A /* Config */,
 				CD9E18E30FD98018C5FF9CF3 /* Products */,
 			);
@@ -102,6 +124,7 @@
 				6B20436A5C4B331E4A4CEBFB /* Common.xcconfig */,
 				6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */,
 				F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */,
+				23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */,
 				CA9DE0CDCBA3DE53DDF0F376 /* Local.xcconfig.example */,
 			);
 			path = Config;
@@ -112,6 +135,7 @@
 			children = (
 				FACF963AD6EA85BCD1F54CBB /* Kallilex.app */,
 				30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */,
+				1FEF687DD4999C4FAA4CAFAF /* KallilexUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -169,6 +193,27 @@
 			productReference = 30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		3CE622769BC7B1448CD4FBE4 /* KallilexUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AFDA769E1E48C027E6AE7AD9 /* Build configuration list for PBXNativeTarget "KallilexUITests" */;
+			buildPhases = (
+				5175A0CFA1DDAD4B0F595F14 /* Sources */,
+				5BBD1BA9D908C3E7094DC16A /* Frameworks */,
+				76C4613A97BAEF505885BE74 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				50F630A776F2E6E51E96E5EC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				23DCD9F80679E09EEB3B4573 /* KallilexUITests */,
+			);
+			name = KallilexUITests;
+			productName = KallilexUITests;
+			productReference = 1FEF687DD4999C4FAA4CAFAF /* KallilexUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +229,10 @@
 					};
 					3995F444AA98065D47FEF360 = {
 						CreatedOnToolsVersion = 27.2;
+					};
+					3CE622769BC7B1448CD4FBE4 = {
+						CreatedOnToolsVersion = 27.2;
+						TestTargetID = 07500AE4354AFD943A849C4C;
 					};
 				};
 			};
@@ -206,6 +255,7 @@
 			targets = (
 				07500AE4354AFD943A849C4C /* Kallilex */,
 				3995F444AA98065D47FEF360 /* ShareExtension */,
+				3CE622769BC7B1448CD4FBE4 /* KallilexUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -219,6 +269,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		3127298928921E804C0D8F46 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		76C4613A97BAEF505885BE74 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -242,6 +299,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5175A0CFA1DDAD4B0F595F14 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -249,6 +313,11 @@
 			isa = PBXTargetDependency;
 			target = 3995F444AA98065D47FEF360 /* ShareExtension */;
 			targetProxy = 111B30E4EFC969CEBE24DE80 /* PBXContainerItemProxy */;
+		};
+		50F630A776F2E6E51E96E5EC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 07500AE4354AFD943A849C4C /* Kallilex */;
+			targetProxy = 4B04CE6298160C4CC4907CF7 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -391,6 +460,20 @@
 			};
 			name = Release;
 		};
+		9DCE046A186D455F33A1A333 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A574B41BD430211CCCAC71DB /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -417,6 +500,15 @@
 			buildConfigurations = (
 				18071D0F52B4FD5EFFA9D898 /* Debug */,
 				0DCB1E92D5C8AC0647D538B7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AFDA769E1E48C027E6AE7AD9 /* Build configuration list for PBXNativeTarget "KallilexUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9DCE046A186D455F33A1A333 /* Debug */,
+				A574B41BD430211CCCAC71DB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

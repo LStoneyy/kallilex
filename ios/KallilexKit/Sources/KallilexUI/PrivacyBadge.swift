@@ -1,45 +1,66 @@
 import SwiftUI
 import KallilexKit
 
-/// A small, tappable badge showing a provider's privacy class (ios-06):
-/// "On device", "This device", "Your network", or "Cloud: <host>". Tapping
-/// it shows a longer explanation in a popover. Shared between the
+/// A small badge showing a provider's privacy class (ios-06): "On device",
+/// "This device", "Your network", or "Cloud: <host>". Shared between the
 /// container app's Providers tab (this spec) and, later, the Share
 /// Extension (ios-09).
+///
+/// `interactive` (default `true`) controls whether tapping it shows a
+/// longer explanation in a popover. Pass `false` inside another tappable
+/// row (e.g. `ProviderListView`'s row `Button`) — a `Button` nested inside
+/// another `Button`'s label is an anti-pattern: taps anywhere in the outer
+/// row, even well outside the badge's own frame, get misrouted to the
+/// inner badge instead of the row's own action (verified empirically while
+/// building ios-06's XCUITests). The provider editor, which doesn't nest
+/// this inside another button, keeps the interactive form.
 public struct PrivacyBadge: View {
     private let info: PrivacyBadgeInfo
+    private let interactive: Bool
     @State private var showDetail = false
 
-    public init(info: PrivacyBadgeInfo) {
+    public init(info: PrivacyBadgeInfo, interactive: Bool = true) {
         self.info = info
+        self.interactive = interactive
     }
 
-    public init(profile: ProviderProfile) {
+    public init(profile: ProviderProfile, interactive: Bool = true) {
         self.info = PrivacyBadgeInfo(profile: profile)
+        self.interactive = interactive
     }
 
     public var body: some View {
-        Button {
-            showDetail = true
-        } label: {
-            Label(info.title, systemImage: info.symbolName)
-                .labelStyle(.titleAndIcon)
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .foregroundStyle(tintColor)
-                .background(tintColor.opacity(0.15), in: Capsule())
+        if interactive {
+            Button {
+                showDetail = true
+            } label: {
+                badgeLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(info.accessibilityLabel)
+            .accessibilityIdentifier("provider.privacyBadge")
+            .popover(isPresented: $showDetail) {
+                Text(detailText)
+                    .font(.callout)
+                    .padding()
+                    .frame(maxWidth: 280)
+                    .presentationCompactAdaptation(.popover)
+            }
+        } else {
+            badgeLabel
+                .accessibilityLabel(info.accessibilityLabel)
+                .accessibilityIdentifier("provider.privacyBadge")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(info.accessibilityLabel)
-        .accessibilityIdentifier("provider.privacyBadge")
-        .popover(isPresented: $showDetail) {
-            Text(detailText)
-                .font(.callout)
-                .padding()
-                .frame(maxWidth: 280)
-                .presentationCompactAdaptation(.popover)
-        }
+    }
+
+    private var badgeLabel: some View {
+        Label(info.title, systemImage: info.symbolName)
+            .labelStyle(.titleAndIcon)
+            .font(.caption)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .foregroundStyle(tintColor)
+            .background(tintColor.opacity(0.15), in: Capsule())
     }
 
     private var tintColor: Color {

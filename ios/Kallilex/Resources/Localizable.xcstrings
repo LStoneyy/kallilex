@@ -309,6 +309,17 @@
         }
       }
     },
+    "provider.baseUrl.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base URL"
+          }
+        }
+      }
+    },
     "provider.baseUrl.placeholder": {
       "extractionState": "manual",
       "localizations": {
@@ -408,6 +419,17 @@
         }
       }
     },
+    "provider.model.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        }
+      }
+    },
     "provider.model.placeholder": {
       "extractionState": "manual",
       "localizations": {
@@ -415,6 +437,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "gpt-4-turbo"
+          }
+        }
+      }
+    },
+    "provider.name.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
           }
         }
       }

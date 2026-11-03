@@ -9,11 +9,14 @@ import Security
 /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and never
 /// synchronizable: they never sync and never land in backups.
 public final class KeychainSecretStore: SecretStore {
+    /// The Keychain service used for provider API keys.
+    public static let defaultService = "com.webcommits.kallilex.provider-key"
+
     private let service: String
     private let accessGroup: String?
 
     public init(
-        service: String = "com.webcommits.kallilex.provider-key",
+        service: String = KeychainSecretStore.defaultService,
         accessGroup: String?
     ) {
         self.service = service

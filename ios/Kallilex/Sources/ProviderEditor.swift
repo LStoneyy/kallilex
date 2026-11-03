@@ -23,23 +23,49 @@ struct ProviderEditor: View {
     @State private var testState: ProviderTestState = .idle
     @State private var testTask: Task<Void, Never>?
 
+    // Suppresses validation messages until the user has actually edited
+    // the corresponding field: opening a blank "Add provider" form
+    // shouldn't greet the user with "Model is required." before they've
+    // typed anything. Save stays disabled the whole time regardless
+    // (`draft.canSave`) — these flags only control when the *message*
+    // appears, not whether Save is enabled.
+    @State private var nameTouched = false
+    @State private var baseUrlTouched = false
+    @State private var modelTouched = false
+
     let onSave: (ProviderProfile, String?) -> Void
 
     init(draft: ProviderDraft, onSave: @escaping (ProviderProfile, String?) -> Void) {
         self._draft = State(initialValue: draft)
         self.onSave = onSave
+        // Editing an already-saved profile: there's existing data in every
+        // field, so there's nothing to hide — show validation immediately
+        // if it's somehow invalid. Only a brand-new draft (blank `id`)
+        // starts with messages suppressed.
+        let editingExisting = !draft.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        self._nameTouched = State(initialValue: editingExisting)
+        self._baseUrlTouched = State(initialValue: editingExisting)
+        self._modelTouched = State(initialValue: editingExisting)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(
-                        String(localized: "provider.name.placeholder", defaultValue: "Name"),
-                        text: $draft.name
-                    )
-                    .accessibilityIdentifier("provider.editor.name")
+                    LabeledContent(String(localized: "provider.name.label", defaultValue: "Name")) {
+                        TextField(
+                            String(localized: "provider.name.placeholder", defaultValue: "Name"),
+                            text: $draft.name
+                        )
+                        .accessibilityIdentifier("provider.editor.name")
+                    }
+                    if nameTouched, draft.validationErrors.contains(.blankName) {
+                        Text(ProviderDraftValidationError.blankName.errorDescription ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
+                .onChange(of: draft.name) { _, _ in nameTouched = true }
 
                 switch draft.kind {
                 case .unknown:
@@ -121,28 +147,39 @@ struct ProviderEditor: View {
 
     private var baseUrlAndModelSection: some View {
         Section {
-            TextField(
-                String(localized: "provider.baseUrl.placeholder", defaultValue: "https://api.example.com/v1"),
-                text: $draft.baseUrl
-            )
-            .keyboardType(.URL)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .accessibilityIdentifier("provider.editor.baseUrl")
-
-            TextField(
-                String(localized: "provider.model.placeholder", defaultValue: "gpt-4-turbo"),
-                text: $draft.model
-            )
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .accessibilityIdentifier("provider.editor.model")
-
-            ForEach(draft.validationErrors, id: \.self) { error in
-                Text(error.errorDescription ?? "")
+            LabeledContent(String(localized: "provider.baseUrl.label", defaultValue: "Base URL")) {
+                TextField(
+                    String(localized: "provider.baseUrl.placeholder", defaultValue: "https://api.example.com/v1"),
+                    text: $draft.baseUrl
+                )
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("provider.editor.baseUrl")
+            }
+            .onChange(of: draft.baseUrl) { _, _ in baseUrlTouched = true }
+            if baseUrlTouched, draft.validationErrors.contains(.invalidBaseUrl) {
+                Text(ProviderDraftValidationError.invalidBaseUrl.errorDescription ?? "")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+
+            LabeledContent(String(localized: "provider.model.label", defaultValue: "Model")) {
+                TextField(
+                    String(localized: "provider.model.placeholder", defaultValue: "gpt-4-turbo"),
+                    text: $draft.model
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("provider.editor.model")
+            }
+            .onChange(of: draft.model) { _, _ in modelTouched = true }
+            if modelTouched, draft.validationErrors.contains(.blankModel) {
+                Text(ProviderDraftValidationError.blankModel.errorDescription ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
             ForEach(draft.warnings, id: \.self) { warning in
                 Text(warning.errorDescription ?? "")
                     .font(.caption)
@@ -184,6 +221,12 @@ struct ProviderEditor: View {
                 )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                // Kallilex stores this key itself (Keychain, via
+                // `SecretStore`) — without this, iOS treats a bare
+                // `SecureField` as a login password and offers its own
+                // "Save Password?" prompt after Save, which then sits on
+                // top of the app and blocks every subsequent interaction.
+                .textContentType(.oneTimeCode)
                 .accessibilityIdentifier("provider.editor.apiKey.field")
             } else {
                 Button(String(localized: "provider.apiKey.pasteAndSave", defaultValue: "Paste and save")) {

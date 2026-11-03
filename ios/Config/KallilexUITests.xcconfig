@@ -1,0 +1,5 @@
+#include "Common.xcconfig"
+PRODUCT_NAME = KallilexUITests
+PRODUCT_BUNDLE_IDENTIFIER = $(KALLILEX_APP_ID).uitests
+GENERATE_INFOPLIST_FILE = YES
+TEST_TARGET_NAME = Kallilex
