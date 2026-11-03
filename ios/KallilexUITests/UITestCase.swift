@@ -18,6 +18,15 @@ class KallilexUITestCase: XCTestCase {
     /// `resetState` is `false`, plus any `extraArguments` (e.g.
     /// `-uiTestStubProvider`, `-uiTestCorruptSettings`).
     ///
+    /// Also passes `-uiTestSkipOnboarding` by default (ios-07), independent
+    /// of `resetState`, so every test written before onboarding existed
+    /// keeps landing straight on the tab UI exactly as before — including a
+    /// `resetState: false` relaunch, where `settings.json` can still be
+    /// missing (e.g. right after `CorruptionUITests`' recovery) and would
+    /// otherwise default `onboardingCompleted` back to `false`.
+    /// `OnboardingUITests` is the one caller that passes `skipOnboarding:
+    /// false`, to actually exercise the first-run cover.
+    ///
     /// Always forces English (`-AppleLanguages (en) -AppleLocale en_US`),
     /// regardless of the simulator's own language setting. `tabButton(_:)`
     /// below matches tab bar buttons by their (untranslated) English label
@@ -25,11 +34,14 @@ class KallilexUITestCase: XCTestCase {
     /// ios-11 adds German, rather than depending on whatever language the
     /// CI runner's simulator happens to default to.
     @discardableResult
-    func launchApp(resetState: Bool = true, extraArguments: [String] = []) -> XCUIApplication {
+    func launchApp(resetState: Bool = true, skipOnboarding: Bool = true, extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         var arguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if resetState {
             arguments.append("-uiTestResetState")
+        }
+        if skipOnboarding {
+            arguments.append("-uiTestSkipOnboarding")
         }
         arguments.append(contentsOf: extraArguments)
         app.launchArguments = arguments

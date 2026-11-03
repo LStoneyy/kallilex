@@ -8,6 +8,17 @@ struct RootTabView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @Environment(\.scenePhase) private var scenePhase
 
+    /// `true` while `KallilexApp`'s one-time corruption-recovery alert is
+    /// up. SwiftUI can't cleanly present an `.alert` (from `KallilexApp`,
+    /// above this view) and a `.fullScreenCover` (below, from this view) at
+    /// the same instant — verified empirically: without this, a corrupt
+    /// first launch (which also always seeds `onboardingCompleted = false`)
+    /// raced the two, and the alert never actually appeared. Suppressing
+    /// the cover's binding while the alert is still showing sequences them:
+    /// the cover presents right after the alert is dismissed, instead of
+    /// fighting it for the same instant.
+    var suppressOnboardingCover: Bool = false
+
     var body: some View {
         TabView {
             NavigationStack {
@@ -46,6 +57,25 @@ struct RootTabView: View {
             if newPhase == .active {
                 appEnv.reload()
             }
+        }
+        // A real `Binding`, not `.constant`: SwiftUI needs a settable
+        // binding to animate the cover away the moment `onboardingCompleted`
+        // flips to `true` (ios-07). The flow itself is the only thing that
+        // ever flips it — there's no swipe-to-dismiss or Cancel on the
+        // cover — but the `set` side still has to exist for SwiftUI's own
+        // dismissal bookkeeping, and mirrors the flow's own effect if it
+        // ever fires.
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { !appEnv.settings.onboardingCompleted && !suppressOnboardingCover },
+                set: { isPresented in
+                    if !isPresented {
+                        appEnv.updateSettings { $0.onboardingCompleted = true }
+                    }
+                }
+            )
+        ) {
+            OnboardingView()
         }
         .alert(
             String(localized: "error.alert.title", defaultValue: "Something went wrong"),

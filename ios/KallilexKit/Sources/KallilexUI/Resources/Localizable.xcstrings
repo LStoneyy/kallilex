@@ -1,61 +1,160 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "privacyBadge.detail.cloud" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to a cloud server over the internet."
+  "sourceLanguage": "en",
+  "strings": {
+    "consent.allow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
           }
         }
       }
     },
-    "privacyBadge.detail.lan" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to a server on your local network. Nothing leaves your network."
+    "consent.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When you run a prompt, the text you share and the prompt's instruction are sent to %@ (%@) to be processed. Kallilex doesn't collect or store your text itself; the provider's privacy policy applies."
           }
         }
       }
     },
-    "privacyBadge.detail.local" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Processed on this device. Nothing leaves your phone."
+    "consent.notNow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not now"
           }
         }
       }
     },
-    "privacyBadge.detail.onDevice" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Processed entirely on this device using Apple's on-device model. Nothing leaves your phone."
+    "consent.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send text to %@?"
           }
         }
       }
     },
-    "privacyBadge.detail.unsupported" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This provider type isn't supported by this version of Kallilex."
+    "privacyBadge.detail.cloud": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to a cloud server over the internet."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.lan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to a server on your local network. Nothing leaves your network."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.local": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processed on this device. Nothing leaves your phone."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.onDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processed entirely on this device using Apple's on-device model. Nothing leaves your phone."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This provider type isn't supported by this version of Kallilex."
+          }
+        }
+      }
+    },
+    "shareSheetGuide.step1": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select text in any app and tap Share."
+          }
+        }
+      }
+    },
+    "shareSheetGuide.step2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe the app row to the end and tap More."
+          }
+        }
+      }
+    },
+    "shareSheetGuide.step3": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap Edit."
+          }
+        }
+      }
+    },
+    "shareSheetGuide.step4": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Kallilex to Favorites."
+          }
+        }
+      }
+    },
+    "shareSheetGuide.step5": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex now appears at the front of the row."
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

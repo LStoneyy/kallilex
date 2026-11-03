@@ -1,5 +1,6 @@
 import SwiftUI
 import KallilexKit
+import KallilexUI
 
 /// The Settings tab (ios-06): auto-run/auto-copy toggles, AI consents,
 /// onboarding reset, the share-sheet guide, and About.
@@ -109,7 +110,21 @@ struct SettingsView: View {
         }
         .navigationTitle(String(localized: "tab.settings", defaultValue: "Settings"))
         .sheet(isPresented: $showShareSheetGuide) {
-            ShareSheetGuideView()
+            NavigationStack {
+                KallilexUI.ShareSheetGuideView()
+                    .navigationTitle(String(
+                        localized: "settings.shareSheetGuide.title",
+                        defaultValue: "Add Kallilex to your share sheet"
+                    ))
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(String(localized: "action.close", defaultValue: "Close")) {
+                                showShareSheetGuide = false
+                            }
+                            .accessibilityIdentifier("settings.shareSheetGuide.close")
+                        }
+                    }
+            }
         }
         .alert(
             consentPendingRevoke.map {

@@ -40,7 +40,11 @@ public struct SettingsService: Sendable {
     /// deliberately not validated here either, for the same reason as
     /// desktop: an empty or malformed value still saves and instead fails
     /// at request time with a more specific provider error), generates an
-    /// id when `profile.id` is empty, and upserts it by id.
+    /// id when `profile.id` is empty, and upserts it by id. Returns the
+    /// saved profile exactly as stored — in particular with its resolved
+    /// `id` (the generated one for a brand-new profile, or the one passed
+    /// in otherwise) and `hasApiKey`, so callers never have to re-derive
+    /// which profile they just saved (e.g. by diffing the full list).
     ///
     /// `apiKey`'s effect on the Keychain entry mirrors
     /// `save_profile_core` exactly: `nil` leaves the existing key (and
@@ -66,7 +70,7 @@ public struct SettingsService: Sendable {
     /// without a matching `hasApiKey: true` profile, and gets overwritten
     /// or deleted the next time this id is saved or deleted.
     @discardableResult
-    public func saveProfile(_ profile: ProviderProfile, apiKey: String?) throws -> [ProviderProfile] {
+    public func saveProfile(_ profile: ProviderProfile, apiKey: String?) throws -> ProviderProfile {
         var profile = profile
         guard !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw SettingsServiceError.validation(.blankProfileName)
@@ -78,7 +82,7 @@ public struct SettingsService: Sendable {
             profile.id = UUID().uuidString
         }
 
-        let updated = try settings.update { current in
+        try settings.update { current in
             let existing = current.profiles.first { $0.id == profile.id }
             let oldHost = existing.flatMap { consentHost(for: $0) }
 
@@ -113,7 +117,7 @@ public struct SettingsService: Sendable {
                 }
             }
         }
-        return updated.profiles
+        return profile
     }
 
     /// Removes the profile with `id` (a no-op if absent), its Keychain

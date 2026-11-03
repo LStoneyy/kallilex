@@ -20,7 +20,7 @@ struct KallilexApp: App {
         WindowGroup {
             Group {
                 if let environment {
-                    RootTabView()
+                    RootTabView(suppressOnboardingCover: showCorruptionAlert)
                         .environment(environment)
                 } else {
                     StartupErrorView(error: startupError ?? .other("unknown"))

@@ -101,11 +101,8 @@ public struct ActionRunner: Sendable {
             return .failed(.unavailable(reason: Self.unsupportedProviderKindReason))
         }
 
-        if profile.kind == .openAICompatible, classifyPrivacy(baseUrl: profile.baseUrl) == .cloud {
-            guard let host = consentHost(for: profile),
-                  SettingsService.hasConsent(profileID: profile.id, host: host, in: current) else {
-                return .consentRequired(profile)
-            }
+        if case .required = consentRequirement(for: profile, consents: current.consents) {
+            return .consentRequired(profile)
         }
 
         let apiKey: String? = profile.hasApiKey ? (try? secrets.get(profileID: profile.id)) : nil

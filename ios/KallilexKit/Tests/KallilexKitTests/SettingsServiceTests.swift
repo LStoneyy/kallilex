@@ -42,29 +42,30 @@ struct SettingsServiceTests {
         var profile = sampleProfile(id: "a")
         profile.baseUrl = ""
         profile.model = ""
-        let profiles = try service.saveProfile(profile, apiKey: nil)
-        #expect(profiles.count == 1)
+        let saved = try service.saveProfile(profile, apiKey: nil)
+        #expect(saved.id == "a")
     }
 
     // ---- saveProfile: id generation and upsert ------------------------------
 
-    @Test func saveProfileWithAnEmptyIdGeneratesOne() throws {
-        let (service, _, _) = makeService()
-        let profiles = try service.saveProfile(sampleProfile(id: ""), apiKey: nil)
-        #expect(profiles.count == 1)
-        #expect(!profiles[0].id.isEmpty)
+    @Test func saveProfileWithAnEmptyIdGeneratesOneAndReturnsIt() throws {
+        let (service, settings, _) = makeService()
+        let saved = try service.saveProfile(sampleProfile(id: ""), apiKey: nil)
+        #expect(!saved.id.isEmpty)
+        #expect(try settings.load().profiles.map(\.id) == [saved.id])
     }
 
-    @Test func saveProfileWithAnExistingIdUpsertsInPlace() throws {
-        let (service, _, _) = makeService()
+    @Test func saveProfileWithAnExistingIdUpsertsInPlaceAndReturnsTheSameId() throws {
+        let (service, settings, _) = makeService()
         try service.saveProfile(sampleProfile(id: "a"), apiKey: nil)
 
         var updated = sampleProfile(id: "a")
         updated.name = "Renamed"
-        let profiles = try service.saveProfile(updated, apiKey: nil)
+        let saved = try service.saveProfile(updated, apiKey: nil)
 
-        #expect(profiles.count == 1)
-        #expect(profiles[0].name == "Renamed")
+        #expect(saved.id == "a")
+        #expect(saved.name == "Renamed")
+        #expect(try settings.load().profiles.count == 1)
     }
 
     // ---- saveProfile: first-profile activation ------------------------------
@@ -89,9 +90,9 @@ struct SettingsServiceTests {
         let profile = sampleProfile(id: "a")
         try service.saveProfile(profile, apiKey: "sk-key")
 
-        let profiles = try service.saveProfile(profile, apiKey: nil)
+        let saved = try service.saveProfile(profile, apiKey: nil)
 
-        #expect(profiles[0].hasApiKey)
+        #expect(saved.hasApiKey)
         #expect(try secrets.get(profileID: "a") == "sk-key")
     }
 
@@ -99,24 +100,24 @@ struct SettingsServiceTests {
         let (service, _, secrets) = makeService()
         try service.saveProfile(sampleProfile(id: "a"), apiKey: "sk-key")
 
-        let profiles = try service.saveProfile(sampleProfile(id: "a"), apiKey: "   ")
+        let saved = try service.saveProfile(sampleProfile(id: "a"), apiKey: "   ")
 
-        #expect(!profiles[0].hasApiKey)
+        #expect(!saved.hasApiKey)
         #expect(try secrets.get(profileID: "a") == nil)
     }
 
     @Test func apiKeyNonBlankSetsTheKeyAndFlag() throws {
         let (service, _, secrets) = makeService()
-        let profiles = try service.saveProfile(sampleProfile(id: "a"), apiKey: "sk-key")
+        let saved = try service.saveProfile(sampleProfile(id: "a"), apiKey: "sk-key")
 
-        #expect(profiles[0].hasApiKey)
+        #expect(saved.hasApiKey)
         #expect(try secrets.get(profileID: "a") == "sk-key")
     }
 
     @Test func apiKeyNilOnABrandNewProfileLeavesHasApiKeyFalse() throws {
         let (service, _, _) = makeService()
-        let profiles = try service.saveProfile(sampleProfile(id: "a"), apiKey: nil)
-        #expect(!profiles[0].hasApiKey)
+        let saved = try service.saveProfile(sampleProfile(id: "a"), apiKey: nil)
+        #expect(!saved.hasApiKey)
     }
 
     // ---- saveProfile: consent invalidation on host change -------------------

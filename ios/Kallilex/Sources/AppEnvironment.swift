@@ -178,9 +178,27 @@ final class AppEnvironment: Sendable {
     ///   so the corruption-recovery path (and its one-time alert) can be
     ///   exercised deterministically. Applied after the reset above, so
     ///   combining both arguments always yields exactly one corrupt file.
+    /// - `-uiTestSkipOnboarding` (ios-07): writes `onboardingCompleted =
+    ///   true` through the real `SettingsStore` (merging onto whatever's
+    ///   already there — a fresh install after `-uiTestResetState`, or an
+    ///   existing file from an earlier launch in the same test), so every
+    ///   pre-existing UI test (which never expects a first-run onboarding
+    ///   cover) keeps passing once `RootTabView` starts gating the tab UI
+    ///   behind it. Independent of `-uiTestResetState`: `KallilexUITestCase
+    ///   .launchApp` passes it on *every* launch by default, including a
+    ///   `resetState: false` relaunch — e.g. right after
+    ///   `-uiTestCorruptSettings`'s own recovery leaves no file on disk at
+    ///   all, a plain relaunch would otherwise see a fresh
+    ///   `onboardingCompleted == false` and show onboarding instead of the
+    ///   tab UI that test actually wants to assert on. Applied *before*
+    ///   `-uiTestCorruptSettings` below, so a launch requesting both still
+    ///   ends up with a genuinely corrupt file — onboarding's own tests
+    ///   opt out of this argument entirely.
     private static func applyUITestLaunchArguments() {
         let arguments = ProcessInfo.processInfo.arguments
-        guard arguments.contains("-uiTestResetState") || arguments.contains("-uiTestCorruptSettings") else {
+        guard arguments.contains("-uiTestResetState")
+            || arguments.contains("-uiTestCorruptSettings")
+            || arguments.contains("-uiTestSkipOnboarding") else {
             return
         }
         guard let container = FileManager.default.containerURL(
@@ -190,6 +208,9 @@ final class AppEnvironment: Sendable {
         }
         if arguments.contains("-uiTestResetState") {
             resetUITestState(in: container)
+        }
+        if arguments.contains("-uiTestSkipOnboarding") {
+            skipOnboardingUITestState(in: container)
         }
         if arguments.contains("-uiTestCorruptSettings") {
             writeCorruptSettingsFile(in: container)
@@ -213,6 +234,18 @@ final class AppEnvironment: Sendable {
             query[kSecAttrAccessGroup as String] = accessGroup
         }
         SecItemDelete(query as CFDictionary)
+    }
+
+    /// Sets `onboardingCompleted = true` through the same
+    /// `AppGroupSettingsStore` the app itself will use — `update`'s own
+    /// read-modify-write merges onto whatever's already on disk (seeded
+    /// defaults if `settings.json` is missing, e.g. right after
+    /// `resetUITestState` or after a corruption-recovery rename; the
+    /// existing file's every other field, otherwise) instead of needing any
+    /// hand-rolled JSON kept in sync with `AppSettings`'s own encoding.
+    private static func skipOnboardingUITestState(in container: URL) {
+        let store = AppGroupSettingsStore(directory: container)
+        _ = try? store.update { $0.onboardingCompleted = true }
     }
 
     private static func writeCorruptSettingsFile(in container: URL) {
