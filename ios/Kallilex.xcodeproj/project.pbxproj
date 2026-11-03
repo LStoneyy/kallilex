@@ -1,0 +1,444 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5DD54C45ED9393A4A9A8C895 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		55E4610AF6A6A0134123AAEE /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = D6876D0C3AB42DEC7CCD82FB /* KallilexKit */; };
+		1724F4B8900726FE95ED9C30 /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1A09F4693EB6E0295D460AD /* KallilexKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		111B30E4EFC969CEBE24DE80 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F3C37EA7E0ACA645825C993 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3995F444AA98065D47FEF360;
+			remoteInfo = ShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6ED45F6B238BFD2E216349B9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5DD54C45ED9393A4A9A8C895 /* ShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		FACF963AD6EA85BCD1F54CBB /* Kallilex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kallilex.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B20436A5C4B331E4A4CEBFB /* Common.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Common.xcconfig; sourceTree = "<group>"; };
+		6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Kallilex.xcconfig; sourceTree = "<group>"; };
+		F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ShareExtension.xcconfig; sourceTree = "<group>"; };
+		CA9DE0CDCBA3DE53DDF0F376 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		DB92A431E6578C4E8A925529 /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Kallilex/Sources;
+			sourceTree = "<group>";
+		};
+		92AA3F5446DB2A7F6AFE3EF3 /* Resources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Kallilex/Resources;
+			sourceTree = "<group>";
+		};
+		02318A735DAD1DF028FF8137 /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ShareExtension/Sources;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4BC2912699B03CC87DFDEA85 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55E4610AF6A6A0134123AAEE /* KallilexKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74B5B96B40FC698F0B23D26C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1724F4B8900726FE95ED9C30 /* KallilexKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CAEE4F77B5153C6E0FDD9A59 = {
+			isa = PBXGroup;
+			children = (
+				DB92A431E6578C4E8A925529 /* Sources */,
+				92AA3F5446DB2A7F6AFE3EF3 /* Resources */,
+				02318A735DAD1DF028FF8137 /* Sources */,
+				A8A9A184B9A443CC46C1DB0A /* Config */,
+				CD9E18E30FD98018C5FF9CF3 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A8A9A184B9A443CC46C1DB0A /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				6B20436A5C4B331E4A4CEBFB /* Common.xcconfig */,
+				6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */,
+				F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */,
+				CA9DE0CDCBA3DE53DDF0F376 /* Local.xcconfig.example */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		CD9E18E30FD98018C5FF9CF3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FACF963AD6EA85BCD1F54CBB /* Kallilex.app */,
+				30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		07500AE4354AFD943A849C4C /* Kallilex */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFE5797914A2888C0DC2D081 /* Build configuration list for PBXNativeTarget "Kallilex" */;
+			buildPhases = (
+				8E04D5517A01317236A4F651 /* Sources */,
+				4BC2912699B03CC87DFDEA85 /* Frameworks */,
+				2C98BF33F07ACA1BD29E07A8 /* Resources */,
+				6ED45F6B238BFD2E216349B9 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2153679493856D813235EEBC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DB92A431E6578C4E8A925529 /* Sources */,
+				92AA3F5446DB2A7F6AFE3EF3 /* Resources */,
+			);
+			name = Kallilex;
+			packageProductDependencies = (
+				D6876D0C3AB42DEC7CCD82FB /* KallilexKit */,
+			);
+			productName = Kallilex;
+			productReference = FACF963AD6EA85BCD1F54CBB /* Kallilex.app */;
+			productType = "com.apple.product-type.application";
+		};
+		3995F444AA98065D47FEF360 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3F7B8F24B4704E21CFAAD2F3 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				C473F1206A5193C76593D27A /* Sources */,
+				74B5B96B40FC698F0B23D26C /* Frameworks */,
+				3127298928921E804C0D8F46 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				02318A735DAD1DF028FF8137 /* Sources */,
+			);
+			name = ShareExtension;
+			packageProductDependencies = (
+				A1A09F4693EB6E0295D460AD /* KallilexKit */,
+			);
+			productName = ShareExtension;
+			productReference = 30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4F3C37EA7E0ACA645825C993 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2720;
+				LastUpgradeCheck = 2720;
+				TargetAttributes = {
+					07500AE4354AFD943A849C4C = {
+						CreatedOnToolsVersion = 27.2;
+					};
+					3995F444AA98065D47FEF360 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+				};
+			};
+			buildConfigurationList = 2E88E4A87ACCBF1223C33CA3 /* Build configuration list for PBXProject "Kallilex" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CAEE4F77B5153C6E0FDD9A59;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CD9E18E30FD98018C5FF9CF3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				07500AE4354AFD943A849C4C /* Kallilex */,
+				3995F444AA98065D47FEF360 /* ShareExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2C98BF33F07ACA1BD29E07A8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3127298928921E804C0D8F46 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8E04D5517A01317236A4F651 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C473F1206A5193C76593D27A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2153679493856D813235EEBC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3995F444AA98065D47FEF360 /* ShareExtension */;
+			targetProxy = 111B30E4EFC969CEBE24DE80 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1CDAA2EE40D859F821B677E2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		882C29390AE5A0C1B258C09B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		719C1DDF7566A67A0AE9E047 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		EA4B26D5D86233215E814050 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		18071D0F52B4FD5EFFA9D898 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		0DCB1E92D5C8AC0647D538B7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2E88E4A87ACCBF1223C33CA3 /* Build configuration list for PBXProject "Kallilex" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1CDAA2EE40D859F821B677E2 /* Debug */,
+				882C29390AE5A0C1B258C09B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFE5797914A2888C0DC2D081 /* Build configuration list for PBXNativeTarget "Kallilex" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				719C1DDF7566A67A0AE9E047 /* Debug */,
+				EA4B26D5D86233215E814050 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3F7B8F24B4704E21CFAAD2F3 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18071D0F52B4FD5EFFA9D898 /* Debug */,
+				0DCB1E92D5C8AC0647D538B7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = KallilexKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D6876D0C3AB42DEC7CCD82FB /* KallilexKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
+			productName = KallilexKit;
+		};
+		A1A09F4693EB6E0295D460AD /* KallilexKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
+			productName = KallilexKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 4F3C37EA7E0ACA645825C993 /* Project object */;
+}

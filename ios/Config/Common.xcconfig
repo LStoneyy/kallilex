@@ -1,0 +1,21 @@
+IPHONEOS_DEPLOYMENT_TARGET = 26.0
+SWIFT_VERSION = 6.0
+COPY_PHASE_STRIP = NO
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// Identifier prefix. Override in Local.xcconfig when developing on a free
+// Personal Team so com.webcommits.kallilex is not registered to it.
+KALLILEX_ID_PREFIX = com.webcommits
+KALLILEX_APP_ID = $(KALLILEX_ID_PREFIX).kallilex
+KALLILEX_APP_GROUP = group.$(KALLILEX_APP_ID)
+KALLILEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)$(KALLILEX_APP_ID).shared
+
+TARGETED_DEVICE_FAMILY = 1,2
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+GCC_TREAT_WARNINGS_AS_ERRORS = YES
+GENERATE_INFOPLIST_FILE = NO
+CODE_SIGN_STYLE = Automatic
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+
+#include? "Local.xcconfig"

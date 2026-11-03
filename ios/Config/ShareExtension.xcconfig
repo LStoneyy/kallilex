@@ -1,0 +1,7 @@
+#include "Common.xcconfig"
+PRODUCT_NAME = ShareExtension
+PRODUCT_BUNDLE_IDENTIFIER = $(KALLILEX_APP_ID).share
+INFOPLIST_FILE = ShareExtension/Info.plist
+CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements
+APPLICATION_EXTENSION_API_ONLY = YES
+SKIP_INSTALL = YES

@@ -1,0 +1,95 @@
+name: iOS
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - "contracts/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - "contracts/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
+          test -n "$XCODE" || { echo "No Xcode 26 or later found"; exit 1; }
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve simulator
+        run: |
+          # Newest iPhone simulator whose iOS runtime is at least 26.0 and not
+          # newer than the selected Xcode's simulator SDK.
+          SDK=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          SIM_ID=$(xcrun simctl list devices available -j | jq -r --arg sdk "$SDK" '
+            ($sdk | split(".") | map(tonumber)) as $max
+            | [ .devices | to_entries[]
+                | select(.key | test("SimRuntime\\.iOS-"))
+                | (.key | capture("iOS-(?<v>[0-9-]+)$").v | split("-") | map(tonumber)) as $ver
+                | select($ver[0] >= 26 and $ver <= $max)
+                | .value[] | select(.name | startswith("iPhone"))
+                | {udid, ver: $ver} ]
+            | sort_by(.ver) | last | .udid // empty
+          ')
+          test -n "$SIM_ID" || { echo "No available iPhone simulator for iOS 26 to $SDK found"; exit 1; }
+          echo "Using simulator $SIM_ID (simulator SDK $SDK)"
+          echo "SIM_ID=$SIM_ID" >> "$GITHUB_ENV"
+
+      - name: Test KallilexKit
+        working-directory: ios/KallilexKit
+        run: |
+          xcodebuild test \
+            -scheme KallilexKit \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            -derivedDataPath ../build/kit \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build Kallilex app (embeds and builds the extension)
+        run: |
+          xcodebuild build \
+            -project ios/Kallilex.xcodeproj \
+            -scheme Kallilex \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            -derivedDataPath ios/build/app \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify app and extension share the same App Group
+        run: |
+          APP_PATH="ios/build/app/Build/Products/Debug-iphonesimulator/Kallilex.app"
+          EXT_PATH="$APP_PATH/PlugIns/ShareExtension.appex"
+          APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :KallilexAppGroup" "$APP_PATH/Info.plist")
+          EXT_GROUP=$(/usr/libexec/PlistBuddy -c "Print :KallilexAppGroup" "$EXT_PATH/Info.plist")
+          echo "App group (app): $APP_GROUP"
+          echo "App group (extension): $EXT_GROUP"
+          if [ "$APP_GROUP" != "$EXT_GROUP" ]; then
+            echo "App and extension KallilexAppGroup values differ"
+            exit 1
+          fi
+          case "$APP_GROUP" in
+            group.*) ;;
+            *)
+              echo "KallilexAppGroup does not start with 'group.'"
+              exit 1
+              ;;
+          esac

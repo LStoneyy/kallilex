@@ -10,3 +10,12 @@ src-tauri/target
 # Code-signing key material must never be committed (public .pem in src-tauri/packaging/macos is fine)
 *.p12
 *-key.pem
+
+# iOS
+ios/Config/Local.xcconfig
+ios/build/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+ios/KallilexKit/.build/
+ios/KallilexKit/.swiftpm/

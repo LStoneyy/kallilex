@@ -1,0 +1,4 @@
+// Copy this file to Local.xcconfig (gitignored) and fill in your team ID.
+DEVELOPMENT_TEAM = ABC1234567
+// Optional, for a free Personal Team:
+// KALLILEX_ID_PREFIX = de.example
