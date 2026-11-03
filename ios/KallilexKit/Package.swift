@@ -9,11 +9,17 @@ let package = Package(
     ],
     products: [
         .library(name: "KallilexKit", targets: ["KallilexKit"]),
+        .library(name: "KallilexUI", targets: ["KallilexUI"]),
     ],
     targets: [
         .target(
             name: "KallilexKit",
             dependencies: [],
+            resources: [.process("Resources")]
+        ),
+        .target(
+            name: "KallilexUI",
+            dependencies: ["KallilexKit"],
             resources: [.process("Resources")]
         ),
         .testTarget(

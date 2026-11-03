@@ -155,10 +155,16 @@ public struct CustomPrompt: Codable, Identifiable, Equatable, Sendable, Hashable
 /// A user's one-time consent to send text to a specific profile's host
 /// (PLAN.md §10.1). Invalidated when the profile's host changes — see
 /// `consentHost(for:)`.
-public struct AIConsent: Codable, Equatable, Sendable {
+public struct AIConsent: Identifiable, Codable, Equatable, Sendable {
     public let profileID: String
     public let host: String
     public let grantedAt: Date
+
+    /// A composite of `profileID` and `host` — never just `host` alone,
+    /// since two different profiles can share a host (e.g. the same cloud
+    /// endpoint configured twice) and would otherwise collide as SwiftUI
+    /// `ForEach` identities.
+    public var id: String { "\(profileID)\n\(host)" }
 
     public init(profileID: String, host: String, grantedAt: Date) {
         self.profileID = profileID

@@ -66,6 +66,15 @@ struct ModelsTests {
         #expect(json?["profileID"] == nil)
     }
 
+    @Test func aiConsentIdIsDistinctForTheSameHostOnDifferentProfiles() {
+        // Two profiles can share a host (e.g. the same cloud endpoint
+        // configured twice): their consents must not collide as SwiftUI
+        // `ForEach` identities (ios-06 review fix).
+        let a = AIConsent(profileID: "p1", host: "example.com", grantedAt: .now)
+        let b = AIConsent(profileID: "p2", host: "example.com", grantedAt: .now)
+        #expect(a.id != b.id)
+    }
+
     @Test func appSettingsRoundTrips() throws {
         let value = AppSettings(
             schemaVersion: 1,

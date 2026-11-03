@@ -58,7 +58,7 @@ jobs:
         working-directory: ios/KallilexKit
         run: |
           xcodebuild test \
-            -scheme KallilexKit \
+            -scheme KallilexKit-Package \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIM_ID" \
             -derivedDataPath ../build/kit \

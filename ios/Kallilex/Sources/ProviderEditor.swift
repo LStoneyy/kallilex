@@ -1,0 +1,335 @@
+import SwiftUI
+import KallilexKit
+
+/// Result of the most recent "Test connection" attempt, shown inline below
+/// the button (ios-06).
+private enum ProviderTestState: Equatable {
+    case idle
+    case running
+    case success
+    case failure(String)
+}
+
+/// The Add/Edit sheet for a single provider profile (ios-06). Owns a
+/// `ProviderDraft`; nothing is persisted until Save is tapped — Cancel (or
+/// dismissing the sheet) discards every change, including any API-key
+/// replace/remove.
+struct ProviderEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppEnvironment.self) private var appEnv
+
+    @State private var draft: ProviderDraft
+    @State private var isEditingApiKey = false
+    @State private var testState: ProviderTestState = .idle
+    @State private var testTask: Task<Void, Never>?
+
+    let onSave: (ProviderProfile, String?) -> Void
+
+    init(draft: ProviderDraft, onSave: @escaping (ProviderProfile, String?) -> Void) {
+        self._draft = State(initialValue: draft)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(
+                        String(localized: "provider.name.placeholder", defaultValue: "Name"),
+                        text: $draft.name
+                    )
+                    .accessibilityIdentifier("provider.editor.name")
+                }
+
+                switch draft.kind {
+                case .unknown:
+                    unknownKindSection
+                case .appleOnDevice:
+                    availabilitySection
+                case .openAICompatible:
+                    baseUrlAndModelSection
+                    apiKeySection
+                    timeoutSection
+                    customHeadersSection
+                }
+
+                Section {
+                    Toggle(
+                        String(localized: "provider.enabled", defaultValue: "Enabled"),
+                        isOn: $draft.enabled
+                    )
+                    .accessibilityIdentifier("provider.editor.enabled")
+                }
+
+                Section {
+                    Button(String(localized: "provider.setActive", defaultValue: "Use this provider")) {
+                        appEnv.perform { try $0.setActiveProfile(id: draft.id) }
+                    }
+                    .disabled(!draft.canActivate)
+                    .accessibilityIdentifier("provider.editor.setActive")
+
+                    testConnectionRow
+                }
+            }
+            .navigationTitle(draft.name.isEmpty
+                ? String(localized: "provider.preset.picker.title", defaultValue: "Add Provider")
+                : draft.name
+            )
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "action.cancel", defaultValue: "Cancel")) {
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("provider.editor.cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "action.save", defaultValue: "Save")) {
+                        onSave(draft.makeProfile(), draft.apiKeyArgument)
+                        dismiss()
+                    }
+                    .disabled(!draft.canSave)
+                    .accessibilityIdentifier("provider.editor.save")
+                }
+            }
+        }
+        .onDisappear {
+            testTask?.cancel()
+        }
+    }
+
+    // MARK: - Sections
+
+    private var unknownKindSection: some View {
+        Section {
+            Text(String(
+                localized: "provider.unknownKind.notice",
+                defaultValue: "This provider type isn't supported by this version of Kallilex."
+            ))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var availabilitySection: some View {
+        Section(String(localized: "provider.availability", defaultValue: "Availability")) {
+            Text(String(
+                localized: "provider.availability.comingSoon",
+                defaultValue: "On-device availability isn't checked yet in this version."
+            ))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var baseUrlAndModelSection: some View {
+        Section {
+            TextField(
+                String(localized: "provider.baseUrl.placeholder", defaultValue: "https://api.example.com/v1"),
+                text: $draft.baseUrl
+            )
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("provider.editor.baseUrl")
+
+            TextField(
+                String(localized: "provider.model.placeholder", defaultValue: "gpt-4-turbo"),
+                text: $draft.model
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("provider.editor.model")
+
+            ForEach(draft.validationErrors, id: \.self) { error in
+                Text(error.errorDescription ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            ForEach(draft.warnings, id: \.self) { warning in
+                Text(warning.errorDescription ?? "")
+                    .font(.caption)
+                    .foregroundStyle(warning == .insecureHttpToCloud ? .red : .secondary)
+                    .accessibilityIdentifier(
+                        warning == .insecureHttpToCloud
+                            ? "provider.editor.warning.insecureUrl"
+                            : "provider.editor.hint.localNetwork"
+                    )
+            }
+        }
+    }
+
+    private var apiKeySection: some View {
+        Section {
+            if effectiveHasApiKey, !isEditingApiKey {
+                Text(String(
+                    localized: "provider.apiKey.saved",
+                    defaultValue: "API key saved on this device"
+                ))
+                .accessibilityIdentifier("provider.editor.apiKey.saved")
+                HStack {
+                    Button(String(localized: "provider.apiKey.replace", defaultValue: "Replace")) {
+                        draft.apiKeyIntent = .replace("")
+                        isEditingApiKey = true
+                    }
+                    .accessibilityIdentifier("provider.editor.apiKey.replace")
+                    Spacer()
+                    Button(String(localized: "provider.apiKey.remove", defaultValue: "Remove"), role: .destructive) {
+                        draft.apiKeyIntent = .remove
+                        isEditingApiKey = false
+                    }
+                    .accessibilityIdentifier("provider.editor.apiKey.remove")
+                }
+            } else if isEditingApiKey {
+                SecureField(
+                    String(localized: "provider.apiKey.placeholder", defaultValue: "Paste your API key"),
+                    text: apiKeyFieldBinding
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("provider.editor.apiKey.field")
+            } else {
+                Button(String(localized: "provider.apiKey.pasteAndSave", defaultValue: "Paste and save")) {
+                    draft.apiKeyIntent = .replace("")
+                    isEditingApiKey = true
+                }
+                .accessibilityIdentifier("provider.editor.apiKey.pasteAndSave")
+            }
+        }
+    }
+
+    private var timeoutSection: some View {
+        Section {
+            Stepper(value: $draft.timeoutSecs, in: ProviderDraft.timeoutRange) {
+                HStack {
+                    Text(String(localized: "provider.timeout", defaultValue: "Request timeout (s)"))
+                    Spacer()
+                    Text("\(draft.timeoutSecs)")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("provider.editor.timeout")
+        }
+    }
+
+    private var customHeadersSection: some View {
+        Section(String(localized: "provider.customHeaders.title", defaultValue: "Custom Headers")) {
+            ForEach(draft.customHeaders.indices, id: \.self) { index in
+                HStack {
+                    TextField(
+                        String(localized: "provider.customHeaders.name.placeholder", defaultValue: "Header name"),
+                        text: Binding(
+                            get: { draft.customHeaders[index].name },
+                            set: { draft.customHeaders[index] = HeaderEntry(name: $0, value: draft.customHeaders[index].value) }
+                        )
+                    )
+                    .accessibilityIdentifier("provider.editor.header.name.\(index)")
+                    TextField(
+                        String(localized: "provider.customHeaders.value.placeholder", defaultValue: "Header value"),
+                        text: Binding(
+                            get: { draft.customHeaders[index].value },
+                            set: { draft.customHeaders[index] = HeaderEntry(name: draft.customHeaders[index].name, value: $0) }
+                        )
+                    )
+                    .accessibilityIdentifier("provider.editor.header.value.\(index)")
+                }
+            }
+            .onDelete { offsets in draft.customHeaders.remove(atOffsets: offsets) }
+
+            Button {
+                draft.customHeaders.append(HeaderEntry(name: "", value: ""))
+            } label: {
+                Label(String(localized: "provider.customHeaders.add", defaultValue: "Add header"), systemImage: "plus")
+            }
+            .accessibilityIdentifier("provider.editor.headers.add")
+        }
+    }
+
+    private var testConnectionRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if draft.testConnectionKeySource() == .storedKeyWithheld {
+                Text(String(
+                    localized: "provider.apiKey.withheldForTest",
+                    defaultValue: "The saved API key is only sent to \(draft.originalHost ?? "the original address"). Replace it to test the new address."
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("provider.editor.apiKey.withheldForTest")
+            }
+
+            Button(String(localized: "provider.testConnection", defaultValue: "Test connection")) {
+                runTestConnection()
+            }
+            .disabled(testState == .running)
+            .accessibilityIdentifier("provider.editor.testConnection")
+
+            switch testState {
+            case .idle:
+                EmptyView()
+            case .running:
+                ProgressView()
+                    .accessibilityIdentifier("provider.editor.testConnection.progress")
+            case .success:
+                Text(String(
+                    localized: "provider.testConnection.success",
+                    defaultValue: "✓ Connection successful"
+                ))
+                .foregroundStyle(.green)
+                .accessibilityIdentifier("provider.editor.testConnection.result")
+            case .failure(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("provider.editor.testConnection.result")
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var effectiveHasApiKey: Bool {
+        switch draft.apiKeyIntent {
+        case .remove: return false
+        case .replace: return true
+        case .keep: return draft.hasApiKeyStored
+        }
+    }
+
+    private var apiKeyFieldBinding: Binding<String> {
+        Binding(
+            get: {
+                if case .replace(let key) = draft.apiKeyIntent { return key }
+                return ""
+            },
+            set: { draft.apiKeyIntent = .replace($0) }
+        )
+    }
+
+    private func resolveApiKeyForTest() -> String? {
+        switch draft.testConnectionKeySource() {
+        case .none, .storedKeyWithheld:
+            return nil
+        case .draftKey(let key):
+            return key
+        case .storedKey:
+            return try? appEnv.secretStore.get(profileID: draft.id)
+        }
+    }
+
+    private func runTestConnection() {
+        testTask?.cancel()
+        testState = .running
+        let profile = draft.makeProfile()
+        let apiKey = resolveApiKeyForTest()
+        testTask = Task {
+            let result = await appEnv.actionRunner.testConnection(profile: profile, apiKey: apiKey)
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .success:
+                testState = .success
+            case .failure(let error):
+                testState = .failure(error.localizedDescription)
+            }
+        }
+    }
+}
+
+#Preview {
+    ProviderEditor(draft: ProviderDraft(preset: providerPresets()[1])) { _, _ in }
+}

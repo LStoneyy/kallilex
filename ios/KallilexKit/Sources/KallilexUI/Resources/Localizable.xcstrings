@@ -1,0 +1,61 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "privacyBadge.detail.cloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent to a cloud server over the internet."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.lan" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent to a server on your local network. Nothing leaves your network."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.local" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Processed on this device. Nothing leaves your phone."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.onDevice" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Processed entirely on this device using Apple's on-device model. Nothing leaves your phone."
+          }
+        }
+      }
+    },
+    "privacyBadge.detail.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This provider type isn't supported by this version of Kallilex."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
