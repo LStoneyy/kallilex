@@ -1,0 +1,12 @@
+[
+  {
+    "kind": "prompt",
+    "instruction": "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone.",
+    "expected": "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone. Return only the transformed text, with no preamble, commentary, or surrounding quotes. Preserve the text's original language. Preserve the text's structure and formatting exactly: keep paragraph breaks, line breaks, list markers, indentation, and any markup characters (e.g. Markdown) that appear in the input."
+  },
+  {
+    "kind": "custom",
+    "instruction": "Translate to French",
+    "expected": "Apply the following instruction to the user's text: Translate to French Return only the transformed text, with no preamble, commentary, or surrounding quotes. Preserve the text's original language. Preserve the text's structure and formatting exactly: keep paragraph breaks, line breaks, list markers, indentation, and any markup characters (e.g. Markdown) that appear in the input."
+  }
+]

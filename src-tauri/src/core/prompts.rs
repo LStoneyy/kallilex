@@ -165,6 +165,44 @@ mod tests {
         }
     }
 
+    // ---- contract fixtures (see issues-ios/spec-ios-03-contract-fixtures.md) --
+
+    /// Mirrors `contracts/default-prompts.json`'s shape; `shortcut` is
+    /// deliberately not part of the contract (desktop-only).
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct FixturePrompt {
+        id: String,
+        label: String,
+        instruction: String,
+    }
+
+    #[test]
+    fn default_prompts_match_the_contract_fixture() {
+        let fixture: Vec<FixturePrompt> =
+            crate::core::contract_fixtures::load_json("default-prompts.json");
+        let actual = default_prompts();
+
+        assert_eq!(
+            actual.len(),
+            fixture.len(),
+            "default_prompts() and the contract fixture disagree on prompt count"
+        );
+        for (prompt, expected) in actual.iter().zip(fixture.iter()) {
+            assert_eq!(prompt.id, expected.id, "id mismatch for {}", expected.id);
+            assert_eq!(
+                prompt.label, expected.label,
+                "label mismatch for {}",
+                expected.id
+            );
+            assert_eq!(
+                prompt.instruction, expected.instruction,
+                "instruction mismatch for {}",
+                expected.id
+            );
+        }
+    }
+
     #[test]
     fn a_fresh_store_lists_the_seeded_defaults() {
         let settings_store = InMemorySettingsStore::new();

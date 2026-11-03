@@ -1,0 +1,17 @@
+[
+  {
+    "id": "builtin-rewrite",
+    "label": "Rewrite",
+    "instruction": "Rewrite the user's text to improve phrasing and flow while preserving its meaning and tone."
+  },
+  {
+    "id": "builtin-shorten",
+    "label": "Shorten",
+    "instruction": "Make the user's text noticeably shorter while keeping its essential meaning and tone."
+  },
+  {
+    "id": "builtin-improve-clarity",
+    "label": "Improve clarity",
+    "instruction": "Make the user's text clearer and easier to understand without changing its meaning."
+  }
+]

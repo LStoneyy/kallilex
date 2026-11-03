@@ -1,0 +1,1 @@
+Return only the transformed text, with no preamble, commentary, or surrounding quotes. Preserve the text's original language. Preserve the text's structure and formatting exactly: keep paragraph breaks, line breaks, list markers, indentation, and any markup characters (e.g. Markdown) that appear in the input.

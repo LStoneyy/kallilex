@@ -501,6 +501,82 @@ mod tests {
         }
     }
 
+    // ---- contract fixtures (see issues-ios/spec-ios-03-contract-fixtures.md) --
+
+    #[test]
+    fn return_only_text_instruction_matches_the_contract_fixture() {
+        let fixture =
+            crate::core::contract_fixtures::read_fixture("return-only-text-instruction.txt");
+        assert_eq!(RETURN_ONLY_TEXT_INSTRUCTION, fixture);
+    }
+
+    /// Mirrors `contracts/prompt-assembly.json`'s shape.
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct AssemblyCase {
+        kind: String,
+        instruction: String,
+        expected: String,
+    }
+
+    #[test]
+    fn assemble_prompt_matches_the_contract_fixture() {
+        let cases: Vec<AssemblyCase> =
+            crate::core::contract_fixtures::load_json("prompt-assembly.json");
+        assert!(!cases.is_empty(), "prompt-assembly.json must not be empty");
+
+        for case in cases {
+            let action = match case.kind.as_str() {
+                "prompt" => Action::Prompt {
+                    instruction: case.instruction.clone(),
+                },
+                "custom" => Action::Custom {
+                    instruction: case.instruction.clone(),
+                },
+                other => panic!("prompt-assembly.json: unknown action kind \"{other}\""),
+            };
+            let assembled = assemble_prompt(&action);
+            assert_eq!(
+                assembled, case.expected,
+                "assembly mismatch for kind={} instruction={:?}",
+                case.kind, case.instruction
+            );
+        }
+    }
+
+    /// Mirrors `contracts/privacy-classification.json`'s shape. `expected`
+    /// is `None` for unparseable URLs.
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct PrivacyCase {
+        base_url: String,
+        expected: Option<String>,
+    }
+
+    #[test]
+    fn classify_privacy_matches_the_contract_fixture() {
+        let cases: Vec<PrivacyCase> =
+            crate::core::contract_fixtures::load_json("privacy-classification.json");
+        assert!(
+            !cases.is_empty(),
+            "privacy-classification.json must not be empty"
+        );
+
+        for case in cases {
+            let actual = classify_privacy(&case.base_url).map(|class| match class {
+                PrivacyClass::Local => "local",
+                PrivacyClass::Lan => "lan",
+                PrivacyClass::Cloud => "cloud",
+            });
+            assert_eq!(
+                actual,
+                case.expected.as_deref(),
+                "classification mismatch for {:?}",
+                case.base_url
+            );
+        }
+    }
+
     // ---- assemble_prompt ----------------------------------------------
 
     #[test]

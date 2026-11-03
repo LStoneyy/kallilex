@@ -1,0 +1,24 @@
+[
+  {
+    "baseUrl": "http://localhost:11434/v1",
+    "expected": "http://localhost:11434/v1/chat/completions"
+  },
+  {
+    "baseUrl": "http://localhost:11434/v1/",
+    "expected": "http://localhost:11434/v1/chat/completions"
+  },
+  {
+    "baseUrl": "https://api.openai.com/v1",
+    "expected": "https://api.openai.com/v1/chat/completions"
+  },
+  {
+    "baseUrl": "ftp://invalid",
+    "shouldError": true,
+    "errorKind": "invalidBaseUrl"
+  },
+  {
+    "baseUrl": "not a url",
+    "shouldError": true,
+    "errorKind": "invalidBaseUrl"
+  }
+]

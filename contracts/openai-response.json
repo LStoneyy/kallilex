@@ -1,0 +1,71 @@
+[
+  {
+    "name": "success with padding",
+    "status": 200,
+    "body": "{\"choices\": [{\"message\": {\"role\": \"assistant\", \"content\": \"\\n\\nHello there  \"}}]}",
+    "expectedText": "Hello there",
+    "description": "Leading blank lines and trailing whitespace stripped, first line indentation preserved"
+  },
+  {
+    "name": "CRLF line endings",
+    "status": 200,
+    "body": "{\"choices\": [{\"message\": {\"content\": \"\\r\\n\\r\\n  hi\\r\\n\"}}]}",
+    "expectedText": "  hi",
+    "description": "CRLF stripped like LF; indentation preserved"
+  },
+  {
+    "name": "multiline with indentation",
+    "status": 200,
+    "body": "{\"choices\": [{\"message\": {\"content\": \"\\nLine one\\n\\n    indented\\n\"}}]}",
+    "expectedText": "Line one\n\n    indented",
+    "description": "Interior blank lines and indentation kept, leading blank lines and trailing whitespace stripped"
+  },
+  {
+    "name": "single indented line",
+    "status": 200,
+    "body": "{\"choices\": [{\"message\": {\"content\": \"  indented\"}}]}",
+    "expectedText": "  indented",
+    "description": "Leading indentation preserved"
+  },
+  {
+    "name": "no choices",
+    "status": 200,
+    "body": "{\"choices\": []}",
+    "shouldError": true,
+    "errorKind": "invalidResponse",
+    "errorMessageContains": "response contained no choices"
+  },
+  {
+    "name": "missing content",
+    "status": 200,
+    "body": "{\"choices\": [{\"message\": {\"role\": \"assistant\"}}]}",
+    "shouldError": true,
+    "errorKind": "invalidResponse",
+    "errorMessageContains": "message content was missing or null"
+  },
+  {
+    "name": "null content",
+    "status": 200,
+    "body": "{\"choices\": [{\"message\": {\"content\": null}}]}",
+    "shouldError": true,
+    "errorKind": "invalidResponse",
+    "errorMessageContains": "message content was missing or null"
+  },
+  {
+    "name": "invalid JSON",
+    "status": 200,
+    "body": "not json",
+    "shouldError": true,
+    "errorKind": "invalidResponse"
+  },
+  {
+    "name": "HTTP 500 error",
+    "status": 500,
+    "body": "ääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääääää",
+    "shouldError": true,
+    "errorKind": "http",
+    "expectedStatus": 500,
+    "expectedSnippetChars": 300,
+    "description": "Error snippet is exactly the first 300 Unicode characters of the body; non-ASCII character catches byte-vs-character truncation bugs"
+  }
+]

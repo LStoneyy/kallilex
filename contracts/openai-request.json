@@ -1,0 +1,132 @@
+[
+  {
+    "name": "bearer token and custom header",
+    "baseUrl": "https://api.example.com/v1",
+    "model": "test-model",
+    "apiKey": "test-key",
+    "customHeaders": [
+      {
+        "name": "X-Custom",
+        "value": "custom-value"
+      }
+    ],
+    "systemPrompt": "Fix the text.",
+    "userText": "Hello world",
+    "expectedBody": {
+      "model": "test-model",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Fix the text."
+        },
+        {
+          "role": "user",
+          "content": "Hello world"
+        }
+      ],
+      "stream": false
+    },
+    "expectedHeaders": {
+      "Authorization": "Bearer test-key",
+      "X-Custom": "custom-value"
+    },
+    "expectedAbsentHeaders": []
+  },
+  {
+    "name": "no key sends no Authorization header",
+    "baseUrl": "https://api.example.com/v1",
+    "model": "test-model",
+    "apiKey": null,
+    "customHeaders": [],
+    "systemPrompt": "Fix the text.",
+    "userText": "Hello world",
+    "expectedBody": {
+      "model": "test-model",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Fix the text."
+        },
+        {
+          "role": "user",
+          "content": "Hello world"
+        }
+      ],
+      "stream": false
+    },
+    "expectedHeaders": {},
+    "expectedAbsentHeaders": [
+      "Authorization"
+    ]
+  },
+  {
+    "name": "custom header with blank name is skipped",
+    "baseUrl": "https://api.example.com/v1",
+    "model": "test-model",
+    "apiKey": "test-key",
+    "customHeaders": [
+      {
+        "name": "  ",
+        "value": "ignored"
+      },
+      {
+        "name": "X-Valid",
+        "value": "used"
+      }
+    ],
+    "systemPrompt": "Fix the text.",
+    "userText": "Hello world",
+    "expectedHeaders": {
+      "Authorization": "Bearer test-key",
+      "X-Valid": "used"
+    },
+    "expectedAbsentHeaders": []
+  },
+  {
+    "name": "custom header with invalid value is skipped",
+    "baseUrl": "https://api.example.com/v1",
+    "model": "test-model",
+    "apiKey": "test-key",
+    "customHeaders": [
+      {
+        "name": "X-Bad",
+        "value": "line\nbreak"
+      },
+      {
+        "name": "X-Valid",
+        "value": "used"
+      }
+    ],
+    "systemPrompt": "Fix the text.",
+    "userText": "Hello world",
+    "expectedHeaders": {
+      "Authorization": "Bearer test-key",
+      "X-Valid": "used"
+    },
+    "expectedAbsentHeaders": [
+      "X-Bad"
+    ]
+  },
+  {
+    "name": "blank model fails before any request",
+    "baseUrl": "https://api.example.com/v1",
+    "model": "  ",
+    "apiKey": "test-key",
+    "customHeaders": [],
+    "systemPrompt": "Fix the text.",
+    "userText": "Hello world",
+    "expectedErrorKind": "missingModel",
+    "expectNoRequest": true
+  },
+  {
+    "name": "invalid base URL is reported before a blank model",
+    "baseUrl": "ftp://example.com/v1",
+    "model": "  ",
+    "apiKey": null,
+    "customHeaders": [],
+    "systemPrompt": "Fix the text.",
+    "userText": "Hello world",
+    "expectedErrorKind": "invalidBaseUrl",
+    "expectNoRequest": true
+  }
+]

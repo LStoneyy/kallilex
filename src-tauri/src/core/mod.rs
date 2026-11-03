@@ -3,6 +3,8 @@
 
 pub mod capture;
 pub mod clipboard;
+#[cfg(test)]
+pub mod contract_fixtures;
 pub mod onboarding;
 pub mod prompts;
 pub mod providers;

@@ -239,6 +239,298 @@ mod tests {
         })
     }
 
+    /// Maps a [`ProviderError`] to the fixture's `errorKind` string.
+    /// Delegates to the production [`ProviderError::kind`] — every variant
+    /// maps cleanly to the fixtures' `invalidBaseUrl` / `missingModel` /
+    /// `invalidResponse` / `http` strings (see
+    /// `issues-ios/spec-ios-03-contract-fixtures.md`).
+    fn fixture_error_kind(e: &ProviderError) -> &'static str {
+        e.kind()
+    }
+
+    // ---- contract fixtures (see issues-ios/spec-ios-03-contract-fixtures.md) --
+
+    /// Mirrors `contracts/openai-endpoint.json`'s shape.
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct EndpointCase {
+        base_url: String,
+        #[serde(default)]
+        expected: Option<String>,
+        #[serde(default)]
+        should_error: bool,
+        #[serde(default)]
+        error_kind: Option<String>,
+    }
+
+    #[test]
+    fn endpoint_matches_the_contract_fixture() {
+        let cases: Vec<EndpointCase> =
+            crate::core::contract_fixtures::load_json("openai-endpoint.json");
+        assert!(!cases.is_empty(), "openai-endpoint.json must not be empty");
+
+        for case in cases {
+            let result = endpoint(&case.base_url);
+            if case.should_error {
+                match result {
+                    Err(e) => assert_eq!(
+                        Some(fixture_error_kind(&e).to_string()),
+                        case.error_kind,
+                        "{}",
+                        case.base_url
+                    ),
+                    Ok(v) => panic!("{}: expected an error but got {v:?}", case.base_url),
+                }
+            } else {
+                assert_eq!(
+                    result.unwrap(),
+                    case.expected.expect("non-error case must have `expected`"),
+                    "{}",
+                    case.base_url
+                );
+            }
+        }
+    }
+
+    /// Mirrors `contracts/openai-request.json`'s `customHeaders` entries.
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct HeaderFixture {
+        name: String,
+        value: String,
+    }
+
+    /// Mirrors `contracts/openai-request.json`'s shape. Every case lists
+    /// all inputs explicitly — there are no implicit defaults in the
+    /// fixture itself, but several fields are only present on some cases
+    /// (`#[serde(default)]` below covers that, not "desktop doesn't need
+    /// it").
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct RequestCase {
+        name: String,
+        base_url: String,
+        model: String,
+        api_key: Option<String>,
+        #[serde(default)]
+        custom_headers: Vec<HeaderFixture>,
+        system_prompt: String,
+        user_text: String,
+        #[serde(default)]
+        expected_body: Option<JsonValue>,
+        #[serde(default)]
+        expected_headers: std::collections::HashMap<String, String>,
+        #[serde(default)]
+        expected_absent_headers: Vec<String>,
+        #[serde(default)]
+        expected_error_kind: Option<String>,
+        #[serde(default)]
+        expect_no_request: bool,
+    }
+
+    #[tokio::test]
+    async fn requests_match_the_contract_fixture() {
+        let cases: Vec<RequestCase> =
+            crate::core::contract_fixtures::load_json("openai-request.json");
+        assert!(!cases.is_empty(), "openai-request.json must not be empty");
+
+        for case in cases {
+            let server = MockServer::start().await;
+            // Expect zero hits unless the case below proves otherwise: a
+            // catch-all 200 keeps a stray request from panicking instead of
+            // failing an assertion.
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(success_body("ok")))
+                .mount(&server)
+                .await;
+
+            let base_url = if case.expect_no_request {
+                // These cases fail validation before any request is ever
+                // built, so the literal fixture URL is safe to use as-is —
+                // no network call happens, even to the mock below.
+                case.base_url.clone()
+            } else {
+                // Keep the fixture's path (e.g. "/v1"), but talk to the
+                // mock server instead of the real host.
+                let parsed = url::Url::parse(&case.base_url)
+                    .unwrap_or_else(|e| panic!("{}: invalid baseUrl: {e}", case.name));
+                format!("{}{}", server.uri(), parsed.path())
+            };
+
+            let mut profile = profile_for(base_url);
+            profile.model = case.model.clone();
+            profile.custom_headers = case
+                .custom_headers
+                .iter()
+                .map(|h| HeaderEntry {
+                    name: h.name.clone(),
+                    value: h.value.clone(),
+                })
+                .collect();
+
+            let adapter = OpenAiCompatibleAdapter;
+            let result = adapter
+                .complete(
+                    &profile,
+                    case.api_key.as_deref(),
+                    &case.system_prompt,
+                    &case.user_text,
+                )
+                .await;
+
+            if case.expect_no_request {
+                match result {
+                    Err(e) => assert_eq!(
+                        Some(fixture_error_kind(&e).to_string()),
+                        case.expected_error_kind,
+                        "{}",
+                        case.name
+                    ),
+                    Ok(v) => panic!("{}: expected an error but got {v:?}", case.name),
+                }
+                assert!(
+                    server.received_requests().await.unwrap().is_empty(),
+                    "{}: expected no request to reach the mock",
+                    case.name
+                );
+                continue;
+            }
+
+            assert!(result.is_ok(), "{}: {:?}", case.name, result);
+
+            let requests = server.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 1, "{}", case.name);
+            let request = &requests[0];
+
+            if let Some(expected_body) = &case.expected_body {
+                let body: JsonValue = serde_json::from_slice(&request.body).unwrap();
+                assert_eq!(&body, expected_body, "{}", case.name);
+            }
+
+            for (name, value) in &case.expected_headers {
+                let actual = request
+                    .headers
+                    .get(name.as_str())
+                    .unwrap_or_else(|| panic!("{}: missing header {name}", case.name));
+                assert_eq!(
+                    actual.to_str().unwrap(),
+                    value,
+                    "{}: header {name}",
+                    case.name
+                );
+            }
+
+            for name in &case.expected_absent_headers {
+                assert!(
+                    request.headers.get(name.as_str()).is_none(),
+                    "{}: header {name} should be absent",
+                    case.name
+                );
+            }
+        }
+    }
+
+    /// Mirrors `contracts/openai-response.json`'s shape.
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct ResponseCase {
+        name: String,
+        status: u16,
+        body: String,
+        #[serde(default)]
+        expected_text: Option<String>,
+        #[serde(default)]
+        should_error: bool,
+        #[serde(default)]
+        error_kind: Option<String>,
+        #[serde(default)]
+        error_message_contains: Option<String>,
+        #[serde(default)]
+        expected_status: Option<u16>,
+        #[serde(default)]
+        expected_snippet_chars: Option<usize>,
+        /// Human-readable only — never asserted on, but `deny_unknown_fields`
+        /// above means every key the fixture actually uses must be declared.
+        #[serde(default)]
+        #[allow(dead_code)]
+        description: Option<String>,
+    }
+
+    #[tokio::test]
+    async fn responses_match_the_contract_fixture() {
+        let cases: Vec<ResponseCase> =
+            crate::core::contract_fixtures::load_json("openai-response.json");
+        assert!(!cases.is_empty(), "openai-response.json must not be empty");
+
+        for case in cases {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/chat/completions"))
+                .respond_with(ResponseTemplate::new(case.status).set_body_string(case.body.clone()))
+                .mount(&server)
+                .await;
+
+            let profile = profile_for(server.uri());
+            let adapter = OpenAiCompatibleAdapter;
+            let result = adapter.complete(&profile, None, "system", "user").await;
+
+            if case.should_error {
+                let err = match result {
+                    Err(e) => e,
+                    Ok(v) => panic!("{}: expected an error but got {v:?}", case.name),
+                };
+                assert_eq!(
+                    Some(fixture_error_kind(&err).to_string()),
+                    case.error_kind,
+                    "{}",
+                    case.name
+                );
+                if let Some(contains) = &case.error_message_contains {
+                    assert!(
+                        err.to_string().contains(contains.as_str()),
+                        "{}: {} does not contain {contains:?}",
+                        case.name,
+                        err
+                    );
+                }
+                if let ProviderError::Http { status, snippet } = &err {
+                    if let Some(expected_status) = case.expected_status {
+                        assert_eq!(*status, expected_status, "{}", case.name);
+                    }
+                    if let Some(n) = case.expected_snippet_chars {
+                        let expected_snippet: String = case.body.chars().take(n).collect();
+                        assert_eq!(
+                            snippet, &expected_snippet,
+                            "{}: snippet is not exactly the first {n} characters",
+                            case.name
+                        );
+                    }
+                }
+            } else {
+                assert_eq!(
+                    result,
+                    Ok(case
+                        .expected_text
+                        .clone()
+                        .expect("non-error case must have expectedText")),
+                    "{}",
+                    case.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_http_500_fixture_body_is_exactly_400_characters() {
+        let cases: Vec<ResponseCase> =
+            crate::core::contract_fixtures::load_json("openai-response.json");
+        let case = cases
+            .iter()
+            .find(|c| c.name == "HTTP 500 error")
+            .expect("the HTTP 500 error case must exist");
+        assert_eq!(case.body.chars().count(), 400);
+    }
+
     #[tokio::test]
     async fn success_returns_content_and_sends_the_expected_request() {
         let server = MockServer::start().await;
