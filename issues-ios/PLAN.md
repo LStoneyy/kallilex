@@ -1,6 +1,6 @@
 # Kallilex for iOS — Implementation Plan
 
-Status: draft, awaiting review (no specs written yet)
+Status: approved 2026-11-03; decisions in §18
 Branch: `ios-plan`
 Date: 2026-11-03
 Scope of this folder: `issues-ios/` holds the plan and, later, the specs for
@@ -9,8 +9,8 @@ the iOS variant only. Desktop specs stay in `issues/`.
 This plan is the source the iOS specs will be cut from (see
 [§15 Proposed specs](#15-proposed-specs)). It records the platform research,
 the product scope, the architecture decisions with their reasons, and the
-order of work. Anything marked **Open question** needs a decision from the
-product owner before the matching spec can be marked `ready-for-agent`.
+order of work. The product decisions taken on 2026-11-03 are in
+[§18](#18-decisions-product-owner-2026-11-03).
 
 ---
 
@@ -88,7 +88,7 @@ Other constraints that shape the design:
 3. **Providers:** any OpenAI-compatible endpoint, the same model as on
    desktop: base URL, model, optional key, custom headers, timeout.
 4. **Apple on-device model** as a provider that needs no key, available when
-   the device supports it. **Open question Q4.**
+   the device supports it. Private Cloud Compute is not in v1 (decided, Q4).
 5. **Localization:** English and German.
 6. **iPhone first.** iPad works through the same targets (the share sheet
    exists there too), but there is no iPad-specific layout in v1.
@@ -97,7 +97,7 @@ Other constraints that shape the design:
 
 - Automatic Replace or paste-back (needs the keyboard, §16).
 - Sync of prompts or profiles with the desktop app or between devices
-  (**Open question Q3**).
+  (decided, Q3: later, as an import/export format; API keys never sync).
 - A custom spell-check engine. iOS text views already underline misspellings
   and offer corrections, and that is enough.
 - Shortcut chords (`Mod+1` …), popover position, update channels, Wayland
@@ -234,7 +234,7 @@ Further reasons:
 
 ```
 ios/
-  Kallilex.xcodeproj               # Xcode 16+ synchronized folders (minimal pbxproj churn)
+  Kallilex.xcodeproj               # Xcode 26+ (iOS 26 SDK), synchronized folders (minimal pbxproj churn)
   Kallilex/                        # container app target (SwiftUI)
   ShareExtension/                  # Share Extension target (SwiftUI in a UIHostingController)
   KallilexKit/                     # local Swift package, linked by both targets
@@ -249,12 +249,12 @@ issues-ios/                        # this plan + iOS specs
 
 | Item | Proposed value | Notes |
 |---|---|---|
-| App bundle id | `com.webcommits.kallilex` | Same as the desktop id, which keeps "universal purchase" possible later. **Open question Q5** |
+| App bundle id | `com.webcommits.kallilex` | Same as the desktop id, which keeps "universal purchase" possible later (decided, Q5) |
 | Extension bundle id | `com.webcommits.kallilex.share` | Must be prefixed by the app id |
 | App Group | `group.com.webcommits.kallilex` | Settings JSON, consent records |
 | Keychain access group | `$(AppIdentifierPrefix)com.webcommits.kallilex.shared` | API keys |
 | URL scheme | `kallilex://` | Deep links into settings |
-| Minimum iOS | **iOS 26.0** | Foundation Models need 26. The PCC path is gated with `if #available(iOS 27, *)`. **Open question Q6** |
+| Minimum iOS | **iOS 26.0** | Foundation Models need 26 (decided, Q6) |
 | Swift | 6, strict concurrency | |
 | Version | Independent semver starting at `1.0.0`, tags `ios-v1.0.0` | See §13. This keeps it clear of the desktop `v*` tags |
 
@@ -269,7 +269,7 @@ Pure logic plus storage seams, no UI. Both targets link it. Every type is
 struct ProviderProfile: Codable, Identifiable, Sendable {
     var id: String            // UUID string
     var name: String
-    var kind: ProviderKind    // .openAICompatible | .appleOnDevice | .applePrivateCloud
+    var kind: ProviderKind    // .openAICompatible | .appleOnDevice (enum stays open for a later .applePrivateCloud)
     var baseURL: String       // JSON key "baseUrl", like desktop; unused for apple*
     var model: String
     var timeoutSecs: Int      // default 30, min 1
@@ -285,7 +285,7 @@ struct CustomPrompt: Codable, Identifiable, Sendable {
     // desktop's `shortcut` is ignored on iOS (decoded and dropped)
 }
 
-struct IOSSettings: Codable, Sendable {
+struct AppSettings: Codable, Sendable {
     var schemaVersion: Int    // explicit from day one (desktop has none)
     var activeProfileID: String?
     var profiles: [ProviderProfile]
@@ -316,7 +316,8 @@ desktop profiles later stays possible (Q3).
 
 ```swift
 protocol TextProvider: Sendable {
-    func complete(systemPrompt: String, userText: String) async throws(ProviderError) -> String
+    func complete(systemPrompt: String, userText: String) async throws -> String
+    // throws ProviderError, or CancellationError when the task is cancelled
 }
 ```
 
@@ -340,8 +341,9 @@ protocol TextProvider: Sendable {
     sending.
   - It maps `exceededContextWindowSize` and guardrail errors onto the
     taxonomy.
-- **`ApplePrivateCloudProvider`** (iOS 27+, behind the entitlement): the
-  same shape with `PrivateCloudComputeLanguageModel`. **Open question Q4.**
+- `ApplePrivateCloudProvider` (iOS 27+, `PrivateCloudComputeLanguageModel`,
+  behind an entitlement) is **not in v1** (Q4). The `TextProvider` seam
+  keeps it a drop-in addition later.
 - **`ActionRunner`** is the iOS counterpart of `run_action`:
   - it resolves the active, enabled profile (`active_profile` semantics)
   - it checks consent (§10.1)
@@ -367,11 +369,10 @@ iOS adds:
 
 - `unavailable`: the on-device model isn't ready (reason included)
 - `contextTooLong`
-- `consentRequired`
+- `declined`: the on-device model refused the text (guardrails)
 - `localNetworkDenied`: a LAN host was refused because the Local Network
   permission is missing (spike ios-01 must show whether this can be told
   apart from `unreachable`)
-- `quotaExceeded`: the PCC daily limit was reached
 
 Every message is actionable, localized in English and German, and never
 just "failed".
@@ -382,10 +383,10 @@ This is a port of `classify_privacy`: `local` (loopback, `localhost`),
 `lan` (private and link-local IPs, `.local`, `.lan`, `.home`, `.internal`,
 single-label hosts) and `cloud`.
 
-The Apple kinds map to `onDevice`, a new class, and `privateCloud`. The
-popover's "which endpoint, which privacy class" badge becomes a small badge
-in the extension: *On device*, *Your network*, *Apple PCC*, or *Cloud:
-<host>*.
+The Apple on-device kind maps to a new class, `onDevice`. The popover's
+"which endpoint, which privacy class" badge becomes a small badge in the
+extension: *On device*, *This device* (`local`), *Your network*, or
+*Cloud: <host>*.
 
 ### 7.6 Storage seams
 
@@ -487,11 +488,12 @@ Share extensions can't call `UIApplication.open`.
 
 ## 9. Container app
 
-Tabs or a sidebar-style `NavigationSplitView`:
+A `TabView` (iPhone first) with these tabs; About is a section of
+Settings:
 
 1. **Scratchpad**: the same editor and chip UI as the extension, built from
-   the same SwiftUI components in `KallilexKit`'s UI module or a shared
-   `KallilexUI` target. It adds a **Paste** button. That is a
+   the same SwiftUI components, in the `KallilexUI` library target of the
+   `ios/KallilexKit` package. It adds a **Paste** button. That is a
    `PasteButton`/`UIPasteControl`, so iOS shows no paste prompt.
 2. **Prompts**:
    - a list with drag to reorder
@@ -521,9 +523,7 @@ Tabs or a sidebar-style `NavigationSplitView`:
 ### 10.1 AI consent (guideline 5.1.2(i))
 
 - `AIConsent { profileID, host, grantedAt }`.
-- Consent is required before the first request to any `cloud`-class host or
-  to Apple PCC (to be safe; Apple's own service may be exempt, so check
-  during review prep).
+- Consent is required before the first request to any `cloud`-class host.
 - It isn't required for `local`, `lan` or `onDevice`.
 - If the base URL's host changes, the consent is invalid.
 - The consent UI exists in both the app and the extension. The wording names
@@ -531,8 +531,10 @@ Tabs or a sidebar-style `NavigationSplitView`:
   instruction) and what isn't (nothing else, no identifiers).
 - The App Review notes explain the flow and include a test configuration.
   App Review needs a working provider:
-  - Apple on device, if the review device supports it, **or**
-  - a demo endpoint, **Open question Q7**.
+  - Apple on device, if the review device supports it, **and**
+  - as a fallback, a temporary, spend-limited API key for an
+    OpenAI-compatible provider, given in the review notes and revoked after
+    the review (decided, Q7).
 
 ### 10.2 Privacy manifest and labels
 
@@ -560,9 +562,11 @@ Tabs or a sidebar-style `NavigationSplitView`:
 
 - String catalogs (`Localizable.xcstrings`) in English and German, for the
   app, the extension and the `KallilexKit` error messages.
-- The default prompts stay in English, as on desktop. The model already
-  keeps the text's language. **Open question Q8**: ship German default
-  prompt labels?
+- Default prompts (decided, Q8): the **labels** are localized ("Rewrite" →
+  "Umschreiben", "Shorten" → "Kürzen", "Improve clarity" → "Klarer
+  formulieren"); the **instructions** stay English, as on desktop, since
+  the model already keeps the text's language. Labels are localized only
+  when seeding; once stored, they are user data and are never re-translated.
 - Dynamic Type up to the accessibility sizes. The prompt chips wrap into a
   vertical list at large sizes.
 - VoiceOver labels on all chips and toolbar buttons. Request state changes
@@ -649,13 +653,21 @@ is a separate, small spec (ios-03).
     *any* published release and would bump the cask. If GitHub Releases are
     wanted for iOS, add a tag-prefix guard to `homebrew.yml` first. That is a
     desktop change, so it gets its own spec.
-- **Release:**
-  - signing: an App Store Connect API key plus a distribution certificate as
-    GitHub secrets
-  - the upload: `xcodebuild archive` + `-exportArchive` + `xcrun altool` /
-    `notarytool`-style upload, or fastlane `pilot`. **Open question Q9**:
-    GitHub Actions or Xcode Cloud
-  - path: TestFlight internal → TestFlight external → App Store
+- **Release (decided, Q9: manual for v1):**
+  - Archive and upload by hand from Xcode (Product → Archive → Distribute
+    App → App Store Connect), using automatic signing with the team's
+    distribution certificate. No signing secrets in GitHub.
+  - Bump `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in the xcconfig,
+    tag the release commit `ios-vX.Y.Z` (no GitHub Release).
+  - Path: TestFlight internal → TestFlight external → App Store.
+  - Automating the upload (GitHub Actions on `ios-v*` tags) is a later spec.
+- **Paid app (decided, Q10: one-time price):**
+  - Needs the Paid Apps agreement, banking and tax forms in App Store
+    Connect, and (for EU storefronts) the DSA trader-status declaration,
+    which publishes the seller's address and contact details.
+  - The price tier is chosen in App Store Connect at release time.
+  - No in-app purchases and no trial. The source stays Apache-2.0, so
+    building it yourself remains possible. The README says so.
 - A `docs/ios-release-checklist.md`, modeled on `docs/release-checklist.md`.
 
 ## 14. Phases
@@ -666,7 +678,7 @@ is a separate, small spec (ios-03).
 | **1 — Foundation** | The Xcode project, `KallilexKit` with models, stores, prompt assembly, the OpenAI provider, the contract fixtures, iOS CI | `xcodebuild test` is green in CI, and the fixtures pass in Rust and Swift |
 | **2 — Container app** | Providers, prompts, settings, consent, onboarding, Scratchpad | The full loop works in the Scratchpad on a device |
 | **3 — Share Extension** | The extension with all states from §8.3 | The manual host-app matrix passes for Safari, Mail, Notes and Messages |
-| **4 — Apple models** | The on-device provider (and PCC if Q4 = yes) | It works on an eligible device and degrades cleanly on ineligible ones |
+| **4 — Apple models** | The on-device provider (PCC is out of v1, Q4) | It works on an eligible device and degrades cleanly on ineligible ones |
 | **5 — Polish** | Localization, accessibility, a memory audit, privacy manifest, App Review notes, website and privacy policy | Checklist complete |
 | **6 — Release** | TestFlight → App Store 1.0.0 | Live in the App Store |
 | Later | App Intents, keyboard, sync (§16) | Separate plan |
@@ -679,24 +691,24 @@ components (§9) are built in Phase 2 and reused in Phase 3.
 
 These will be written next, in the format of `issues/spec-XX-*.md`
 (Status, Phase, Depends on, Problem Statement, Solution, User Stories,
-Implementation Decisions, Testing Decisions, Out of Scope). Numbering is
+Implementation Decisions, Testing Decisions, Out of Scope, Further Notes). Numbering is
 separate from desktop: `spec-ios-NN-*.md`.
 
 | Spec | Title | Depends on | Key content |
 |---|---|---|---|
 | ios-01 | Technical spike | — | See the unknowns below |
-| ios-02 | Project skeleton and iOS CI | ios-01, Q1/Q5/Q6 | §6 layout, xcconfigs, entitlements (App Group, Keychain group), `ios.yml`, an empty app and extension that launch |
+| ios-02 | Project skeleton and iOS CI | ios-01 | §6 layout, xcconfigs, entitlements (App Group, Keychain group), `ios.yml`, an empty app and extension that launch |
 | ios-03 | Contract fixtures | ios-02 | The `contracts/` JSON, the Rust test loader (tests only), the Swift test loader |
 | ios-04 | KallilexKit: models, settings and secret stores | ios-02 | §7.1, §7.6, schema versioning, file coordination |
 | ios-05 | KallilexKit: prompts, assembly, privacy class, OpenAI provider, ActionRunner | ios-03, ios-04 | §7.2–7.5 |
 | ios-06 | Container app: providers, prompts, settings | ios-05 | §9 (2–5), Test connection |
-| ios-07 | AI consent and onboarding | ios-06, Q7 | §4.1, §10.1 |
-| ios-08 | Shared editor UI and Scratchpad | ios-05 | §9 (1), components reused by ios-09 |
+| ios-07 | AI consent and onboarding | ios-06 | §4.1, §10.1; creates the `KallilexUI` library target |
+| ios-08 | Shared editor UI and Scratchpad | ios-07 | §9 (1), components reused by ios-09 |
 | ios-09 | Share Extension | ios-07, ios-08 | §8 in full |
-| ios-10 | Apple Foundation Models providers | ios-05, Q4 | §7.3 Apple providers, availability UI |
+| ios-10 | Apple on-device model provider | ios-05, ios-06 | §7.3 on-device provider, availability UI |
 | ios-11 | Localization and accessibility | ios-09 | §11 |
 | ios-12 | Privacy manifest, App Review package, website | ios-09 | §10.2, the privacy policy, review notes, screenshots |
-| ios-13 | Release pipeline and 1.0.0 | ios-11, ios-12, Q2/Q9 | §13, `docs/ios-release-checklist.md`, the homebrew guard (if needed) |
+| ios-13 | Manual release and 1.0.0 | ios-11, ios-12, paid developer account | §13: manual archive/upload, versioning and `ios-v*` tags, paid-app setup, `docs/ios-release-checklist.md`, host-app matrix |
 
 The spike's (ios-01) unknowns:
 
@@ -705,13 +717,16 @@ The spike's (ios-01) unknowns:
 2. Is `NSAllowsLocalNetworking` enough for `http://<host>.local` and for
    bare LAN IPs? Can the extension trigger the Local Network prompt, or only
    the app?
-3. Are Foundation Models (on-device and PCC) available inside a Share
+3. Is the on-device Foundation Model available inside a Share
    Extension, and what is the memory cost there?
 4. Does `extensionContext.open(_:)` work from a Share Extension on iOS 26
    and 27?
 5. The peak memory of the SwiftUI extension during a request.
 6. Pasting back after Copy: does the selection survive the share sheet, so
    that one Paste replaces it? Spot-check four apps.
+7. Can a free Personal Team provision App Groups and Keychain sharing? If
+   not, the paid account (Q2) must exist before Phase 1, not only before
+   TestFlight.
 
 ## 16. Later (outside v1)
 
@@ -751,22 +766,22 @@ The spike's (ios-01) unknowns:
 | Swift port drifts from the Rust core | Inconsistent results across platforms | The contract fixtures (§12.2) in both CIs |
 | Foundation Models unavailable in extensions or too weak in German | The keyless option disappears | Spike item 3. Ship OpenAI-compatible only, and keep the Apple provider in the app's Scratchpad only |
 | iOS releases trigger desktop workflows | A wrong Homebrew bump or release | The `ios-v*` tags, no GitHub Releases, or a guard in `homebrew.yml` (§13) |
-| Apple Developer Program cost and account setup | A blocker for any distribution | Q2, settled before Phase 6 (TestFlight needs it too; a free account only allows 7-day device builds for the spike) |
+| Apple Developer Program cost and account setup | A blocker for any distribution | No account yet (Q2). The spike starts with a free Personal Team (7-day device builds) and records which capabilities (App Groups, Keychain sharing) need the paid account; enroll before Phase 1 if they do, at the latest before TestFlight |
 
-## 18. Open questions (product owner)
+## 18. Decisions (product owner, 2026-11-03)
 
-| # | Question | Default if unanswered |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Repo: is the iOS app in this repo under `ios/` (as planned) or in a separate repo? | This repo, `ios/` |
-| Q2 | Apple Developer Program: is there a paid account? Individual or organization ("webcommits")? | Needed before TestFlight |
-| Q3 | Sync of prompts and profiles with desktop or across devices in v1? | No; later as import and export |
-| Q4 | Apple models in v1: on-device only, on-device plus PCC, or neither? | On-device only; PCC later |
-| Q5 | Bundle id: reuse `com.webcommits.kallilex` (keeps universal purchase possible) or a separate `…kallilex.ios`? | Reuse |
-| Q6 | Minimum iOS: 26.0 (Foundation Models) or lower (wider reach, no Apple model)? | 26.0 |
-| Q7 | App Review demo provider: rely on the on-device model, or provide a temporary API key or endpoint for reviewers? | On-device, plus a reviewer key if Q4 = neither |
-| Q8 | Default prompts: English only (as on desktop) or localized? | Labels localized, instructions English |
-| Q9 | Release automation: GitHub Actions (consistent with desktop) or Xcode Cloud? | GitHub Actions |
-| Q10 | Price: free (like desktop) | Free |
+| Q1 | Where does the iOS code live? | This repo, under `ios/` |
+| Q2 | Paid Apple Developer Program account? | Not yet; will be created. Spike runs on a free Personal Team |
+| Q3 | Sync of prompts and profiles in v1? | No. Later as an import/export format; API keys never sync |
+| Q4 | Apple models in v1? | On-device only. Private Cloud Compute later |
+| Q5 | Bundle id? | `com.webcommits.kallilex` (same as desktop) |
+| Q6 | Minimum iOS? | iOS 26.0 |
+| Q7 | How does App Review test the app? | On-device model, plus a temporary, spend-limited reviewer API key as a fallback |
+| Q8 | Localize default prompts? | Labels localized (EN/DE), instructions stay English |
+| Q9 | Release automation? | Manual archive and upload from Xcode for v1; automation later |
+| Q10 | Price? | Paid, one-time price; no in-app purchases |
 
 ## 19. Sources
 
