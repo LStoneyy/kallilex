@@ -79,6 +79,8 @@ Before engineering begins on Phase 1 or ios-02, the product owner must:
 - [ ] Register the App Group: `group.com.webcommits.kallilex`.
 - [ ] Register the Keychain sharing group:
   `$(AppIdentifierPrefix)com.webcommits.kallilex.shared`.
+- [ ] `Local.xcconfig` does not override `KALLILEX_ID_PREFIX` (release
+  builds must use `com.webcommits`).
 - [ ] Create the App Store Connect app record for "Kallilex" (bundle ID
   `com.webcommits.kallilex`). Category: Productivity. Pricing: Paid (one-time
   purchase).
@@ -205,8 +207,9 @@ For each app in the list:
 1. **Appear:** Does Kallilex appear in the share sheet?
 2. **Text intact:** Is the selected text passed to Kallilex without corruption
    or loss?
-3. **Paste-back:** Does pasting the result back into the app replace the
-   selection?
+3. **Paste-back:** After Copy, is the selection still there? Does
+   selecting the original text again and pasting replace it? Spike
+   ios-01 found the selection is lost in Notes on iOS 27; record per app.
 
 Mark each cell with:
 - ✓ Pass
@@ -469,7 +472,7 @@ step. The release matrix is recorded and filed as a permanent record.
   created (done before Phase 1). Q9 confirms release is manual for v1. Q10
   confirms one-time pricing.
 - Test devices may run iOS 26 or 27; the deployment target stays iOS 26.0
-  (PLAN.md §18 Q6). Archive with the current Xcode 26.x.
+  (PLAN.md §18 Q6). Archive with the current Xcode (26 or later).
 - The `docs/ios-release-checklist.md` file lives in the main repo and is
   committed alongside this spec. It is the definitive gate for every release.
 - Future releases (1.0.1, 1.1.0, etc.) follow the same checklist; only the

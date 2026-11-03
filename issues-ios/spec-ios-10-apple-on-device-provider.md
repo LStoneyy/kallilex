@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 Phase: Phase 4 (Apple models)
-Depends on: ios-05, ios-06, spike ios-01 (unknown 3)
+Depends on: ios-05, ios-06
 
 ## Problem Statement
 
@@ -11,8 +11,9 @@ the FoundationModels framework. The model is free, requires no API key, runs
 on eligible devices, and has a small context window. The app must check
 availability before offering it, pre-check context size (on iOS 26.4+),
 map errors to the provider taxonomy, and show availability status in the UI.
-The extension's access to the on-device model is undocumented; the spike
-must report whether it works, and ios-10 must implement both branches.
+Spike ios-01 (unknown 3) confirmed the model works inside the Share
+Extension, so ios-10 implements a single code path shared by the app and
+the extension.
 
 ## Solution
 
@@ -21,8 +22,8 @@ Implement `AppleOnDeviceProvider: TextProvider` using `FoundationModels`'s
 Wrap `SystemLanguageModel` and session creation behind small protocols so
 tests inject fakes. Offer the on-device profile only on eligible devices,
 and show availability status instead of URL/key/headers fields in the UI
-(ios-06). Handle extension unavailability with two code branches: one if the
-model works in extensions, one if it doesn't.
+(ios-06). The on-device profile behaves identically in the app and in the
+Share Extension; no extension-specific branch is needed.
 
 ## User Stories
 
@@ -41,9 +42,11 @@ model works in extensions, one if it doesn't.
    the UI can tell the user the model refused, not that the request failed.
 7. As a developer, I want to inject fake availability and session objects for
    testing without a real model.
-8. As a user in the extension, I want to be told if the on-device model is
-   only available in the app (if it cannot run in extensions), so that I can
-   open the app.
+8. As a user in the Share Extension, I want the on-device model to work
+   exactly as it does in the app, so that I don't need to switch to the app
+   for on-device rewrites.
+9. As a user running an on-device rewrite, I want to see progress and have a
+   Cancel button, so that a ~10-second rewrite doesn't feel stuck.
 
 ## Implementation Decisions
 
@@ -53,9 +56,9 @@ model works in extensions, one if it doesn't.
 
 ```swift
 struct AppleOnDeviceProvider: TextProvider {
-    let model: OnDeviceModel
+    let model: any OnDeviceModel
     
-    init(model: OnDeviceModel = .default)
+    init(model: any OnDeviceModel = DefaultOnDeviceModel())
     
     func complete(
         systemPrompt: String,
@@ -67,13 +70,8 @@ struct AppleOnDeviceProvider: TextProvider {
 Behavior:
 - Check `model.availability` before doing anything; if not `.available`,
   map the reason to a localized `unavailable(reason)` message and return.
-- On iOS 26.4+, call `model.contextSize()` to get the token limit (or a
-  best-guess fallback). Pre-check `systemPrompt.count + userText.count` (a
-  rough Unicode-scalar approximation; if the SDK provides token counting,
-  use that). If it would exceed the limit, return `contextTooLong` without
-  sending a request.
-- On iOS < 26.4, skip the pre-check and rely on the `exceededContextWindowSize`
-  error from the model.
+- Run the context check (below). If it would exceed the context size,
+  return `contextTooLong` without sending a request.
 - Create a new `OnDeviceSession(model: model, instructions: systemPrompt)`.
 - Call `session.respond(to: userText)`.
 - Apply `stripPadding` (from ios-05) to the result.
@@ -83,6 +81,28 @@ Behavior:
   rate limited / busy → `unavailable(.busy)`, anything else →
   `invalidResponse(description)`.
 
+### Context check
+
+Spike ios-01 measured `usage.input.totalTokenCount` as 54 tokens higher than
+`tokenCount(for:)` of the prompt alone, consistently across all three runs.
+Reserve 64 tokens for that session overhead (a few tokens of headroom over
+the measured 54):
+
+1. Build the full prompt (`systemPrompt` + `userText`, per ios-05's
+   assembly rules).
+2. On iOS 26.4+, call `model.tokenCount(for: prompt)` to get the input
+   token count.
+3. Compute `total = inputTokenCount + 64 (overhead reserve) + outputReserve`.
+   This provider has no separate output-length setting, so the output
+   reserve is the input token count itself, capped at 1024.
+4. If `total > model.contextSize`, return `contextTooLong` without sending
+   a request.
+5. On iOS 26.0–26.3, `tokenCount(for:)` is unavailable. Fall back to a
+   character-based estimate (`systemPrompt.count + userText.count`, a
+   rough Unicode-scalar approximation of token count) in the same formula,
+   and rely on the model's `exceededContextWindowSize` error as a backstop
+   if the estimate is too optimistic.
+
 ### Protocols for testing
 
 Abstract the model and session behind small protocols:
@@ -90,7 +110,9 @@ Abstract the model and session behind small protocols:
 ```swift
 protocol OnDeviceModel: Sendable {
     var availability: SystemLanguageModel.Availability { get async }
-    func contextSize() async throws -> Int?
+    var contextSize: Int { get async }
+    /// `nil` on iOS 26.0–26.3, where `tokenCount(for:)` is unavailable.
+    func tokenCount(for text: String) async throws -> Int?
 }
 
 struct DefaultOnDeviceModel: OnDeviceModel {
@@ -98,11 +120,18 @@ struct DefaultOnDeviceModel: OnDeviceModel {
         get async { SystemLanguageModel.default.availability }
     }
     
-    func contextSize() async throws -> Int? {
-        // iOS 26.4+ only; check the SDK for the exact API.
-        // **To confirm:** exact symbol names in the iOS 26.4 SDK
-        // (e.g., contextWindowSize, maxTokens, etc.)
-        try? SystemLanguageModel.default.contextWindowSize()
+    // `SystemLanguageModel.default.contextSize: Int`, `@backDeployed` to
+    // iOS 26.0 (not device-tested on iOS 26). Verified against the Xcode 27.2 SDK's
+    // FoundationModels.swiftinterface.
+    var contextSize: Int {
+        get async { SystemLanguageModel.default.contextSize }
+    }
+    
+    // `SystemLanguageModel.default.tokenCount(for:) async throws -> Int`,
+    // iOS 26.4+. `String` is accepted directly.
+    func tokenCount(for text: String) async throws -> Int? {
+        guard #available(iOS 26.4, *) else { return nil }
+        return try await SystemLanguageModel.default.tokenCount(for: text)
     }
 }
 
@@ -111,10 +140,20 @@ protocol OnDeviceSession: Sendable {
 }
 
 struct DefaultOnDeviceSession: OnDeviceSession {
+    // `LanguageModelSession(instructions:)`
     let session: LanguageModelSession
     
     func respond(to text: String) async throws -> String {
-        try await session.respond(to: text)
+        // `session.respond(to: String) async throws ->
+        // LanguageModelSession.Response<String>`; unwrap `.content`.
+        let response = try await session.respond(to: text)
+        if #available(iOS 27.0, *) {
+            // `Response.usage` is iOS 27.0+ only, and optional for v1:
+            // it is not required for the context check, which uses
+            // `tokenCount(for:)` instead. Available for future telemetry.
+            _ = response.usage
+        }
+        return response.content
     }
 }
 ```
@@ -132,10 +171,10 @@ The on-device profile (when offered) has:
 - `privacyClass: .onDevice` (never needs consent)
 
 At most one such profile exists in the profile list. The preset is only
-offered when `SystemLanguageModel.default.availability != .deviceNotEligible`
-(state the exact check). If unavailable for other reasons (not enabled,
-downloading, etc.), the preset is still offered but the profile shows an
-availability status row when created.
+offered unless `SystemLanguageModel.default.availability` is
+`.unavailable(.deviceNotEligible)`. If unavailable for other reasons
+(`.appleIntelligenceNotEnabled`, `.modelNotReady`), the preset is still
+offered but the profile shows an availability status row when created.
 
 ### UI: availability status row
 
@@ -145,88 +184,39 @@ when a profile's `kind == .appleOnDevice`:
   headers fields.
 - If available, show "Ready".
 - If not available, show the reason and a user-friendly hint:
-  - `deviceNotEligible`: "This device doesn't support Apple Intelligence."
-  - `notEnabled`: "Turn on Apple Intelligence in Settings."
-  - `notAvailable`: "The model is still downloading or not yet ready."
-  - Unknown reasons: a generic message.
+  - `.deviceNotEligible`: "This device doesn't support Apple Intelligence."
+  - `.appleIntelligenceNotEnabled`: "Turn on Apple Intelligence in Settings."
+  - `.modelNotReady`: "The model is still downloading or not yet ready."
+  - Unknown reasons (`@unknown default`): a generic message.
 
 This row is informational only (not editable).
 
-### Extension behavior: two branches
+### Extension behavior
 
-The spike (ios-01 unknown 3) determines whether the on-device model is
-usable in the Share Extension. ios-10 implements both branches:
+Spike ios-01 (unknown 3) confirmed the on-device model works inside the
+Share Extension on iOS 27.0.1. It runs in a system process, not in-process:
+the extension's memory footprint grew by only 2–5 MB during inference,
+which is far less than a language model would need in-process. A ~300-word
+rewrite took about 10.6 s; a short text took about 2 s.
 
-#### Branch A: Model works in extensions
+The on-device profile works identically in the app and in the extension.
+Both can see and use the same profile, it has no extension-specific
+restrictions, and no special handling (no runtime check, no inline "only
+available in the app" card) is needed. `AppleOnDeviceProvider` and
+`ActionRunner` run the same code path regardless of where the process
+hosting them lives.
 
-If `SystemLanguageModel` is available and works in the extension, no special
-handling is needed. The extension runs prompts just like the app. Both app
-and extension can see and use the same on-device profile (it has no
-extension-specific restrictions). Implement normally.
-
-#### Branch B: Model unavailable in extensions
-
-If the model is not usable in the Share Extension (whether always or when
-certain conditions apply — the spike report determines this), the extension
-must tell the user:
-
-**Inline card in the extension** (when the active profile is on-device and
-the model is not available):
-
-```
-The on-device model is only available in the Kallilex app.
-Use the Scratchpad in the app or set up another provider.
-```
-
-No request is sent. The user is guided to use the app's Scratchpad (PLAN.md
-§17) instead.
-
-Determine "are we in the extension" at runtime, not with a build flag, so
-the same binary works correctly and the check is injectable for tests:
-
-**File:** `KallilexKit/Sources/KallilexKit/Core/RuntimeContext.swift`
-
-```swift
-enum RuntimeContext {
-    /// `true` when running inside an app extension (e.g. the Share
-    /// Extension), `false` in the container app. Extension bundles always
-    /// end in `.appex`.
-    static var isAppExtension: Bool {
-        Bundle.main.bundlePath.hasSuffix(".appex")
-    }
-}
-```
-
-`ActionRunner` (ios-05) takes an `isAppExtension: Bool = RuntimeContext.isAppExtension`
-init parameter so tests can inject either value without touching the real
-bundle. Implement the branch check as: in `ActionRunner.run`, before calling
-the provider, if the profile is `appleOnDevice` and `isAppExtension` is true,
-check whether the model is available. If not, return a dedicated error or a
-new `RunOutcome` variant (specify which; alternatively, map it to
-`.consentRequired` and special-case the display in ios-06).
-
-Write both branches in the code with clear comments; the implementer picks
-one based on the spike report. Example structure:
-
-```swift
-// Branch A: uncomment if model works in extensions
-// let outcome = try await provider.complete(...)
-
-// Branch B: uncomment if model does not work in extensions
-// if isAppExtension && profile.kind == .appleOnDevice {
-//     return .failed(.unavailable("model_not_in_extension"))
-// }
-```
-
-Add unit tests for both branches by constructing `ActionRunner` with
-`isAppExtension: true` and `isAppExtension: false` and asserting the
-on-device profile is handled correctly in each case (Branch A: the request
-proceeds; Branch B: a "model not in extension" error is returned without
-calling the provider).
+Because a full on-device rewrite takes about 10 s, the visible progress
+state and Cancel button from ios-08 are essential for on-device runs, in
+both the app and the extension.
 
 ### Error mapping
 
-**Availability mapping (exact API names to confirm from SDK):**
+**Availability mapping.** Verified against the Xcode 27.2 SDK's
+`FoundationModels.swiftinterface`: `SystemLanguageModel.Availability` has
+exactly two cases, `.available` and `.unavailable(reason)`, where `reason`
+is `.deviceNotEligible`, `.appleIntelligenceNotEnabled`, or
+`.modelNotReady`.
 
 ```swift
 extension SystemLanguageModel.Availability {
@@ -234,14 +224,17 @@ extension SystemLanguageModel.Availability {
         switch self {
         case .available:
             return nil
-        case .notAvailable:
-            return .unavailable("The model is downloading or not yet available.")
-        case .notEnabled:
-            return .unavailable("Turn on Apple Intelligence in Settings.")
-        case .deviceNotEligible:
-            return .unavailable("This device doesn't support Apple Intelligence.")
-        @unknown default:
-            return .unavailable("Apple Intelligence is not available.")
+        case .unavailable(let reason):
+            switch reason {
+            case .deviceNotEligible:
+                return .unavailable("This device doesn't support Apple Intelligence.")
+            case .appleIntelligenceNotEnabled:
+                return .unavailable("Turn on Apple Intelligence in Settings.")
+            case .modelNotReady:
+                return .unavailable("The model is still downloading or not yet ready.")
+            @unknown default:
+                return .unavailable("Apple Intelligence is not available.")
+            }
         }
     }
 }
@@ -251,13 +244,31 @@ extension SystemLanguageModel.Availability {
 
 - `exceededContextWindowSize` → `contextTooLong`
 - Guardrail refusal (**To confirm:** exact error type and property names;
-  likely a `GenerationError` case) → `declined`
+  likely a `GenerationError` case; spike ios-01 did not verify this) →
+  `declined`
 - Unsupported language or locale → `unavailable(.unsupportedLanguage)`
 - Rate limited / concurrent requests → `unavailable(.busy)`
 - Anything else → `invalidResponse(error.localizedDescription)`
 
-**To confirm:** exact symbol names and error types in the FoundationModels
-SDK for iOS 26.4+ (context size API, error cases, availability variants).
+**Verified symbols** (spike ios-01, against the Xcode 27.2 SDK's
+`FoundationModels.swiftinterface`):
+
+- `SystemLanguageModel.default.availability: SystemLanguageModel.Availability`
+  (cases above)
+- `SystemLanguageModel.default.contextSize: Int` (`@backDeployed` to iOS 26.0
+  in the SDK interface, returning 4096 before iOS 27; not device-tested on
+  iOS 26)
+- `SystemLanguageModel.default.tokenCount(for:) async throws -> Int`
+  (iOS 26.4+; `String` is accepted directly)
+- `LanguageModelSession(instructions:)`
+- `session.respond(to: String) async throws ->
+  LanguageModelSession.Response<String>`, with `.content`
+- `Response.usage` (iOS 27.0+ only; stays behind `#available(iOS 27.0, *)`
+  and is optional for v1)
+
+**Not verified:** the guardrail/refusal error types noted above. Confirm
+the exact error type and property names once a refusal can be triggered on
+a real device.
 
 ### Manual test plan
 
@@ -298,11 +309,18 @@ on a real eligible device), document a manual test plan:
   extension behavior.
 - PLAN.md §18 Q4 confirms that only the on-device model ships in v1;
   Private Cloud Compute is deferred.
-- The spike ios-01 unknown 3 answers whether the model works in Share
-  Extensions. Both branches must be written with clear comments indicating
-  which to use based on the spike report.
-- Apple's FoundationModels documentation is the reference for availability
-  variants, error types, and context-size APIs. The exact symbol names need
-  confirmation from the iOS 26.4 SDK.
+- Spike ios-01 unknown 3 confirmed the model works in the Share Extension,
+  at the cost of about 2–5 MB of extra memory and roughly 2–10.6 s of
+  latency depending on text length; see "Extension behavior" above.
+- The availability variants, `contextSize`, `tokenCount(for:)`, and the
+  `LanguageModelSession` call shape are verified against the Xcode 27.2
+  SDK's `FoundationModels.swiftinterface` (spike ios-01). The guardrail
+  and refusal error types are still unverified; confirm them once a
+  refusal can be triggered on a real device.
 - The iOS 26 SDK provides a `SystemLanguageModel`, and iOS 26.4+ adds
-  context-size APIs. Document the version cutoff.
+  `tokenCount(for:)`. `contextSize` is `@backDeployed` to iOS 26.0 per the
+  SDK interface (not device-tested on iOS 26).
+  `Response.usage` is iOS 27.0+ only.
+- Because a full on-device rewrite takes about 10 s (spike ios-01), the
+  progress state and Cancel button from ios-08 are essential for on-device
+  runs; this applies in the app and the extension alike.

@@ -21,7 +21,8 @@ Define portable model types in `KallilexKit/Sources/KallilexKit/Models/`:
 and `AppSettings`. Implement `SettingsStore` with a file-coordinated JSON
 loader and `SecretStore` with Keychain access. Provide a `SettingsMigrator`
 scaffold and seeded default prompts. All types use `CodingKeys` for camelCase
-JSON parity with desktop.
+JSON parity with desktop. Provide a public `InfoPlist` helper that reads the
+App Group id and the Keychain access group from Info.plist.
 
 ## User Stories
 
@@ -235,18 +236,42 @@ future migrations (version 2, 3, …) are added in one place.
 The app reads `KallilexAppGroup` and `KallilexKeychainAccessGroup` from
 Info.plist at runtime, so team-specific values are set once in build settings
 and used by both the app and extension targets without being hardcoded in
-source. **Add these two keys to the ios-02 skeleton's Info.plist:**
+source. The keys and the build settings behind them (`KALLILEX_APP_GROUP`,
+`KALLILEX_KEYCHAIN_GROUP`) are defined in ios-02:
 
 ```xml
 <key>KallilexAppGroup</key>
-<string>$(PRODUCT_BUNDLE_IDENTIFIER).shared</string>
+<string>$(KALLILEX_APP_GROUP)</string>
 
 <key>KallilexKeychainAccessGroup</key>
-<string>$(AppIdentifierPrefix)com.webcommits.kallilex.shared</string>
+<string>$(KALLILEX_KEYCHAIN_GROUP)</string>
 ```
 
-(In ios-02's CommonConfig.xcconfig, expand `PRODUCT_BUNDLE_IDENTIFIER` if it
-is not yet set, or use `com.webcommits.kallilex` directly to be explicit.)
+### `InfoPlist` helper
+
+**File:** `KallilexKit/Sources/KallilexKit/Storage/InfoPlist.swift`
+
+```swift
+public enum InfoPlist {
+    public static var kallilexAppGroup: String { value(for: "KallilexAppGroup") }
+    public static var kallilexKeychainAccessGroup: String { value(for: "KallilexKeychainAccessGroup") }
+
+    private static func value(for key: String) -> String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+              !value.isEmpty, !value.contains("$(") else {
+            preconditionFailure("Info.plist key \(key) is missing or unresolved")
+        }
+        return value
+    }
+}
+```
+
+The container app (ios-06) and the Share Extension (ios-09) both read
+the App Group id and the Keychain access group through this helper,
+instead of reading `Bundle.main` directly. It has no hard-coded
+fallback: a missing or unresolved key means a build misconfiguration,
+and `preconditionFailure` makes that visible immediately rather than
+silently falling back to a wrong group.
 
 ### SettingsStore protocol
 
@@ -417,8 +442,9 @@ prompts are preserved, and extra fields disappear without error.
 
 - PLAN.md §7.1 and §7.6 describe the data model and storage seams.
 - PLAN.md §6 specifies the App Group id and Keychain access group.
-- The two Info.plist keys must be added to the ios-02 skeleton, and this
-  spec must state that explicitly so the ios-02 implementer is aware.
+- The two Info.plist keys and their build settings are defined in the
+  ios-02 skeleton; this spec only adds the `InfoPlist` helper that reads
+  them.
 - The `AIConsent` type is detailed in PLAN.md §10.1.
 - Desktop prompt and profile CRUD semantics are in
   `src-tauri/src/core/prompts.rs` and `src-tauri/src/core/providers/mod.rs`

@@ -124,8 +124,7 @@ Settings.
     when `classifyPrivacy(host)` is `lan` or `local`. A private address that
     fails as "offline" is the denied-permission case.
   - A timeout to a `.local` host cannot be told apart from a host that is
-    down. Keep it as `timeout`, and add the Local Network hint to the
-    `timeout` message only for `.local` hosts.
+    down. Keep it as `timeout`.
   - Wording for ios-05: "map -1009 on a LAN/local host to
     `localNetworkDenied`; everything else unchanged".
 - **ios-07:** onboarding must trigger the Local Network prompt from the

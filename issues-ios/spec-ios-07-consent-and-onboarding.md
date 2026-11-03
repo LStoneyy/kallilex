@@ -265,6 +265,15 @@ Calls `appEnv.actionRunner.testConnection(profile:apiKey:)` (with
 
 Button: Continue (always enabled, even if test failed), Skip (skips to next step).
 
+The Local Network permission prompt appears only from the container
+app; the Share Extension never shows it (spike ios-01 unknown 2). When
+the selected provider's `baseUrl` host is rated `.lan` by
+`classifyPrivacy`, this step's `testConnection` call is what triggers
+that prompt, here in the app, before the user ever reaches the
+extension. A `localNetworkDenied` result shows its localized message
+(ios-05), which points to Settings → Privacy & Security → Local
+Network → Kallilex.
+
 #### ConsentView (cloud providers only)
 
 Reuses `ConsentView` (see above). The Allow button calls a closure that:
@@ -308,8 +317,8 @@ A numbered list of five steps (animated with Reduce Motion respected):
 Each step is shown with an SF Symbol and the text. Use animations like slide-in
 or fade for each step (respect `@Environment(\.accessibilityReduceMotion)`).
 
-**To confirm:** the exact wording and steps for iOS 26 by checking the spike
-ios-01 report or Apple's official documentation.
+**To confirm:** the exact wording and steps. Not covered by spike ios-01;
+confirm on a device during ios-07 implementation.
 
 ### Onboarding entry point in RootTabView
 
@@ -412,8 +421,9 @@ ProviderPreset(
 - PLAN.md §10.1 covers AI consent and the App Review requirement 5.1.2(i).
 - PLAN.md §11 covers localization (labels are English here; German added in
   ios-11).
-- The spike ios-01 report must confirm the exact wording and steps for pinning
-  to the share sheet on iOS 26.
+- The exact wording and steps for pinning Kallilex in the share sheet are
+  not covered by spike ios-01; confirm them on a device during ios-07
+  implementation.
 - The on-device model availability is checked in ios-10; the onboarding respects
   the device eligibility flag when showing the on-device preset.
 - ShareSheetGuideView is reusable: it appears in onboarding (ios-07) and can be

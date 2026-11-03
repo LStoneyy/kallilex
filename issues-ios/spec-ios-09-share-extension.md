@@ -10,8 +10,9 @@ The Share Extension is Kallilex's primary interface: a user selects text in any
 app, taps Share, chooses Kallilex, and the extension immediately presents an
 editor with the selected text, prompt chips, and tools to rewrite and copy the
 result back. The extension runs under a 120 MB memory limit, is killed when the
-sheet closes, and has undocumented access to some framework features (on-device
-model, deep links). It must extract text from many source types (plain text,
+sheet closes, and cannot open the container app (spike ios-01 confirmed
+`extensionContext.open(_:)` fails from a Share Extension). It must extract
+text from many source types (plain text,
 RTF, URLs, Safari selections), handle setup errors gracefully, show inline
 consent for cloud providers, and support auto-run and auto-copy settings.
 
@@ -37,14 +38,15 @@ memory by avoiding heavy dependencies and keeping only SF Symbols in the UI.
    so that I can try something experimental.
 4. As a user, I want to see a Cancel button while a request runs so that I can
    stop it if I change my mind.
-5. As a user, I want Copy to write the text to the clipboard, show "Copied"
-   briefly, and then close the sheet so that I can paste the result back.
+5. As a user, Copy writes the text to the clipboard, shows "Copied" briefly,
+   and closes the sheet; a hint tells me to select the original text again
+   and paste.
 6. As a user with auto-copy enabled, I want the result to copy and close
    automatically so that the flow is seamless.
 7. As a user with auto-run enabled, I want the first prompt to run as soon as
    the sheet opens so that I don't have to tap anything.
-8. As a user without a provider set up, I want a clear message and a button to
-   open the app (if possible) so that I know what to do next.
+8. As a user without a provider set up, I want a clear message telling me to
+   open the Kallilex app so that I know what to do next.
 9. As a cloud-provider user who hasn't consented yet, I want the consent screen
    to appear inline so that I can allow it without leaving the sheet.
 10. As a Safari user, I want the selected text from a webpage to arrive in the
@@ -71,10 +73,11 @@ class ShareViewController: UIViewController {
         guard let extensionContext = extensionContext else { return }
         
         // Read App Group and Keychain identifiers from Info.plist
-        let appGroupId = Bundle.main.infoDictionary?["KallilexAppGroup"] as? String
-            ?? "group.com.webcommits.kallilex"
-        let keychainAccessGroup = Bundle.main.infoDictionary?["KallilexKeychainAccessGroup"]
-            as? String ?? "com.webcommits.kallilex.shared"
+        // via KallilexKit's InfoPlist helper (ios-04). It calls
+        // `preconditionFailure` if a value is missing, so there is no
+        // hard-coded fallback here.
+        let appGroupId = InfoPlist.kallilexAppGroup
+        let keychainAccessGroup = InfoPlist.kallilexKeychainAccessGroup
         
         // Build stores and runner
         let settingsStore = AppGroupSettingsStore(
@@ -237,7 +240,9 @@ struct InputExtractor {
                     return text
                 }
                 
-                // Safari JS preprocessing (if spike ios-01 confirms it's needed)
+                // Safari JS preprocessing. Ship this path unconditionally;
+                // spike ios-01 did not test Safari (open items), so this is
+                // verified during ios-09 acceptance testing instead.
                 if let text = await trySafariPreprocessing(
                     attachment: attachment
                 ) {
@@ -275,10 +280,31 @@ struct InputExtractor {
     private func trySafariPreprocessing(
         attachment: NSItemProvider
     ) async -> String? {
-        // **To confirm:** whether Safari JS preprocessing is needed
-        // (spike ios-01 unknown 1 determines this)
-        // If needed, extract the NSExtensionJavaScriptPreprocessingResultsKey
-        return nil  // Stub for now
+        // The companion JS file (NSExtensionJavaScriptPreprocessingFile,
+        // registered in ios-02's Info.plist) returns
+        // `window.getSelection().toString()` and the page URL. Parse the
+        // results dictionary under NSExtensionJavaScriptPreprocessingResultsKey.
+        guard attachment.hasItemConformingToTypeIdentifier(
+            UTType.propertyList.identifier
+        ) else {
+            return nil
+        }
+        
+        let item = await attachment.loadItem(
+            forTypeIdentifier: UTType.propertyList.identifier,
+            options: nil
+        )
+        guard
+            let dictionary = item as? [String: Any],
+            let results = dictionary[NSExtensionJavaScriptPreprocessingResultsKey]
+                as? [String: Any],
+            let selection = results["selection"] as? String,
+            !selection.isEmpty
+        else {
+            return nil
+        }
+        
+        return selection.normalized()
     }
     
     private func tryAttributedContent(
@@ -303,12 +329,22 @@ extension String {
 **Behavior:**
 - Iterate `extensionContext.inputItems` → `attachments`.
 - Try types in order: `plainText`, `utf8PlainText`, `rtf` (parse via
-  `NSAttributedString`), Safari JS result (if spike ios-01 confirms it's
-  needed), then `attributedContentText`.
+  `NSAttributedString`), Safari JS preprocessing result, then
+  `attributedContentText`.
 - Normalize line endings (`\r\n` and `\r` → `\n`); preserve all other
   whitespace.
 - If nothing yields text, return empty string (which triggers an empty-state
   message in the UI).
+
+**Safari JS preprocessing:** spike ios-01 did not test Safari (it is listed
+in the report's open items), so ship the
+`NSExtensionJavaScriptPreprocessingFile` unconditionally rather than
+guessing. It returns `window.getSelection().toString()` and the page URL;
+the extension parses the `NSExtensionJavaScriptPreprocessingResultsKey`
+dictionary, keeping the priority order above. During ios-09 acceptance
+testing, verify Safari both with and without a text selection. Remove the
+JS file only if that testing shows Safari delivers `public.plain-text` on
+its own in both cases.
 
 ### ShareRootView
 
@@ -405,6 +441,17 @@ struct ShareRootView: View {
                                 handleCopy()
                             }
                         )
+                        
+                        // Paste-back hint: visible whenever a result is
+                        // shown, stores no state of its own. The selection
+                        // in the host app is gone after the share sheet
+                        // closes (spike ios-01 unknown 6), so the user must
+                        // select the original text again before pasting.
+                        if case .result = session.state {
+                            Text(String(localized: "extension.pasteHint"))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .padding()
@@ -463,17 +510,41 @@ struct ShareRootView: View {
    - If text is empty: "Kallilex needs selected text. Select the text first,
      then tap Share." (`String(localized: "extension.empty.title")` and
      `"extension.empty.message"`)
-   - If text present: editor, chips, custom field, status banner, toolbar.
+   - If text present: editor, chips, custom field, status banner, toolbar,
+     and (in the `result` state) the paste-back hint footnote.
 3. **Footer:** (none; toolbar is inline above the status banner)
 
 **States handled:**
 - `loadingInput` (internal; show a brief spinner while extracting)
 - `ready` (no indicator; user can select a prompt)
 - `running` (spinner + Cancel)
-- `result` (checkmark, "Show original" toggle visible)
+- `result` (checkmark, "Show original" toggle visible, paste-back hint)
 - `error` (error message + Retry)
 - `notConfigured` (card: "Set up a provider in the Kallilex app")
 - `consentRequired` (inline `ConsentView`)
+
+The extension never shows the Local Network permission prompt itself (spike
+ios-01 unknown 2: the prompt appeared only from the container app, and the
+extension reached LAN targets before any permission had been granted). A
+`localNetworkDenied` error (ios-05) displays like any other error, through
+its localized message, which points the user to Settings → Privacy &
+Security → Local Network → Kallilex.
+
+**Paste-back hint:**
+
+After the share sheet closes, the selection in the host app is gone, so a
+single Paste does not replace it (spike ios-01 unknown 6, confirmed in
+Notes on iOS 27; not tested in other apps). The result state shows a small
+secondary footnote under the toolbar — `Text(String(localized:
+"extension.pasteHint"))` with `.font(.footnote)` and
+`.foregroundStyle(.secondary)` — reading "After copying, select the
+original text again and paste." It is always visible whenever a result is
+shown and stores no state of its own.
+
+When `settings.autoCopyResult` is enabled, `handleCopy()` copies and closes
+the sheet immediately, so the hint is never shown in that flow. ios-06 and
+ios-07's settings text for auto-copy should mention re-selecting the
+original text (noted here; those specs are not changed by this task).
 
 **Not-configured card:**
 
@@ -485,31 +556,18 @@ VStack(alignment: .leading, spacing: 12) {
         .font(.title)
     Text(String(localized: "extension.notConfigured.title"))
     Text(String(localized: "extension.notConfigured.message"))
-    
-    // Try to open the app if extensionContext.open works (spike unknown 4)
-    if let url = URL(string: "kallilex://settings/providers") {
-        Button(action: {
-            extensionContext.open(url) { success in
-                if !success {
-                    // Fallback: show instruction text
-                }
-            }
-        }) {
-            Text(String(localized: "extension.notConfigured.openApp"))
-        }
-        .buttonStyle(.borderedProminent)
-    } else {
-        Text(String(localized: "extension.notConfigured.instruction"))
-            .font(.caption)
-    }
+    // "Open the Kallilex app to set up a provider."
 }
 .padding()
 .background(Color(.systemGray6))
 ```
 
-**To confirm:** whether `extensionContext.open(_:)` works from a Share Extension
-on iOS 26/27 (spike ios-01 unknown 4). If it works, use it; if not, show
-instruction text only.
+There is no button and no "Open Kallilex" affordance. Spike ios-01
+(unknown 4) confirmed that `extensionContext.open(_:)` returns `false` when
+called from a Share Extension; the completion ran seven times and the app
+never opened. Do not call `extensionContext.open`, and do not reach for a
+responder-chain or `UIApplication` workaround to open the app instead,
+because that is an App Review risk. The message is the only guidance shown.
 
 ### Auto-run and auto-copy logic
 
@@ -523,22 +581,6 @@ instruction text only.
 Both settings apply only to the extension, not to the Scratchpad (decided in
 PLAN.md).
 
-### Deep link handling in the app
-
-When the user taps "Open Kallilex" in the not-configured card, it opens
-`kallilex://settings/providers`. Add to `KallilexApp`:
-
-```swift
-.onOpenURL { url in
-    if url.scheme == "kallilex",
-       url.host == "settings",
-       url.pathComponents.contains("providers") {
-        // Navigate to the Providers tab
-        // (Implementation depends on the TabView structure)
-    }
-}
-```
-
 ### Memory budget and optimization
 
 - Keep peak memory < 50 MB during a request (Instruments).
@@ -546,6 +588,9 @@ When the user taps "Open Kallilex" in the not-configured card, it opens
 - No extra dependencies (only Foundation, SwiftUI, Security).
 - Keep UIHostingController view minimal.
 - Dispose of the editor session and task when the view is deallocated.
+- Spike ios-01 measured a peak of about 36 MB with the SwiftUI UI, network
+  requests and an on-device rewrite, so the 50 MB budget holds with no
+  special memory work beyond what is listed above.
 
 ## Testing Decisions
 
@@ -559,8 +604,10 @@ When the user taps "Open Kallilex" in the not-configured card, it opens
 - **Empty input:** empty `inputItems`, extract returns empty.
 - **Multiple items, first text wins:** two providers, first is URL (no text),
   second is plain text, extract returns the plain text.
-- **Safari JS preprocessing:** if spike ios-01 confirms it's needed, test with
-  a synthetic preprocessing result.
+- **Safari JS preprocessing:** test with a synthetic preprocessing result
+  (a property-list attachment containing
+  `NSExtensionJavaScriptPreprocessingResultsKey`), since spike ios-01 did
+  not test Safari and this path ships unconditionally.
 
 Use synthetic `NSItemProvider`s created with `NSItemProvider.registerDataRepresentation`.
 
@@ -605,7 +652,8 @@ Does pasting back replace the selection in the source app? Record pass/fail.
 
 - Streaming responses.
 - Image or file input.
-- Secondary windows or app switching (other than open to the app via deep link).
+- Secondary windows or app switching. The extension cannot open the
+  container app (spike ios-01 unknown 4).
 - Background processing or scheduled runs.
 - Persistence of the editor state (each launch is fresh).
 - Localization of app names or system UI (apple's responsibility).
@@ -615,9 +663,11 @@ Does pasting back replace the selection in the source app? Record pass/fail.
 - PLAN.md §8 covers the Share Extension architecture and activation rules.
 - PLAN.md §4.2, §4.3 cover the main loop and error flows.
 - PLAN.md §12.3 covers the manual host-app matrix exit criterion for Phase 3.
-- The spike ios-01 report (unknown 1, 4) answers whether Safari JS preprocessing
-  is needed and whether `extensionContext.open` works from a Share Extension.
-  Both have fallbacks if the answer is no.
+- The spike ios-01 report answers unknown 4: `extensionContext.open(_:)`
+  does not work from a Share Extension (confirmed no), which is why the
+  not-configured card has no button. Unknown 1 confirmed `public.plain-text`
+  delivery from Notes; Safari (both with and without a selection) is still
+  open and is verified during this spec's acceptance testing.
 - The extension's principal class `ShareViewController` is registered in ios-02's
   Info.plist.
 - The extension reads App Group and Keychain access group identifiers from the

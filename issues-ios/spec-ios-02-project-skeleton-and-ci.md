@@ -22,8 +22,8 @@ Create an Xcode 26+ project at `ios/Kallilex.xcodeproj` with:
 - `.xcconfig` files for bundle IDs, version, and team ID (team ID read from
   environment, never committed)
 - Entitlements for App Group and Keychain sharing
-- `Info.plist` entries for network permissions, URL scheme, and extension
-  activation rules
+- `Info.plist` entries for network permissions and extension activation
+  rules
 - A `.github/workflows/ios.yml` CI workflow that runs `xcodebuild test` on
   simulator and verifies that an empty app and extension build and launch
 - `.gitignore` updates to exclude build artifacts and user-specific Xcode
@@ -90,11 +90,17 @@ ios/
 | Extension bundle ID | `com.webcommits.kallilex.share` | Must be prefixed by app ID |
 | App Group | `group.com.webcommits.kallilex` | Settings JSON in App Group container |
 | Keychain access group | `$(AppIdentifierPrefix)com.webcommits.kallilex.shared` | API keys (PLAN.md §6) |
-| URL scheme | `kallilex://` | Deep links into settings (PLAN.md §4.3, unknown 4) |
 | Minimum iOS | iOS 26.0 | Foundation Models (PLAN.md §6, §18 Q6) |
 | Swift | 6, strict concurrency | Language version and warning flags |
 | Version | 1.0.0 | Independent semver from desktop; tags `ios-v1.0.0` (PLAN.md §6, §13) |
 | Build number | 1 | Incremented per release; CURRENT_PROJECT_VERSION in xcconfig |
+
+The production values above derive from
+`KALLILEX_ID_PREFIX = com.webcommits` in `Common.xcconfig` and can be
+overridden locally in `Local.xcconfig` (spike ios-01 unknown 7).
+
+There is no URL scheme in v1: the extension cannot open the app
+(spike ios-01 unknown 4), so nothing would use it.
 
 ### Xcconfig files
 
@@ -106,6 +112,14 @@ SWIFT_VERSION = 6.0
 COPY_PHASE_STRIP = NO
 MARKETING_VERSION = 1.0.0
 CURRENT_PROJECT_VERSION = 1
+
+// Identifier prefix. Override in Local.xcconfig when developing on a free
+// Personal Team so com.webcommits.kallilex is not registered to it.
+KALLILEX_ID_PREFIX = com.webcommits
+KALLILEX_APP_ID = $(KALLILEX_ID_PREFIX).kallilex
+KALLILEX_APP_GROUP = group.$(KALLILEX_APP_ID)
+KALLILEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)$(KALLILEX_APP_ID).shared
+
 #include? "Local.xcconfig"
 ```
 
@@ -116,7 +130,7 @@ CURRENT_PROJECT_VERSION = 1
 ```
 #include "Common.xcconfig"
 PRODUCT_NAME = Kallilex
-PRODUCT_BUNDLE_IDENTIFIER = com.webcommits.kallilex
+PRODUCT_BUNDLE_IDENTIFIER = $(KALLILEX_APP_ID)
 ```
 
 #### Config/ShareExtension.xcconfig
@@ -124,22 +138,30 @@ PRODUCT_BUNDLE_IDENTIFIER = com.webcommits.kallilex
 ```
 #include "Common.xcconfig"
 PRODUCT_NAME = ShareExtension
-PRODUCT_BUNDLE_IDENTIFIER = com.webcommits.kallilex.share
+PRODUCT_BUNDLE_IDENTIFIER = $(KALLILEX_APP_ID).share
 ```
 
 #### Config/Local.xcconfig.example
 
 ```
 DEVELOPMENT_TEAM = ABC1234567
+// Optional, for a free Personal Team:
+// KALLILEX_ID_PREFIX = de.example
 ```
 
-(Developers copy this to `Local.xcconfig` and fill in their team ID. `Local.xcconfig` is gitignored.)
+(Developers copy this to `Local.xcconfig` and fill in their team ID.
+`Local.xcconfig` is gitignored. On a free Personal Team, also uncomment
+and set `KALLILEX_ID_PREFIX` to a personal prefix, so that
+`com.webcommits.kallilex` is never registered to that team; see PLAN.md
+§6 and §18 Q2.)
 
 #### Config/Local.xcconfig
 
 This file is created locally by each developer and gitignored:
 ```
-DEVELOPMENT_TEAM = <team-id>
+DEVELOPMENT_TEAM = ABC1234567
+// Optional, for a free Personal Team:
+// KALLILEX_ID_PREFIX = de.example
 ```
 
 ### Entitlements
@@ -154,11 +176,11 @@ DEVELOPMENT_TEAM = <team-id>
 <dict>
   <key>com.apple.security.application-groups</key>
   <array>
-    <string>group.com.webcommits.kallilex</string>
+    <string>$(KALLILEX_APP_GROUP)</string>
   </array>
   <key>keychain-access-groups</key>
   <array>
-    <string>$(AppIdentifierPrefix)com.webcommits.kallilex.shared</string>
+    <string>$(KALLILEX_KEYCHAIN_GROUP)</string>
   </array>
 </dict>
 </plist>
@@ -170,6 +192,21 @@ Identical to Kallilex.entitlements (both targets share the same App Group and
 Keychain group).
 
 ### Info.plist
+
+Both targets use `GENERATE_INFOPLIST_FILE = NO` and a hand-written
+Info.plist. In addition to the keys shown below, each Info.plist must
+contain:
+
+- `CFBundleIdentifier = $(PRODUCT_BUNDLE_IDENTIFIER)`
+- `CFBundleExecutable = $(EXECUTABLE_NAME)`
+- `CFBundleName = $(PRODUCT_NAME)`
+- `CFBundlePackageType`: `APPL` for the app, `XPC!` for the extension
+- `CFBundleInfoDictionaryVersion = 6.0`
+- `CFBundleShortVersionString = $(MARKETING_VERSION)`
+- `CFBundleVersion = $(CURRENT_PROJECT_VERSION)`
+
+Without these keys the build still succeeds, but the device install
+fails (spike ios-01 finding).
 
 #### Kallilex app Info.plist
 
@@ -183,19 +220,16 @@ Keychain group).
   <key>NSLocalNetworkUsageDescription</key>
   <string>Kallilex connects to AI servers on your local
 network, such as Ollama on your Mac, when you set one up.</string>
-  <key>CFBundleURLTypes</key>
-  <array>
-    <dict>
-      <key>CFBundleURLScheme</key>
-      <string>kallilex</string>
-      <key>CFBundleURLName</key>
-      <string>Kallilex Deep Link</string>
-    </dict>
-  </array>
+  <key>KallilexAppGroup</key>
+  <string>$(KALLILEX_APP_GROUP)</string>
+  <key>KallilexKeychainAccessGroup</key>
+  <string>$(KALLILEX_KEYCHAIN_GROUP)</string>
 </dict>
 ```
 
 `NSLocalNetworkUsageDescription` text is exactly from PLAN.md §10.3.
+`KallilexKit`'s `InfoPlist` helper reads `KallilexAppGroup` and
+`KallilexKeychainAccessGroup` at runtime (ios-04).
 
 #### Share Extension Info.plist
 
@@ -228,11 +262,18 @@ network, such as Ollama on your Mac, when you set one up.</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>Kallilex connects to AI servers on your local
 network, such as Ollama on your Mac, when you set one up.</string>
+  <key>KallilexAppGroup</key>
+  <string>$(KALLILEX_APP_GROUP)</string>
+  <key>KallilexKeychainAccessGroup</key>
+  <string>$(KALLILEX_KEYCHAIN_GROUP)</string>
 </dict>
 ```
 
 (No storyboard. The activation rule uses the dictionary form, not `TRUEPREDICATE`
 as App Review prefers; PLAN.md §8.1.)
+
+`KallilexKit`'s `InfoPlist` helper reads `KallilexAppGroup` and
+`KallilexKeychainAccessGroup` at runtime (ios-04).
 
 ### KallilexKit Swift package
 
@@ -283,14 +324,18 @@ Triggers:
   paths skip the job).
 - `workflow_dispatch` for manual runs.
 
-Runs on: `macos-26` (or a suitable macOS version with Xcode 26.x available)
+Runs on: `macos-26` (or a suitable macOS version with Xcode 26 or later
+available)
 
 Steps:
 
 1. Check out the repo.
-2. Select the newest available Xcode 26.x, fail if none:
+2. Select the newest available Xcode 26 or later (26.x, 27.x), fail if
+   none:
    ```bash
-   sudo xcode-select -s /Applications/Xcode_26.*.app/Contents/Developer
+   XCODE=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
+   test -n "$XCODE" || { echo "No Xcode 26 or later found"; exit 1; }
+   sudo xcode-select -s "$XCODE/Contents/Developer"
    ```
    (Or use `maxim-lobanov/setup-xcode` action to install a specific version.)
 3. Verify Xcode version: `xcodebuild -version`.
@@ -317,6 +362,9 @@ Steps:
 
 No code signing secrets, no provisioning profiles.
 
+The development Mac uses Xcode 27.2, and a deployment target of iOS
+26.0 builds cleanly with it (spike ios-01).
+
 ### Guard rails against cross-triggering
 
 (PLAN.md §13: iOS tags are `ios-v*`, desktop tags are `v*`.)
@@ -337,6 +385,8 @@ No code signing secrets, no provisioning profiles.
 - Project opens without errors or warnings.
 - `xcodebuild test` passes on simulator.
 - App and ShareExtension schemes build and launch without errors.
+- In the built app and in the extension, the Info.plist contains the
+  same resolved `KallilexAppGroup`, and it starts with `group.`.
 
 ### CI
 

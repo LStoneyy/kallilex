@@ -215,9 +215,10 @@ offers Apple's on-device Foundation Model, which requires no API key.
    - Tap a prompt (e.g., "Rewrite") — the text is sent to the provider and
      the result appears in the sheet.
    - Tap "Copy" — the result goes to the clipboard.
-   - Go back to Notes and tap Paste — the selection is replaced with the
-     rewritten text.
-   - This is the core workflow: select → Share → prompt → Copy → Paste.
+   - Go back to Notes, select the original text again and tap Paste — it
+     is replaced with the rewritten text.
+   - This is the core workflow: select → Share → prompt → Copy → select
+     again → Paste.
 5. **Test the Scratchpad (fallback editor):**
    - In the Kallilex app, tap the Scratchpad tab.
    - Paste some text (use the Paste button).
@@ -308,7 +309,7 @@ all without leaving your writing app.
 3. Choose a prompt: Rewrite, Shorten, Improve clarity, or a custom
    instruction.
 4. Tap Copy to put the result on your clipboard.
-5. Go back to your app and paste.
+5. Go back to your app, select the original text again, and paste.
 
 **Bring your own AI provider:**
 
@@ -349,7 +350,8 @@ alles ohne deine Schreib-App zu verlassen.
 3. Wähle einen Prompt: Umschreiben, Kürzen, Klarer formulieren oder eine
    eigene Anweisung.
 4. Tippe Kopieren, um das Ergebnis in deine Zwischenablage zu legen.
-5. Geh zurück zu deiner App und füge ein.
+5. Geh zurück zu deiner App, markiere den ursprünglichen Text erneut
+   und füge ihn ein.
 
 **Bring dein eigenes KI-Modell mit:**
 

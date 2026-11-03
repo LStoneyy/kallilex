@@ -310,12 +310,17 @@ Behavior (port from `openai.rs` exactly):
   call `stripPadding` on the text. Invalid JSON: `invalidResponse("invalid JSON: \(error)")`.
 - **Non-2xx responses:** return `http(status, snippet)` with the body
   truncated to 300 Unicode scalars.
-- **URLError mapping:** `.timedOut` → `timeout(profile.timeoutSecs)`,
-  `.cancelled` → propagate as `CancellationError`, others →
-  `unreachable(localizedDescription)`.
-- **Local network error (from ios-01 spike):** write as "map the error
-  identified in spike-ios-01-report.md (unknown 2); if it cannot be
-  distinguished, fall back to `unreachable` and drop `localNetworkDenied`".
+- **URLError mapping:**
+  - `.timedOut` → `timeout(profile.timeoutSecs)`.
+  - `.cancelled` → propagate as `CancellationError`.
+  - `.notConnectedToInternet` (-1009) when `classifyPrivacy` of the base
+    URL's host is `.lan` → `localNetworkDenied`. Spike ios-01 unknown 2:
+    with the Local Network permission denied, a request to a private IP
+    fails within milliseconds with -1009, while internet access still
+    works.
+  - everything else, including -1009 for non-LAN hosts →
+    `unreachable(localizedDescription)`.
+  - A timeout to a `.local` host stays `timeout`.
 
 Helper function:
 
@@ -359,7 +364,6 @@ struct ActionRunner {
         ProviderProfile,
         String?
     ) -> any TextProvider
-    let isAppExtension: Bool
     
     init(
         settings: SettingsStore,
@@ -367,8 +371,7 @@ struct ActionRunner {
         makeProvider: @escaping @Sendable (
             ProviderProfile,
             String?
-        ) -> any TextProvider,
-        isAppExtension: Bool = RuntimeContext.isAppExtension
+        ) -> any TextProvider
     )
     
     func run(text: String, action: Action) async -> RunOutcome
@@ -378,11 +381,6 @@ struct ActionRunner {
     ) async -> Result<Void, ProviderError>
 }
 ```
-
-`isAppExtension` defaults to `RuntimeContext.isAppExtension` (ios-10) and is
-injectable so tests can exercise both the app and extension branches of the
-on-device model's extension-availability check without touching the real
-bundle.
 
 Behavior for `run`:
 - Load settings fresh each time (no cache).
@@ -482,6 +480,15 @@ Load and assert all fixtures from `contracts/` via `#filePath`:
   stub to intercept and verify).
 - **openai-response.json**: response parsing and padding cases match, HTTP
   errors are handled correctly, invalid JSON is caught.
+
+### URLError mapping tests
+
+- `URLError(.timedOut)` → `.timeout(profile.timeoutSecs)`.
+- `URLError(.cancelled)` → propagates as `CancellationError`.
+- `URLError(.notConnectedToInternet)` with base URL
+  `http://192.168.1.10:11434/v1` → `.localNetworkDenied`.
+- `URLError(.notConnectedToInternet)` with base URL
+  `https://api.openai.com/v1` → `.unreachable`.
 
 ### ActionRunner tests
 

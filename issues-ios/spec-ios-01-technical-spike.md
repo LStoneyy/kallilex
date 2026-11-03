@@ -1,6 +1,6 @@
 # Spec ios-01 — Technical spike
 
-Status: ready-for-agent
+Status: done (2026-11-03), see spike-ios-01-report.md
 Phase: spike (Phase 0, throwaway prototype)
 Depends on: —
 

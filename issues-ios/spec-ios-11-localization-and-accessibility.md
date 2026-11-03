@@ -121,7 +121,14 @@ English translation. Examples:
 - `state.rewriting` → "Rewriting…"
 - `state.done` → "Done"
 - `error.too_long` → "Text is too long for the on-device model"
-- `error.not_configured` → "Set up a provider in the Kallilex app"
+- `error.not_configured` → "Open the Kallilex app to set up a provider"
+- `extension.notConfigured.message` → "Open the Kallilex app to set up a
+  provider."
+- `extension.pasteHint` → "After copying, select the original text again
+  and paste."
+- `error.localNetworkDenied` → "Kallilex can't reach this server. Allow
+  local network access in Settings → Privacy & Security → Local
+  Network → Kallilex."
 - `consent.message` → "The text you share is sent to {{host}} to be
   processed."
 - `scratchpad.paste` → "Paste"
@@ -146,6 +153,19 @@ Use hierarchical key names (dots for grouping) for maintainability.
 | Retry | Erneut versuchen | Redo a request |
 | Undo | Widerrufen | Revert to original text |
 | Cancel | Abbrechen | Close without action |
+
+**New string examples (EN → DE), matching the glossary above:**
+
+- `extension.notConfigured.message`: "Open the Kallilex app to set up a
+  provider." → "Öffne die Kallilex-App, um einen Anbieter einzurichten."
+- `extension.pasteHint`: "After copying, select the original text again
+  and paste." → "Markiere nach dem Kopieren den ursprünglichen Text
+  erneut und füge ihn ein."
+- `error.localNetworkDenied`: "Kallilex can't reach this server. Allow
+  local network access in Settings → Privacy & Security → Local
+  Network → Kallilex." → "Kallilex erreicht diesen Server nicht. Erlaube
+  den Zugriff auf das lokale Netzwerk unter Einstellungen → Datenschutz &
+  Sicherheit → Lokales Netzwerk → Kallilex."
 
 **Voice:**
 

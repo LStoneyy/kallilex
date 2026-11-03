@@ -68,8 +68,9 @@ Other constraints that shape the design:
   other than English is weaker. Since iOS 27 there is also a
   **Private Cloud Compute** model: 32 K context, needs an entitlement, no
   cost for developers under 2 M first-time downloads, a daily per-user quota.
-  Its availability inside app extensions is undocumented and is spike item
-  ios-01.
+  Foundation Models work inside a Share Extension and run in a system
+  process (+2–5 MB in the extension). A rewrite of about 300 words takes
+  about 10 s (spike ios-01 unknown 3; see §15).
 
 ## 3. Product scope
 
@@ -152,8 +153,9 @@ Other constraints that shape the design:
      confirmation, then closes the sheet
    - **Retry**: runs the same prompt again on the *original* text
    - **Undo**: brings the original back
-5. Back in the source app, the selection is usually still there. The user
-   taps **Paste**, and the selection is replaced.
+5. Back in the source app, the selection is gone (spike ios-01, Notes on
+   iOS 27). The user selects the original text again and taps **Paste**,
+   which replaces it.
 
 Optional speed-ups (settings, all off by default):
 
@@ -165,7 +167,7 @@ Optional speed-ups (settings, all off by default):
 
 | Situation | Behavior |
 |---|---|
-| No provider configured | Inline card "Set up a provider in the Kallilex app", with a button that opens `kallilex://settings/providers` if `extensionContext.open` works from a Share Extension (§8.4, spike item 4). Otherwise it shows instruction text |
+| No provider configured | Inline card "Open the Kallilex app to set up a provider." No button: `extensionContext.open` returns `false` from a Share Extension (§8.4, spike ios-01 unknown 4) |
 | Consent missing for a cloud profile | The consent card shows inline in the extension. Allowing it stores the consent, and the prompt runs |
 | Request error | Inline message from the error taxonomy (§7.4) with Retry |
 | Input empty or not text | "Kallilex needs selected text" with no prompt chips |
@@ -253,10 +255,15 @@ issues-ios/                        # this plan + iOS specs
 | Extension bundle id | `com.webcommits.kallilex.share` | Must be prefixed by the app id |
 | App Group | `group.com.webcommits.kallilex` | Settings JSON, consent records |
 | Keychain access group | `$(AppIdentifierPrefix)com.webcommits.kallilex.shared` | API keys |
-| URL scheme | `kallilex://` | Deep links into settings |
+| URL scheme | none in v1 | The extension cannot open the app (§8.4) |
 | Minimum iOS | **iOS 26.0** | Foundation Models need 26 (decided, Q6) |
 | Swift | 6, strict concurrency | |
 | Version | Independent semver starting at `1.0.0`, tags `ios-v1.0.0` | See §13. This keeps it clear of the desktop `v*` tags |
+
+During development on a free Personal Team, set `KALLILEX_ID_PREFIX` in
+`Local.xcconfig` (e.g. `de.example`) so `com.webcommits.kallilex` is
+never registered to a Personal Team. All identifiers derive from it
+(ios-02).
 
 ## 7. KallilexKit (shared Swift package)
 
@@ -370,9 +377,11 @@ iOS adds:
 - `unavailable`: the on-device model isn't ready (reason included)
 - `contextTooLong`
 - `declined`: the on-device model refused the text (guardrails)
-- `localNetworkDenied`: a LAN host was refused because the Local Network
-  permission is missing (spike ios-01 must show whether this can be told
-  apart from `unreachable`)
+- `localNetworkDenied`: the Local Network permission is missing. Mapped
+  from `URLError.notConnectedToInternet` (-1009) when `classifyPrivacy`
+  rates the base URL's host `.lan` (spike ios-01 unknown 2). A timeout to
+  a `.local` host stays `timeout`, because it cannot be told apart from a
+  host that is down.
 
 Every message is actionable, localized in English and German, and never
 just "failed".
@@ -476,15 +485,10 @@ Behavior:
 
 ### 8.4 Opening the container app from the extension
 
-Share extensions can't call `UIApplication.open`.
-
-- `extensionContext.open(_:)` officially works only for Today and iMessage
-  extensions.
-- The spike checks whether `extensionContext.open` works from a Share
-  Extension on iOS 26/27.
-- If it doesn't, the "not configured" card explains the steps in text:
-  "Open Kallilex and add a provider".
-- Don't use responder-chain hacks; they get apps rejected.
+`extensionContext.open(_:)` does not work from a Share Extension; the
+completion handler returns `false`. The extension shows an instruction
+instead. No responder-chain or `UIApplication` workaround, because that
+is an App Review risk.
 
 ## 9. Container app
 
@@ -728,6 +732,28 @@ The spike's (ios-01) unknowns:
    not, the paid account (Q2) must exist before Phase 1, not only before
    TestFlight.
 
+Answered on 2026-11-03 in `spike-ios-01-report.md`:
+
+1. Selected text arrives as `public.plain-text` (Notes confirmed; other
+   apps untagged); Safari without a selection untested.
+2. ATS and Local Network permission work as planned. The prompt appears
+   only from the app. The extension reaches the LAN before any
+   permission is granted. After denial, the app gets a -1009 error to a
+   LAN IP and a -1001 timeout to an mDNS host.
+3. Foundation Models work inside the extension, run in a system process,
+   with 2–5 MB growth and about 10 s for 300 words.
+4. `extensionContext.open()` returns `false` and does not open the app.
+5. The SwiftUI extension peaks at 36 MB (with network and rewrite),
+   below the 50 MB target.
+6. The selection in Notes is gone once the share sheet closes;
+   re-selecting and pasting works.
+7. A free Personal Team provisions both App Groups and Keychain sharing;
+   profiles expire after 7 days.
+
+Open items: 1b (Safari with/without a selection), the per-app matrix,
+extension behavior under a denied permission, and behavior on an iOS 26
+device.
+
 ## 16. Later (outside v1)
 
 - **App Intents / Shortcuts:** a "Run Kallilex prompt" intent (input text
@@ -773,7 +799,7 @@ The spike's (ios-01) unknowns:
 | # | Question | Decision |
 |---|---|---|
 | Q1 | Where does the iOS code live? | This repo, under `ios/` |
-| Q2 | Paid Apple Developer Program account? | Not yet; will be created. Spike runs on a free Personal Team |
+| Q2 | Paid Apple Developer Program account? | Not yet; will be created. The spike showed that a free Personal Team provisions App Groups and Keychain sharing; the paid account is needed only for TestFlight and the App Store. |
 | Q3 | Sync of prompts and profiles in v1? | No. Later as an import/export format; API keys never sync |
 | Q4 | Apple models in v1? | On-device only. Private Cloud Compute later |
 | Q5 | Bundle id? | `com.webcommits.kallilex` (same as desktop) |
