@@ -2,6 +2,9 @@ name: iOS
 
 on:
   push:
+    # Without a branch filter, every tag push would run this workflow:
+    # path filters aren't evaluated for tags.
+    branches: ["**"]
     paths:
       - "ios/**"
       - "contracts/**"
