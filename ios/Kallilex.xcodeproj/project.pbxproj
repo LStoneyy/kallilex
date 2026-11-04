@@ -11,6 +11,7 @@
 		55E4610AF6A6A0134123AAEE /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = D6876D0C3AB42DEC7CCD82FB /* KallilexKit */; };
 		1724F4B8900726FE95ED9C30 /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1A09F4693EB6E0295D460AD /* KallilexKit */; };
 		C02D43689C53BCCE186FA584 /* KallilexUI in Frameworks */ = {isa = PBXBuildFile; productRef = 10E17E14BBAA9CF20DCCDB98 /* KallilexUI */; };
+		E2D1C0B9A8F7E6D5C4B3A2F1 /* KallilexUI in Frameworks */ = {isa = PBXBuildFile; productRef = D3C2B1A0F9E8D7C6B5A4F3E2 /* KallilexUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,11 @@
 			path = ShareExtension/Sources;
 			sourceTree = "<group>";
 		};
+		F1A2B3C4D5E6F7A8B9C0D1E2 /* Resources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ShareExtension/Resources;
+			sourceTree = "<group>";
+		};
 		23DCD9F80679E09EEB3B4573 /* KallilexUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = KallilexUITests;
@@ -93,6 +99,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1724F4B8900726FE95ED9C30 /* KallilexKit in Frameworks */,
+				E2D1C0B9A8F7E6D5C4B3A2F1 /* KallilexUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,7 @@
 				DB92A431E6578C4E8A925529 /* Sources */,
 				92AA3F5446DB2A7F6AFE3EF3 /* Resources */,
 				02318A735DAD1DF028FF8137 /* Sources */,
+				F1A2B3C4D5E6F7A8B9C0D1E2 /* Resources */,
 				23DCD9F80679E09EEB3B4573 /* KallilexUITests */,
 				A8A9A184B9A443CC46C1DB0A /* Config */,
 				CD9E18E30FD98018C5FF9CF3 /* Products */,
@@ -184,10 +192,12 @@
 			);
 			fileSystemSynchronizedGroups = (
 				02318A735DAD1DF028FF8137 /* Sources */,
+				F1A2B3C4D5E6F7A8B9C0D1E2 /* Resources */,
 			);
 			name = ShareExtension;
 			packageProductDependencies = (
 				A1A09F4693EB6E0295D460AD /* KallilexKit */,
+				D3C2B1A0F9E8D7C6B5A4F3E2 /* KallilexUI */,
 			);
 			productName = ShareExtension;
 			productReference = 30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */;
@@ -534,6 +544,11 @@
 			productName = KallilexKit;
 		};
 		10E17E14BBAA9CF20DCCDB98 /* KallilexUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
+			productName = KallilexUI;
+		};
+		D3C2B1A0F9E8D7C6B5A4F3E2 /* KallilexUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
 			productName = KallilexUI;

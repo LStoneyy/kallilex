@@ -108,12 +108,8 @@ public struct StatusBanner: View {
                     bundle: .module
                 ))
                 .font(.headline)
-                Text(String(
-                    localized: "editor.notConfigured.message",
-                    defaultValue: "Set up an AI provider in Kallilex to run prompts.",
-                    bundle: .module
-                ))
-                .foregroundStyle(.secondary)
+                Text(notConfiguredMessage)
+                    .foregroundStyle(.secondary)
                 if let onOpenProviders {
                     Button(String(
                         localized: "editor.notConfigured.action",
@@ -143,6 +139,25 @@ public struct StatusBanner: View {
         String(
             localized: "editor.running",
             defaultValue: "Rewriting with \(runningLabel)…",
+            bundle: .module
+        )
+    }
+
+    /// The `.notConfigured` body text. When `onOpenProviders` is `nil` —
+    /// the Share Extension, which has no Providers tab to navigate to —
+    /// this points the user at the container app instead of the button
+    /// that isn't shown.
+    private var notConfiguredMessage: String {
+        if onOpenProviders != nil {
+            return String(
+                localized: "editor.notConfigured.message",
+                defaultValue: "Set up an AI provider in Kallilex to run prompts.",
+                bundle: .module
+            )
+        }
+        return String(
+            localized: "extension.notConfigured.message",
+            defaultValue: "Open the Kallilex app to set up a provider.",
             bundle: .module
         )
     }

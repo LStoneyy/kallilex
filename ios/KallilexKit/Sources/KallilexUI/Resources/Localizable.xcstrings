@@ -210,6 +210,83 @@
         }
       }
     },
+    "extension.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "extension.copyAndClose": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy & Close"
+          }
+        }
+      }
+    },
+    "extension.empty.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the text first, then tap Share."
+          }
+        }
+      }
+    },
+    "extension.empty.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex needs selected text"
+          }
+        }
+      }
+    },
+    "extension.notConfigured.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Kallilex app to set up a provider."
+          }
+        }
+      }
+    },
+    "extension.pasteHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After copying, select the original text again and paste."
+          }
+        }
+      }
+    },
+    "extension.settingsError.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex couldn't read its settings. Open the Kallilex app to fix this."
+          }
+        }
+      }
+    },
     "privacyBadge.detail.cloud": {
       "extractionState": "manual",
       "localizations": {
