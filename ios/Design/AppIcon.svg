@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- iOS variant of website/assets/icon.svg: full-bleed and square, because
+       iOS applies its own corner mask. The glyph is scaled up from the macOS
+       824 px grid to fill the larger canvas. Render to
+       ios/Kallilex/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+       (1024x1024, no alpha). -->
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#201F24"/>
+      <stop offset="1" stop-color="#141318"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#surface)"/>
+  <g transform="translate(512 512) scale(1.15) translate(-512 -512)">
+    <!-- Verdigris monoline K -->
+    <g stroke="#2FAF9B" stroke-width="96" stroke-linecap="round" fill="none">
+      <line x1="368" y1="278" x2="368" y2="700"/>
+      <line x1="400" y1="512" x2="652" y2="286"/>
+      <line x1="400" y1="512" x2="652" y2="692"/>
+    </g>
+    <!-- Attic Clay correction squiggle -->
+    <path d="M 336 806 q 44 -34 88 0 t 88 0 t 88 0 t 88 0"
+          fill="none" stroke="#E46846" stroke-width="34" stroke-linecap="round"/>
+  </g>
+</svg>

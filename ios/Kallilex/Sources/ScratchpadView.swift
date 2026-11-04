@@ -77,6 +77,9 @@ struct ScratchpadView: View {
                 .disabled(session == nil)
                 .accessibilityIdentifier("scratchpad.paste")
             }
+            // `PasteButton` draws its own filled capsule; without this the
+            // toolbar's glass background puts a second ring around it.
+            .sharedBackgroundVisibility(.hidden)
         }
         .onAppear {
             guard session == nil else { return }
