@@ -127,7 +127,7 @@ final class ScratchpadUITests: KallilexUITestCase {
     }
 
     /// Reorder prompts then see the new chip order in the Scratchpad: add
-    /// two prompts, drag the second above the first, and verify the
+    /// two prompts, drag the first below the second, and verify the
     /// Scratchpad's chips swap order too.
     func testReorderingPromptsChangesTheScratchpadChipOrder() {
         let app = launchApp()
@@ -143,10 +143,16 @@ final class ScratchpadUITests: KallilexUITestCase {
 
         app.navigationBars.buttons["Edit"].waitAndAssertExists().tap()
 
-        // Drag "Yak Prompt" (currently below "Zebra Prompt") up above it.
-        let from = yakRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
-        let to = zebraRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.1))
-        from.press(forDuration: 0.5, thenDragTo: to)
+        // Drag "Zebra Prompt" (currently above "Yak Prompt") down past it,
+        // by its trailing reorder handle — the same downward drag
+        // `PromptsUITests.testReorderPromptsPersists` uses. Dropping onto
+        // the top edge of the row above proved unreliable on slow CI
+        // runners (the drop landed just below it, leaving the order
+        // unchanged), so this drags well into the lower part of the target
+        // row and holds there briefly before releasing.
+        let from = zebraRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        let to = yakRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9))
+        from.press(forDuration: 0.5, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.5)
 
         app.navigationBars.buttons["Done"].waitAndAssertExists().tap()
 
@@ -160,7 +166,7 @@ final class ScratchpadUITests: KallilexUITestCase {
         XCTAssertLessThan(
             yakChip.frame.minX,
             zebraChip.frame.minX,
-            "After dragging \"Yak Prompt\" above \"Zebra Prompt\" in the Prompts tab, its chip should now come first in the Scratchpad"
+            "After dragging \"Zebra Prompt\" below \"Yak Prompt\" in the Prompts tab, the \"Yak Prompt\" chip should now come first in the Scratchpad"
         )
     }
 
