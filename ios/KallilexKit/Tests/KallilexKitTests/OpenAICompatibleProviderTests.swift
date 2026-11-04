@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import KallilexKit
 
@@ -55,8 +56,81 @@ struct OpenAICompatibleProviderTests {
         )
     }
 
-    func makeProvider(profile: ProviderProfile, apiKey: String? = nil) -> OpenAICompatibleProvider {
-        OpenAICompatibleProvider(profile: profile, apiKey: apiKey, session: StubURLProtocol.makeSession())
+    func makeProvider(
+        profile: ProviderProfile,
+        apiKey: String? = nil,
+        deadlineSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) -> OpenAICompatibleProvider {
+        OpenAICompatibleProvider(
+            profile: profile,
+            apiKey: apiKey,
+            session: StubURLProtocol.makeSession(),
+            deadlineSleep: deadlineSleep
+        )
+    }
+
+    /// Polls (via `Task.yield()`, not a real sleep) until `StubURLProtocol`
+    /// has recorded a request at `endpoint`, so a test can be sure the
+    /// request actually reached the stub — and so production code actually
+    /// started a data task — before doing something time-sensitive like
+    /// cancelling the caller. `timeout` is only a hang guard, generous
+    /// enough to never fire in a passing run; it is not a correctness bound.
+    func waitUntilRequestIsRecorded(
+        at endpoint: URL,
+        timeout: Duration = .seconds(20)
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        while StubURLProtocol.recordedRequest(for: endpoint) == nil {
+            if clock.now >= deadline {
+                Issue.record("timed out waiting for the stubbed request at \(endpoint) to be recorded")
+                return
+            }
+            await Task.yield()
+        }
+    }
+
+    /// A deadline sleeper that never completes on its own — it only
+    /// resumes if its `Task` is cancelled, in which case it throws
+    /// `CancellationError` like a real `Task.sleep` would. Used to prove
+    /// "the real response won, not the deadline" and "caller cancellation
+    /// wins, not the deadline" without ever depending on how long a real
+    /// timer would take to fire. Swift 6-clean: all mutable state lives
+    /// behind a `Mutex`, mirroring `OpenAICompatibleProvider.DeadlineRace`'s
+    /// own pattern for the same "exactly one resume, from any thread"
+    /// problem.
+    final class NeverFiringSleeper: @unchecked Sendable {
+        private struct State {
+            var cancelled = false
+            var continuation: CheckedContinuation<Void, Error>?
+        }
+
+        private let state = Mutex(State())
+
+        var sleep: @Sendable (Duration) async throws -> Void {
+            { _ in
+                try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        let resumeNow = self.state.withLock { s -> Bool in
+                            if s.cancelled { return true }
+                            s.continuation = continuation
+                            return false
+                        }
+                        if resumeNow {
+                            continuation.resume(throwing: CancellationError())
+                        }
+                    }
+                } onCancel: {
+                    let continuation = self.state.withLock { s -> CheckedContinuation<Void, Error>? in
+                        s.cancelled = true
+                        let c = s.continuation
+                        s.continuation = nil
+                        return c
+                    }
+                    continuation?.resume(throwing: CancellationError())
+                }
+            }
+        }
     }
 
     // MARK: - openai-endpoint.json
@@ -406,14 +480,20 @@ struct OpenAICompatibleProviderTests {
 
     // MARK: - Total deadline (idle timeout vs. hard cap)
 
+    /// A hung request raced against a deadline sleeper that returns
+    /// immediately: proves `sendWithDeadline` resolves from the timer
+    /// winning the race, without ever waiting on the hung request — no
+    /// wall-clock assertion needed, since the sleeper itself never
+    /// actually sleeps.
     @Test func aHungRequestTimesOutAfterTheProfilesTimeout() async throws {
         let base = StubURLProtocol.uniqueBaseURL()
         let endpoint = expectedEndpoint(from: base.absoluteString)
         StubURLProtocol.stub(endpoint, hang: true)
 
-        let provider = makeProvider(profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 1))
-        let clock = ContinuousClock()
-        let start = clock.now
+        let provider = makeProvider(
+            profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 1),
+            deadlineSleep: { _ in }
+        )
         do {
             _ = try await provider.complete(systemPrompt: "s", userText: "u")
             Issue.record("expected a timeout error")
@@ -422,41 +502,47 @@ struct OpenAICompatibleProviderTests {
         } catch {
             Issue.record("unexpected error \(error)")
         }
-        let elapsed = clock.now - start
-        #expect(elapsed < .seconds(5), "expected the deadline to fire within a few seconds, took \(elapsed)")
     }
 
+    /// The real response arrives (after a short, incidental delay) while
+    /// the deadline sleeper is one that never fires on its own — only
+    /// cancellation can resume it, and the data task winning the race is
+    /// exactly what cancels it. So success here can only mean the response
+    /// won; it cannot mean "the deadline happened not to have elapsed yet".
     @Test func aResponseArrivingJustBeforeTheDeadlineIsNotATimeout() async throws {
         let base = StubURLProtocol.uniqueBaseURL()
         let endpoint = expectedEndpoint(from: base.absoluteString)
-        // A generous margin between the response's delay and the profile's
-        // deadline (300 ms vs. 3 s) so this isn't flaky under a loaded test
-        // runner — the point is "arrives before the deadline", not "arrives
-        // at the last possible instant".
-        StubURLProtocol.stub(endpoint, body: successBody("just in time"), delay: .milliseconds(300))
+        StubURLProtocol.stub(endpoint, body: successBody("just in time"), delay: .milliseconds(50))
 
-        let provider = makeProvider(profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 3))
-        let clock = ContinuousClock()
-        let start = clock.now
+        let sleeper = NeverFiringSleeper()
+        let provider = makeProvider(
+            profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 3),
+            deadlineSleep: sleeper.sleep
+        )
         let result = try await provider.complete(systemPrompt: "s", userText: "u")
-        let elapsed = clock.now - start
 
         #expect(result == "just in time")
-        #expect(elapsed < .seconds(3), "expected the real response to win the race, took \(elapsed)")
     }
 
+    /// The caller cancels its own `Task` mid-hang, with a deadline sleeper
+    /// that never fires on its own — so only the caller's cancellation,
+    /// never the deadline race, can be responsible for the result. Waits
+    /// for the stub to actually record the request (proof the data task
+    /// has started) before cancelling, rather than a single `Task.yield()`.
     @Test func cancellingTheCallerDuringAHangIsCancellationNotTimeout() async throws {
         let base = StubURLProtocol.uniqueBaseURL()
         let endpoint = expectedEndpoint(from: base.absoluteString)
         StubURLProtocol.stub(endpoint, hang: true)
 
-        // A long profile timeout, so only the caller's own cancellation —
-        // never the deadline race — can resolve this.
-        let provider = makeProvider(profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 30))
+        let sleeper = NeverFiringSleeper()
+        let provider = makeProvider(
+            profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 30),
+            deadlineSleep: sleeper.sleep
+        )
         let task = Task {
             try await provider.complete(systemPrompt: "s", userText: "u")
         }
-        await Task.yield()
+        await waitUntilRequestIsRecorded(at: endpoint)
         task.cancel()
 
         do {

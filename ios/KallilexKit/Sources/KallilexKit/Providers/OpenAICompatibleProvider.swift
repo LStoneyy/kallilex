@@ -11,6 +11,14 @@ public struct OpenAICompatibleProvider: TextProvider {
     public let apiKey: String?
     public let session: URLSession
 
+    /// The sleep used to drive the total-deadline timer in
+    /// `sendWithDeadline`, and *only* that timer — never the real request.
+    /// Overridable so tests can race a hung request (or a caller
+    /// cancellation) against the deadline deterministically, without
+    /// depending on wall-clock time or a real `Task.sleep`. Production code
+    /// always uses the default.
+    public let deadlineSleep: @Sendable (Duration) async throws -> Void
+
     /// Used by production code when no session is injected: an ephemeral
     /// configuration (no cache, no cookies), matching PLAN.md §7.3.
     public static let defaultSession = URLSession(configuration: .ephemeral)
@@ -18,11 +26,13 @@ public struct OpenAICompatibleProvider: TextProvider {
     public init(
         profile: ProviderProfile,
         apiKey: String?,
-        session: URLSession = OpenAICompatibleProvider.defaultSession
+        session: URLSession = OpenAICompatibleProvider.defaultSession,
+        deadlineSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.profile = profile
         self.apiKey = apiKey
         self.session = session
+        self.deadlineSleep = deadlineSleep
     }
 
     public func complete(
@@ -72,7 +82,8 @@ public struct OpenAICompatibleProvider: TextProvider {
             (data, response) = try await Self.sendWithDeadline(
                 request: request,
                 session: session,
-                timeoutSecs: profile.timeoutSecs
+                timeoutSecs: profile.timeoutSecs,
+                deadlineSleep: deadlineSleep
             )
         } catch let providerError as ProviderError {
             throw providerError
@@ -222,7 +233,8 @@ public struct OpenAICompatibleProvider: TextProvider {
     /// whole request instead. This reproduces that hard cap with a
     /// `URLSessionDataTask` (completion-handler based, so it can be
     /// cancelled and simply abandoned — never awaited) raced against a
-    /// `Task.sleep` timer, bridged into `async` with
+    /// timer driven by `deadlineSleep` (`Task.sleep` in production; a test
+    /// double in tests), bridged into `async` with
     /// `withCheckedThrowingContinuation`. Whichever finishes first resumes
     /// the continuation and cancels the other; crucially, nothing here
     /// *awaits* the loser, so this function returns at the deadline
@@ -237,7 +249,8 @@ public struct OpenAICompatibleProvider: TextProvider {
     private static func sendWithDeadline(
         request: URLRequest,
         session: URLSession,
-        timeoutSecs: Int
+        timeoutSecs: Int,
+        deadlineSleep: @escaping @Sendable (Duration) async throws -> Void
     ) async throws -> (Data, URLResponse) {
         let race = DeadlineRace()
         return try await withTaskCancellationHandler {
@@ -255,7 +268,7 @@ public struct OpenAICompatibleProvider: TextProvider {
                 }
 
                 let timeoutTask = Task {
-                    try? await Task.sleep(for: .seconds(timeoutSecs))
+                    try? await deadlineSleep(.seconds(timeoutSecs))
                     guard !Task.isCancelled else { return }
                     race.resume(with: .failure(ProviderError.timeout(timeoutSecs)))
                 }

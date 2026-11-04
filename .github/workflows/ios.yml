@@ -54,6 +54,11 @@ jobs:
           echo "Using simulator $SIM_ID (simulator SDK $SDK)"
           echo "SIM_ID=$SIM_ID" >> "$GITHUB_ENV"
 
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "$SIM_ID" || true
+          xcrun simctl bootstatus "$SIM_ID" -b
+
       - name: Test KallilexKit
         working-directory: ios/KallilexKit
         run: |
