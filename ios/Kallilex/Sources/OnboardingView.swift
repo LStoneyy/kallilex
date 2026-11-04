@@ -171,6 +171,11 @@ private struct OnboardingWelcomeStepView: View {
             Text(String(localized: "onboarding.welcome.title", defaultValue: "Welcome to Kallilex"))
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
+                // Requests its own ideal height instead of accepting
+                // whatever an ancestor offers (ios-11, "Dynamic Type"):
+                // caught as "Text clipped" by `AccessibilityUITests
+                // .testOnboardingWelcomeStepAudit`.
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("onboarding.welcome.title")
 
             VStack(alignment: .leading, spacing: 20) {
@@ -188,10 +193,15 @@ private struct OnboardingWelcomeStepView: View {
                 )
             }
 
+            // `.primary`, not `.secondary` (ios-11, "Contrast and color"):
+            // at `.subheadline` size, `.secondary` on this background falls
+            // short of WCAG AA (caught by
+            // `AccessibilityUITests.testOnboardingWelcomeStepAudit`).
             Text(String(localized: "onboarding.welcome.subtitle", defaultValue: "Use AI to rewrite text right in any app."))
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("onboarding.welcome.subtitle")
 
             Spacer()

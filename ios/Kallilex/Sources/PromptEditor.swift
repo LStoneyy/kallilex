@@ -24,6 +24,14 @@ struct PromptEditor: View {
 
                     TextEditor(text: $draft.instruction)
                         .frame(minHeight: 120)
+                        // Without an explicit label, VoiceOver had no
+                        // description for this text view at all (ios-11,
+                        // caught by
+                        // `AccessibilityUITests.testPromptEditorAudit`).
+                        .accessibilityLabel(String(
+                            localized: "prompt.editor.instruction.label",
+                            defaultValue: "Instruction"
+                        ))
                         .accessibilityIdentifier("prompt.editor.instruction")
                         .overlay(alignment: .topLeading) {
                             if draft.instruction.isEmpty {
@@ -31,7 +39,13 @@ struct PromptEditor: View {
                                     localized: "prompt.instruction.placeholder",
                                     defaultValue: "What should Kallilex do?"
                                 ))
-                                .foregroundStyle(.tertiary)
+                                // `.secondary`, not `.tertiary` (ios-11,
+                                // "Contrast and color"): at this
+                                // placeholder's (default, non-caption)
+                                // size, `.tertiary` fell short of WCAG AA
+                                // (caught by
+                                // `AccessibilityUITests.testPromptEditorAudit`).
+                                .foregroundStyle(.secondary)
                                 .padding(.top, 8)
                                 .padding(.leading, 5)
                                 .allowsHitTesting(false)

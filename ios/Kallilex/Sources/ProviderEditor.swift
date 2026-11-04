@@ -256,8 +256,11 @@ struct ProviderEditor: View {
                 HStack {
                     Text(String(localized: "provider.timeout", defaultValue: "Request timeout (s)"))
                     Spacer()
+                    // `.primary`, not `.secondary` (ios-11, "Contrast and
+                    // color"): caught by
+                    // `AccessibilityUITests.testProviderEditorAudit`.
                     Text("\(draft.timeoutSecs)")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                 }
             }
             .accessibilityIdentifier("provider.editor.timeout")

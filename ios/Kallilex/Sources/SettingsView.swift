@@ -34,13 +34,22 @@ struct SettingsView: View {
                 )
                 .accessibilityIdentifier("settings.autoCopy")
             } footer: {
+                // Explicit `.primary`, not the Form section footer's own
+                // default secondary/footnote dimming: at footnote size,
+                // `.secondary` on this background falls short of WCAG AA
+                // (caught by `AccessibilityUITests.testSettingsAudit`).
                 Text(String(localized: "settings.auto.footer", defaultValue: "In the share sheet only."))
+                    .foregroundStyle(.primary)
             }
 
             Section(String(localized: "settings.consents.heading", defaultValue: "AI data sharing")) {
                 if appEnv.settings.consents.isEmpty {
+                    // `.primary`, not `.secondary` (ios-11, "Contrast and
+                    // color"): caught by `AccessibilityUITests
+                    // .testSettingsAudit` on a fresh install, where this is
+                    // the only row in the section.
                     Text(String(localized: "settings.consents.empty", defaultValue: "No active consents."))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                 } else {
                     ForEach(appEnv.settings.consents) { consent in
                         VStack(alignment: .leading, spacing: 2) {

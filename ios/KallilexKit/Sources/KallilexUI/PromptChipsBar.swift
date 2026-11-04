@@ -3,12 +3,15 @@ import KallilexKit
 
 /// A row of tappable prompt chips, plus a trailing "Custom…" chip, shared by
 /// the Scratchpad tab and the Share Extension (ios-08). Horizontally
-/// scrollable at ordinary Dynamic Type sizes; switches to a vertical list at
-/// accessibility sizes (`dynamicTypeSize.isAccessibilitySize`), since a
-/// capsule row stops being usable once each label wraps to multiple lines.
-/// Long-pressing a chip shows its full instruction via `contextMenu`. Every
-/// chip is disabled while `isRunning` — starting a second run from a chip
-/// mid-run would just be superseded anyway (`EditorSession.run` cancels the
+/// scrollable at ordinary Dynamic Type sizes; switches to a vertical list of
+/// full-width buttons from `.accessibility3` up (ios-11), since a capsule
+/// row stops being usable once each label wraps to multiple lines. Grouped
+/// as a single accessibility container ("Prompts") so VoiceOver's rotor
+/// presents the chips as one logical group of children, rather than a flat
+/// run of unrelated buttons (ios-11, "Hierarchy and grouping"). Long-pressing
+/// a chip shows its full instruction via `contextMenu`. Every chip is
+/// disabled while `isRunning` — starting a second run from a chip mid-run
+/// would just be superseded anyway (`EditorSession.run` cancels the
 /// in-flight one), so disabling avoids a confusing extra tap.
 public struct PromptChipsBar: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -31,18 +34,22 @@ public struct PromptChipsBar: View {
     }
 
     public var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 8) {
-                chips
-            }
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+        Group {
+            if dynamicTypeSize >= .accessibility3 {
+                VStack(alignment: .leading, spacing: 8) {
                     chips
                 }
-                .padding(.horizontal)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        chips
+                    }
+                    .padding(.horizontal)
+                }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "promptChipsBar.label", defaultValue: "Prompts", bundle: .module))
     }
 
     @ViewBuilder
@@ -66,6 +73,13 @@ public struct PromptChipsBar: View {
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
         .disabled(isRunning)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityHint(String(
+            localized: "prompt.custom.hint",
+            defaultValue: "Opens a field for your own instruction.",
+            bundle: .module
+        ))
         .accessibilityIdentifier("editor.chip.custom")
     }
 }
@@ -83,6 +97,13 @@ private struct PromptChip: View {
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
         .disabled(isDisabled)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityHint(String(
+            localized: "editor.chip.hint",
+            defaultValue: "Runs this prompt on the text.",
+            bundle: .module
+        ))
         .contextMenu {
             Text(instruction)
         }

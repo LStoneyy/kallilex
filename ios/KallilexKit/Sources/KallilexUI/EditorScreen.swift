@@ -129,20 +129,21 @@ public struct EditorScreen<ToolbarExtra: View>: View {
             // Dynamic Type sizes once the competing `Spacer()`/toggle are
             // out of the way, and a horizontally scrollable ancestor's own
             // pan gesture can otherwise contend with a `Button`'s tap.
-            HStack(spacing: 12) {
-                EditorToolbar(
-                    canUndo: session.canUndo,
-                    canRetry: session.canRetry,
-                    canCopy: session.canCopy,
-                    onUndo: { session.undo() },
-                    onRetry: {
-                        dismissKeyboard()
-                        session.retry()
-                    },
-                    onCopy: { copyAndShowConfirmation() }
-                )
-
-                toolbarExtra()
+            //
+            // `ViewThatFits` falls back to a vertical stack once that row
+            // no longer fits — at accessibility Dynamic Type sizes,
+            // `EditorToolbar` plus the caller's own `toolbarExtra` can
+            // together outgrow the screen width even though
+            // `EditorToolbar` alone still fits (ios-11, "Dynamic Type").
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    editorToolbar
+                    toolbarExtra()
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    editorToolbar
+                    toolbarExtra()
+                }
             }
             .padding(.horizontal)
 
@@ -157,6 +158,11 @@ public struct EditorScreen<ToolbarExtra: View>: View {
                         )
                     )
                     .toggleStyle(.button)
+                    .accessibilityHint(String(
+                        localized: "editor.showOriginal.hint",
+                        defaultValue: "Shows the text from before the last run.",
+                        bundle: .module
+                    ))
                     .accessibilityIdentifier("editor.showOriginal")
                 }
                 .padding(.horizontal)
@@ -172,6 +178,23 @@ public struct EditorScreen<ToolbarExtra: View>: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    /// The Undo/Retry/Copy row, factored out so both branches of the
+    /// `ViewThatFits` above (horizontal/vertical) share one definition
+    /// instead of duplicating its closures.
+    private var editorToolbar: some View {
+        EditorToolbar(
+            canUndo: session.canUndo,
+            canRetry: session.canRetry,
+            canCopy: session.canCopy,
+            onUndo: { session.undo() },
+            onRetry: {
+                dismissKeyboard()
+                session.retry()
+            },
+            onCopy: { copyAndShowConfirmation() }
+        )
     }
 
     /// Hides the keyboard when a run starts, so the status banner, the

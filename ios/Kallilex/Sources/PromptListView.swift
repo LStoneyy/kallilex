@@ -37,9 +37,12 @@ struct PromptListView: View {
                                 Text(prompt.label)
                                     .font(.body.weight(.semibold))
                                     .foregroundStyle(.primary)
+                                // `.primary`, not `.secondary` (ios-11,
+                                // "Contrast and color"): caught by
+                                // `AccessibilityUITests.testPromptsListAudit`.
                                 Text(prompt.instruction)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.primary)
                                     .lineLimit(2)
                             }
                             .contentShape(Rectangle())

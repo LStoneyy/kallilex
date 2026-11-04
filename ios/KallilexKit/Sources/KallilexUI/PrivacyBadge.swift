@@ -53,14 +53,25 @@ public struct PrivacyBadge: View {
         }
     }
 
+    // The classification's `tintColor` tints only the icon; the title text
+    // stays `.primary` (ios-11, "Contrast and color") — a colored label on
+    // a same-colored tinted background (e.g. orange-on-orange for `.lan`)
+    // can fall below WCAG AA contrast, especially in light mode. The icon
+    // still carries the color cue, and the title text itself already names
+    // the classification, so status is never conveyed by color alone.
     private var badgeLabel: some View {
-        Label(info.title, systemImage: info.symbolName)
-            .labelStyle(.titleAndIcon)
-            .font(.caption)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .foregroundStyle(tintColor)
-            .background(tintColor.opacity(0.15), in: Capsule())
+        Label {
+            Text(info.title)
+                .foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: info.symbolName)
+                .foregroundStyle(tintColor)
+        }
+        .labelStyle(.titleAndIcon)
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(tintColor.opacity(0.15), in: Capsule())
     }
 
     private var tintColor: Color {

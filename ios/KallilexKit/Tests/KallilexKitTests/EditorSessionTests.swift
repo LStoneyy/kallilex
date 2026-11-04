@@ -481,9 +481,19 @@ struct EditorSessionTests {
         await fake.resolveOldest(with: .ok("HELLO"))
         await task.value
 
-        #expect(feedback.recordedAnnouncements() == ["Rewriting with Fix grammar…", "Done"])
+        #expect(feedback.recordedAnnouncements() == ["Rewriting with Fix grammar…", "Done. The result is ready."])
         #expect(feedback.recordedSuccessCount() == 1)
         #expect(feedback.recordedErrorCount() == 0)
+    }
+
+    @Test func copyAnnouncesCopied() {
+        let feedback = FakeEditorFeedback()
+        let session = makeSession(feedback: feedback)
+        session.text = "hello"
+
+        session.copy()
+
+        #expect(feedback.recordedAnnouncements() == ["Copied"])
     }
 
     @Test func announcesTheErrorDescriptionAndPlaysErrorHaptic() async {

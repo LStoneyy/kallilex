@@ -5,6 +5,11 @@ import KallilexKit
 /// confirmation before calling `onFinish()`.
 public let shareRootViewDefaultCopiedDuration: Duration = .milliseconds(600)
 
+/// How long "Copied" stays up before the extension closes while VoiceOver is
+/// running: long enough for the "Copied" announcement to be spoken before
+/// the sheet goes away (ios-11).
+let shareRootViewVoiceOverCopiedDuration: Duration = .seconds(2)
+
 /// The Share Extension's root view (ios-09, PLAN.md §8.3): a header
 /// ("Kallilex", the active profile's privacy badge, Close), then — driven
 /// by `contentState`, computed by `ShareFlow.contentState(text:
@@ -32,6 +37,7 @@ public struct ShareRootView: View {
     private let onClose: () -> Void
     private let onFinish: () -> Void
 
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @State private var showCopiedFeedback = false
     @State private var copiedTask: Task<Void, Never>?
 
@@ -124,6 +130,8 @@ public struct ShareRootView: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel(Text(String(localized: "extension.close", defaultValue: "Close", bundle: .module)))
             .accessibilityIdentifier("share.close")
         }
@@ -186,6 +194,11 @@ public struct ShareRootView: View {
         // Not while running: copying would take the pre-run text and
         // closing would cancel the run.
         .disabled(!session.canCopy || session.isRunning || showCopiedFeedback)
+        .accessibilityHint(String(
+            localized: "extension.copyAndClose.hint",
+            defaultValue: "Copies the result and closes Kallilex.",
+            bundle: .module
+        ))
         .accessibilityIdentifier("share.copyAndClose")
     }
 
@@ -197,7 +210,9 @@ public struct ShareRootView: View {
         copiedTask?.cancel()
         copiedTask = Task {
             showCopiedFeedback = true
-            try? await Task.sleep(for: copiedDuration)
+            try? await Task.sleep(for: voiceOverEnabled
+                ? max(copiedDuration, shareRootViewVoiceOverCopiedDuration)
+                : copiedDuration)
             guard !Task.isCancelled else { return }
             showCopiedFeedback = false
             onFinish()

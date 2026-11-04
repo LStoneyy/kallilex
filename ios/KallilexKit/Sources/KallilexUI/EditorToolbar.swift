@@ -29,34 +29,69 @@ public struct EditorToolbar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onUndo) {
-                Label(
-                    String(localized: "editor.undo", defaultValue: "Undo", bundle: .module),
-                    systemImage: "arrow.uturn.backward"
-                )
+        // A vertical fallback at accessibility Dynamic Type sizes (ios-11):
+        // three full-length German labels (e.g. "Erneut versuchen") no
+        // longer fit one row at AX sizes without truncating.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                undoButton
+                retryButton
+                copyButton
             }
-            .disabled(!canUndo)
-            .accessibilityIdentifier("editor.undo")
-
-            Button(action: onRetry) {
-                Label(
-                    String(localized: "editor.retry", defaultValue: "Retry", bundle: .module),
-                    systemImage: "arrow.clockwise"
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                undoButton
+                retryButton
+                copyButton
             }
-            .disabled(!canRetry)
-            .accessibilityIdentifier("editor.retry")
-
-            Button(action: onCopy) {
-                Label(
-                    String(localized: "editor.copy", defaultValue: "Copy", bundle: .module),
-                    systemImage: "doc.on.doc"
-                )
-            }
-            .disabled(!canCopy)
-            .accessibilityIdentifier("editor.copy")
         }
+    }
+
+    private var undoButton: some View {
+        Button(action: onUndo) {
+            Label(
+                String(localized: "editor.undo", defaultValue: "Undo", bundle: .module),
+                systemImage: "arrow.uturn.backward"
+            )
+        }
+        .disabled(!canUndo)
+        .accessibilityHint(String(
+            localized: "editor.undo.hint",
+            defaultValue: "Restores the text from before the last run.",
+            bundle: .module
+        ))
+        .accessibilityIdentifier("editor.undo")
+    }
+
+    private var retryButton: some View {
+        Button(action: onRetry) {
+            Label(
+                String(localized: "editor.retry", defaultValue: "Retry", bundle: .module),
+                systemImage: "arrow.clockwise"
+            )
+        }
+        .disabled(!canRetry)
+        .accessibilityHint(String(
+            localized: "editor.retry.hint",
+            defaultValue: "Runs the last prompt again.",
+            bundle: .module
+        ))
+        .accessibilityIdentifier("editor.retry")
+    }
+
+    private var copyButton: some View {
+        Button(action: onCopy) {
+            Label(
+                String(localized: "editor.copy", defaultValue: "Copy", bundle: .module),
+                systemImage: "doc.on.doc"
+            )
+        }
+        .disabled(!canCopy)
+        .accessibilityHint(String(
+            localized: "editor.copy.hint",
+            defaultValue: "Copies the text to the clipboard.",
+            bundle: .module
+        ))
+        .accessibilityIdentifier("editor.copy")
     }
 }
 

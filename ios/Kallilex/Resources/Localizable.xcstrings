@@ -477,6 +477,23 @@
         }
       }
     },
+    "prompt.editor.instruction.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anweisung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instruction"
+          }
+        }
+      }
+    },
     "prompt.instruction.placeholder": {
       "extractionState": "manual",
       "localizations": {

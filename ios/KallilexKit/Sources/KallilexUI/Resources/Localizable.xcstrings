@@ -86,6 +86,23 @@
         }
       }
     },
+    "editor.chip.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wendet diesen Prompt auf den Text an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs this prompt on the text."
+          }
+        }
+      }
+    },
     "editor.consent.declined": {
       "extractionState": "manual",
       "localizations": {
@@ -154,6 +171,23 @@
         }
       }
     },
+    "editor.copy.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiert den Text in die Zwischenablage."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copies the text to the clipboard."
+          }
+        }
+      }
+    },
     "editor.done": {
       "extractionState": "manual",
       "localizations": {
@@ -167,6 +201,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Done"
+          }
+        }
+      }
+    },
+    "editor.done.announcement": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig. Das Ergebnis ist bereit."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done. The result is ready."
           }
         }
       }
@@ -256,6 +307,23 @@
         }
       }
     },
+    "editor.retry.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt den letzten Prompt erneut aus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs the last prompt again."
+          }
+        }
+      }
+    },
     "editor.running": {
       "extractionState": "manual",
       "localizations": {
@@ -286,6 +354,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show original"
+          }
+        }
+      }
+    },
+    "editor.showOriginal.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt den Text von vor dem letzten Lauf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the text from before the last run."
           }
         }
       }
@@ -324,6 +409,23 @@
         }
       }
     },
+    "editor.undo.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stellt den Text von vor dem letzten Lauf wieder her."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restores the text from before the last run."
+          }
+        }
+      }
+    },
     "extension.close": {
       "extractionState": "manual",
       "localizations": {
@@ -354,6 +456,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copy & Close"
+          }
+        }
+      }
+    },
+    "extension.copyAndClose.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiert das Ergebnis und schließt Kallilex."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copies the result and closes Kallilex."
           }
         }
       }
@@ -545,6 +664,23 @@
         }
       }
     },
+    "prompt.custom.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet ein Feld für eine eigene Anweisung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens a field for your own instruction."
+          }
+        }
+      }
+    },
     "prompt.custom.label": {
       "extractionState": "manual",
       "localizations": {
@@ -575,6 +711,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Custom instruction…"
+          }
+        }
+      }
+    },
+    "promptChipsBar.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompts"
           }
         }
       }

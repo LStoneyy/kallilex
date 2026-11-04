@@ -231,7 +231,11 @@ public final class EditorSession: Sendable {
         case .ok(let result):
             text = result
             state = .result
-            feedback.announce(String(localized: "editor.done", defaultValue: "Done", bundle: .module))
+            feedback.announce(String(
+                localized: "editor.done.announcement",
+                defaultValue: "Done. The result is ready.",
+                bundle: .module
+            ))
             feedback.success()
         case .notConfigured:
             state = .notConfigured
@@ -274,9 +278,11 @@ public final class EditorSession: Sendable {
         state = .idle
     }
 
-    /// Writes `text` to the injected `pasteboard`.
+    /// Writes `text` to the injected `pasteboard` and announces it to
+    /// VoiceOver.
     public func copy() {
         pasteboard.setString(text)
+        feedback.announce(String(localized: "editor.copied", defaultValue: "Copied", bundle: .module))
     }
 
     /// While `state == .consentRequired(profile)`: grants consent for
