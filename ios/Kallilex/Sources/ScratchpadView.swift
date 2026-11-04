@@ -94,31 +94,9 @@ struct ScratchpadView: View {
     }
 }
 
-/// Writes to `UIPasteboard.general` — the app target's production
-/// `Pasteboard` (ios-08). The Share Extension (ios-09) provides its own,
-/// since it can't depend on this app target.
-private struct DevicePasteboard: Pasteboard {
-    func setString(_ string: String) {
-        UIPasteboard.general.string = string
-    }
-}
-
-/// Wraps `SettingsServiceConsentGranter`'s underlying `SettingsService`
-/// call so a successful grant also reloads `AppEnvironment.settings`:
-/// without this, the Settings tab's consent list wouldn't reflect a grant
-/// made from the Scratchpad until the scene next became active.
-private struct ReloadingConsentGranter: ConsentGranting {
-    let settingsService: SettingsService
-    let reload: @Sendable () -> Void
-
-    func grantConsent(profileID: String, host: String) throws {
-        try settingsService.grantConsent(profileID: profileID, host: host)
-        reload()
-    }
-}
-
 #Preview {
     NavigationStack {
         ScratchpadView(selectedTab: .constant(.scratchpad))
     }
 }
+

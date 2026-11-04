@@ -20,8 +20,18 @@ struct KallilexApp: App {
         WindowGroup {
             Group {
                 if let environment {
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestShareHarness") {
+                        ShareHarnessView()
+                            .environment(environment)
+                    } else {
+                        RootTabView(suppressOnboardingCover: showCorruptionAlert)
+                            .environment(environment)
+                    }
+                    #else
                     RootTabView(suppressOnboardingCover: showCorruptionAlert)
                         .environment(environment)
+                    #endif
                 } else {
                     StartupErrorView(error: startupError ?? .other("unknown"))
                 }

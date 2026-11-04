@@ -4,16 +4,16 @@ import KallilexKit
 import KallilexUI
 
 /// Principal class for the Share Extension (ios-09, PLAN.md §8). No
-/// storyboard; hosts `ShareRootView` through a `UIHostingController`
-/// immediately, in its `.loadingInput` state, then extracts the shared
-/// text and loads settings asynchronously and re-renders once both are
-/// known. `APPLICATION_EXTENSION_API_ONLY` (set on the target) means no
-/// `UIApplication.shared` anywhere in this file or in anything it calls.
+/// storyboard; builds a `ShareHost` (which owns the `EditorSession`,
+/// `ShareFlow`, and the extraction/settings-load task — `KallilexUI`,
+/// shared with the app's own DEBUG-only harness) and hosts a single
+/// `ShareHostView` through a `UIHostingController`, created once in
+/// `viewDidLoad`. `APPLICATION_EXTENSION_API_ONLY` (set on the target)
+/// means no `UIApplication.shared` anywhere in this file or in anything it
+/// calls.
 final class ShareViewController: UIViewController {
-    private var editorSession: EditorSession?
-    private var shareFlow: ShareFlow?
-    private var hostingController: UIHostingController<ShareRootView>?
-    private var extractionTask: Task<Void, Never>?
+    private var host: ShareHost?
+    private var hostingController: UIHostingController<ShareHostView>?
 
     /// `NSExtensionContext` must see exactly one `completeRequest` or
     /// `cancelRequest`. Close, Copy & Close (including its auto-copy
@@ -38,7 +38,13 @@ final class ShareViewController: UIViewController {
             // The App Group container itself is unavailable: there is no
             // settings to load and no profile to run against, so this is
             // the same user-facing failure as a settings-load error.
-            hostSettingsLoadError(extensionContext: extensionContext)
+            let errorHost = ShareHost.settingsError(session: EditorSession(
+                actionRunner: UnreachableActionRunner(),
+                pasteboard: ExtensionPasteboard(),
+                consentGranting: UnreachableConsentGranter()
+            ))
+            host = errorHost
+            hostView(errorHost)
             return
         }
 
@@ -55,43 +61,22 @@ final class ShareViewController: UIViewController {
                 settingsService: SettingsService(settings: settingsStore, secrets: secretStore)
             )
         )
-        let flow = ShareFlow()
-        editorSession = session
-        shareFlow = flow
+        let shareHost = ShareHost(session: session, load: { try settingsStore.load() })
+        host = shareHost
+        hostView(shareHost)
 
-        render(contentState: .loadingInput, settings: nil, session: session, shareFlow: flow)
-
-        extractionTask = Task { [weak self] in
-            let extractor = InputExtractor()
-            let extensionItems = extensionContext.inputItems.compactMap { $0 as? NSExtensionItem }
-            let text = await extractor.extract(from: extensionItems)
-
-            guard !Task.isCancelled else { return }
-            session.text = text
-
-            var loadedSettings: AppSettings?
-            var settingsLoadFailed = false
-            do {
-                loadedSettings = try settingsStore.load()
-            } catch {
-                settingsLoadFailed = true
-            }
-
-            guard !Task.isCancelled, let self else { return }
-            let contentState = flow.contentState(text: text, settingsLoadFailed: settingsLoadFailed)
-            self.render(contentState: contentState, settings: loadedSettings, session: session, shareFlow: flow)
-        }
+        let extensionItems = extensionContext.inputItems.compactMap { $0 as? NSExtensionItem }
+        shareHost.start(items: extensionItems)
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         // Belt-and-suspenders: `EditorSession`'s own `isolated deinit`
         // already cancels its in-flight run once nothing retains it, but
-        // the extraction `Task` and the session itself can otherwise both
-        // outlive the dismissed sheet for a moment — cancel explicitly
-        // rather than rely on deallocation timing.
-        extractionTask?.cancel()
-        editorSession?.cancel()
+        // `ShareHost`'s extraction task and the session itself can
+        // otherwise both outlive the dismissed sheet for a moment — cancel
+        // explicitly rather than rely on deallocation timing.
+        host?.cancel()
         // A dismissal that didn't come from Close or Copy & Close (e.g. an
         // interactive swipe) still has to end the request; a no-op once
         // either of those already did.
@@ -104,8 +89,7 @@ final class ShareViewController: UIViewController {
     private func finishRequest(cancelled: Bool) {
         guard !hasFinishedRequest else { return }
         hasFinishedRequest = true
-        extractionTask?.cancel()
-        editorSession?.cancel()
+        host?.cancel()
         if cancelled {
             extensionContext?.cancelRequest(
                 withError: NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)
@@ -115,36 +99,13 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    private func hostSettingsLoadError(extensionContext: NSExtensionContext) {
-        let session = EditorSession(
-            actionRunner: UnreachableActionRunner(),
-            pasteboard: ExtensionPasteboard(),
-            consentGranting: UnreachableConsentGranter()
-        )
-        let flow = ShareFlow()
-        editorSession = session
-        shareFlow = flow
-        render(contentState: .settingsError, settings: nil, session: session, shareFlow: flow)
-    }
-
-    private func render(
-        contentState: ShareContentState,
-        settings: AppSettings?,
-        session: EditorSession,
-        shareFlow: ShareFlow
-    ) {
-        let activeProfile: ProviderProfile?
-        if let settings, let activeID = settings.activeProfileID {
-            activeProfile = settings.profiles.first { $0.id == activeID && $0.enabled }
-        } else {
-            activeProfile = nil
-        }
-        let rootView = ShareRootView(
-            session: session,
-            shareFlow: shareFlow,
-            contentState: contentState,
-            settings: settings,
-            activeProfile: activeProfile,
+    /// Hosts a `ShareHostView` for `shareHost` through a `UIHostingController`,
+    /// created exactly once per `ShareViewController` — there is no later
+    /// re-render by swapping `rootView`; `ShareHostView` itself observes
+    /// `shareHost` and re-renders on every state change.
+    private func hostView(_ shareHost: ShareHost) {
+        let rootView = ShareHostView(
+            host: shareHost,
             onClose: { [weak self] in
                 self?.finishRequest(cancelled: true)
             },
@@ -152,11 +113,6 @@ final class ShareViewController: UIViewController {
                 self?.finishRequest(cancelled: false)
             }
         )
-
-        if let hostingController {
-            hostingController.rootView = rootView
-            return
-        }
 
         let hosting = UIHostingController(rootView: rootView)
         hosting.view.translatesAutoresizingMaskIntoConstraints = false

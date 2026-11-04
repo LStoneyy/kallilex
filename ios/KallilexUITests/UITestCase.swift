@@ -117,6 +117,28 @@ extension XCUIApplication {
         return candidates[0]
     }
 
+    /// Adds a custom provider (no API key) through the Providers tab and
+    /// returns to it afterward. It becomes the active provider
+    /// automatically if it's the first one added. Shared by
+    /// `ShareExtensionUITests`; mirrors `ScratchpadUITests`' own (private,
+    /// left alone) `addCustomProvider`.
+    @discardableResult
+    func addCustomProvider(name: String, baseUrl: String, model: String) -> XCUIApplication {
+        buttons["provider.add"].waitAndAssertExists().tap()
+        buttons["provider.preset.custom"].waitAndAssertExists().tap()
+
+        textFields["provider.editor.name"].waitAndAssertExists().clearAndTypeText(name)
+        let urlField = textFields["provider.editor.baseUrl"]
+        urlField.tap()
+        urlField.typeText(baseUrl)
+        let modelField = textFields["provider.editor.model"]
+        modelField.tap()
+        modelField.typeText(model)
+
+        buttons["provider.editor.save"].tap()
+        return self
+    }
+
     /// The tab bar button for one of `RootTabView`'s four tabs, found by
     /// its label rather than by its `tab.*` accessibility identifier.
     ///
