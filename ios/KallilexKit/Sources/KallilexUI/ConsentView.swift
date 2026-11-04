@@ -46,6 +46,7 @@ public struct ConsentView: View {
             ))
             .font(.body)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("consent.body")
 
             Spacer()

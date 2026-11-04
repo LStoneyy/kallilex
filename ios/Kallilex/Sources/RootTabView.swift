@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// Identifies one of `RootTabView`'s four tabs (ios-08), so a view below it
+/// (the Scratchpad's "Open Providers" action, on a not-configured or
+/// consent-required status) can switch tabs programmatically instead of
+/// only relying on the user tapping the tab bar.
+enum AppTab: Hashable {
+    case scratchpad, prompts, providers, settings
+}
+
 /// The four-tab shell (ios-06): Scratchpad, Prompts, Providers, Settings.
 /// Reloads settings whenever the scene becomes active, so it picks up
 /// consents or settings the Share Extension wrote while backgrounded, and
@@ -19,15 +27,22 @@ struct RootTabView: View {
     /// fighting it for the same instant.
     var suppressOnboardingCover: Bool = false
 
+    /// Which tab is selected. A real `@State`, not a constant, so the
+    /// Scratchpad's `onOpenProviders` (ios-08) can switch to `.providers`
+    /// programmatically when the editor shows its not-configured or
+    /// consent-required status.
+    @State private var selectedTab: AppTab = .scratchpad
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationStack {
-                ScratchpadView()
+                ScratchpadView(selectedTab: $selectedTab)
             }
             .tabItem {
                 Label(String(localized: "tab.scratchpad", defaultValue: "Scratchpad"), systemImage: "square.and.pencil")
             }
             .accessibilityIdentifier("tab.scratchpad")
+            .tag(AppTab.scratchpad)
 
             NavigationStack {
                 PromptListView()
@@ -36,6 +51,7 @@ struct RootTabView: View {
                 Label(String(localized: "tab.prompts", defaultValue: "Prompts"), systemImage: "text.quote")
             }
             .accessibilityIdentifier("tab.prompts")
+            .tag(AppTab.prompts)
 
             NavigationStack {
                 ProviderListView()
@@ -44,6 +60,7 @@ struct RootTabView: View {
                 Label(String(localized: "tab.providers", defaultValue: "Providers"), systemImage: "server.rack")
             }
             .accessibilityIdentifier("tab.providers")
+            .tag(AppTab.providers)
 
             NavigationStack {
                 SettingsView()
@@ -52,6 +69,7 @@ struct RootTabView: View {
                 Label(String(localized: "tab.settings", defaultValue: "Settings"), systemImage: "gearshape")
             }
             .accessibilityIdentifier("tab.settings")
+            .tag(AppTab.settings)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {

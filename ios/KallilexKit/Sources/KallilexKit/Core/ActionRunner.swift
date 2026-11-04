@@ -1,5 +1,14 @@
 import Foundation
 
+/// A testability seam over `ActionRunner.run(text:action:)` (ios-08):
+/// `EditorSession` depends on `any ActionRunning` rather than the concrete
+/// `ActionRunner`, so its tests can substitute a fake that resolves
+/// deterministically (including "stays pending until released") instead of
+/// going through real settings/secrets/network plumbing.
+public protocol ActionRunning: Sendable {
+    func run(text: String, action: Action) async -> RunOutcome
+}
+
 /// Outcome of a single `ActionRunner.run` call.
 public enum RunOutcome: Equatable, Sendable {
     case ok(String)
@@ -30,7 +39,7 @@ public struct UnavailableProvider: TextProvider {
 /// (`src-tauri/src/core/providers/mod.rs`): resolves the active, enabled
 /// profile, checks consent, reads the API key, calls the provider, and
 /// maps the result (or cancellation) onto `RunOutcome`.
-public struct ActionRunner: Sendable {
+public struct ActionRunner: ActionRunning, Sendable {
     public let settings: any SettingsStore
     public let secrets: any SecretStore
     public let makeProvider: @Sendable (ProviderProfile, String?) -> any TextProvider

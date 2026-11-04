@@ -24,7 +24,7 @@ let package = Package(
         ),
         .testTarget(
             name: "KallilexKitTests",
-            dependencies: ["KallilexKit"]
+            dependencies: ["KallilexKit", "KallilexUI"]
         ),
     ]
 )

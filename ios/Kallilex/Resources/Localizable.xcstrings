@@ -683,24 +683,13 @@
         }
       }
     },
-    "scratchpad.placeholder.message": {
+    "scratchpad.clear": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scratchpad editing is coming in a future update."
-          }
-        }
-      }
-    },
-    "scratchpad.placeholder.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scratchpad"
+            "value": "Clear"
           }
         }
       }
