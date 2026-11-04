@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Talks to any server implementing the OpenAI Chat Completions API shape
 /// (`POST {baseUrl}/chat/completions`) — the one adapter for every
@@ -103,59 +104,167 @@ public struct OpenAICompatibleProvider: TextProvider {
 
     // MARK: - Total deadline
 
-    private enum RaceResult: Sendable {
-        case response(Data, URLResponse)
-        case timedOut
+    /// Coordinates the race between the real request and the deadline timer
+    /// so exactly one of them ever resumes the continuation, and so a
+    /// cancellation arriving before either child exists is remembered and
+    /// honored once they do. All mutable state lives behind a `Mutex`;
+    /// `URLSessionDataTask` and `Task.cancel()` are safe to call from any
+    /// thread, which is the only thing done to them outside the lock.
+    ///
+    /// `@unchecked Sendable`: `CheckedContinuation` and `Task` are already
+    /// `Sendable`; `URLSessionDataTask` is a thread-safe Foundation
+    /// reference type but predates Swift 6 Sendable annotations on this
+    /// platform, so the compiler can't verify it — only `.cancel()` is ever
+    /// called on it, which is documented safe from any thread.
+    private final class DeadlineRace: @unchecked Sendable {
+        private struct State {
+            var finished = false
+            var cancelled = false
+            var dataTask: URLSessionDataTask?
+            var timeoutTask: Task<Void, Never>?
+            var continuation: CheckedContinuation<(Data, URLResponse), Error>?
+        }
+
+        private let state = Mutex(State())
+
+        /// Called once, synchronously, from inside the
+        /// `withCheckedThrowingContinuation` closure. If the caller's task
+        /// was already cancelled by the time this runs, resumes immediately
+        /// with `CancellationError`; otherwise stores the continuation for
+        /// `resume(with:)` or `cancelForTaskCancellation()` to find later.
+        func start(continuation: CheckedContinuation<(Data, URLResponse), Error>) {
+            let resumeNow = state.withLock { s -> Bool in
+                guard !s.finished else { return false }
+                if s.cancelled {
+                    s.finished = true
+                    return true
+                }
+                s.continuation = continuation
+                return false
+            }
+            if resumeNow {
+                continuation.resume(throwing: CancellationError())
+            }
+        }
+
+        /// Records the data task and the deadline timer once both exist, so
+        /// a cancellation observed earlier — while neither existed yet —
+        /// still reaches them here. Cancels both immediately if the race
+        /// was already decided by the time this runs.
+        func register(dataTask: URLSessionDataTask, timeoutTask: Task<Void, Never>) {
+            let shouldCancel = state.withLock { s -> Bool in
+                s.dataTask = dataTask
+                s.timeoutTask = timeoutTask
+                return s.finished || s.cancelled
+            }
+            if shouldCancel {
+                dataTask.cancel()
+                timeoutTask.cancel()
+            }
+        }
+
+        /// The data task's completion handler or the deadline timer
+        /// reporting its result. Only the first call does anything; it
+        /// tears down whichever of the two didn't win, so nothing is left
+        /// running past this call.
+        func resume(with result: Result<(Data, URLResponse), Error>) {
+            let (continuation, dataTask, timeoutTask) = state.withLock { s in
+                (consumeIfUnfinished(&s), s.dataTask, s.timeoutTask)
+            }
+            dataTask?.cancel()
+            timeoutTask?.cancel()
+            continuation?.resume(with: result)
+        }
+
+        /// `withTaskCancellationHandler`'s `onCancel`: the caller's own
+        /// `Task` was cancelled, not the deadline. Tears down both children
+        /// and resumes with `CancellationError` — unless the race was
+        /// already decided, in which case this only runs the (harmless,
+        /// idempotent) cleanup.
+        func cancelForTaskCancellation() {
+            let (continuation, dataTask, timeoutTask) = state.withLock { s -> (
+                CheckedContinuation<(Data, URLResponse), Error>?, URLSessionDataTask?, Task<Void, Never>?
+            ) in
+                s.cancelled = true
+                // `withTaskCancellationHandler` runs `onCancel` *before*
+                // the operation when the task is already cancelled. Then
+                // `start` hasn't stored the continuation yet: leave the
+                // race unfinished so `start` sees `cancelled` and resumes.
+                guard s.continuation != nil else {
+                    return (nil, s.dataTask, s.timeoutTask)
+                }
+                return (consumeIfUnfinished(&s), s.dataTask, s.timeoutTask)
+            }
+            dataTask?.cancel()
+            timeoutTask?.cancel()
+            continuation?.resume(throwing: CancellationError())
+        }
+
+        /// Marks the race finished and hands back the stored continuation,
+        /// unless it was already finished — must only be called with the
+        /// lock held.
+        private func consumeIfUnfinished(
+            _ s: inout State
+        ) -> CheckedContinuation<(Data, URLResponse), Error>? {
+            guard !s.finished else { return nil }
+            s.finished = true
+            let continuation = s.continuation
+            s.continuation = nil
+            return continuation
+        }
     }
 
     /// `URLRequest.timeoutInterval` (set above) is only an *idle* timeout —
     /// it resets on every byte received, so a server that trickles data
-    /// slowly enough never trips it. Desktop's `reqwest` timeout
-    /// (`RequestBuilder::timeout`) is a hard cap on the whole request
-    /// instead. This reproduces that hard cap by racing the real request
-    /// against a `Task.sleep` in a throwing task group and cancelling
-    /// whichever loses — the loser is always cancelled via `defer`, so
-    /// nothing is left running past this call.
+    /// slowly enough never trips it, and it offers no guarantee about how
+    /// quickly a cancelled request actually stops running. Desktop's
+    /// `reqwest` timeout (`RequestBuilder::timeout`) is a hard cap on the
+    /// whole request instead. This reproduces that hard cap with a
+    /// `URLSessionDataTask` (completion-handler based, so it can be
+    /// cancelled and simply abandoned — never awaited) raced against a
+    /// `Task.sleep` timer, bridged into `async` with
+    /// `withCheckedThrowingContinuation`. Whichever finishes first resumes
+    /// the continuation and cancels the other; crucially, nothing here
+    /// *awaits* the loser, so this function returns at the deadline
+    /// regardless of how long the cancelled request takes to actually wind
+    /// down.
     ///
-    /// Caller cancellation (the enclosing `Task`) must still surface as
-    /// `CancellationError`, never `.timeout`: structured concurrency
-    /// propagates that cancellation into both child tasks, so either one
-    /// might be the one `group.next()` observes first — the sleep task as
-    /// a thrown `CancellationError`, the network task as a thrown
-    /// `URLError(.cancelled)`. Both are normalized to `CancellationError`
-    /// here; only a *naturally completed* sleep (the deadline actually
-    /// elapsing, uncancelled) is treated as a real timeout.
+    /// Caller cancellation (the enclosing `Task`) is handled by
+    /// `withTaskCancellationHandler`, which fires as soon as cancellation
+    /// happens — not when the next suspension point is reached — so it
+    /// surfaces as `CancellationError` immediately rather than racing the
+    /// deadline or the request.
     private static func sendWithDeadline(
         request: URLRequest,
         session: URLSession,
         timeoutSecs: Int
     ) async throws -> (Data, URLResponse) {
-        try await withThrowingTaskGroup(of: RaceResult.self) { group in
-            group.addTask {
-                let (data, response) = try await session.data(for: request)
-                return .response(data, response)
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(timeoutSecs))
-                return .timedOut
-            }
-            defer { group.cancelAll() }
+        let race = DeadlineRace()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(Data, URLResponse), Error>) in
+                race.start(continuation: continuation)
 
-            do {
-                guard let first = try await group.next() else {
-                    throw ProviderError.invalidResponse("no result from the request or its deadline")
+                let dataTask = session.dataTask(with: request) { data, response, error in
+                    if let error {
+                        race.resume(with: .failure(error))
+                    } else if let data, let response {
+                        race.resume(with: .success((data, response)))
+                    } else {
+                        race.resume(with: .failure(ProviderError.invalidResponse("no data or response")))
+                    }
                 }
-                switch first {
-                case .response(let data, let response):
-                    return (data, response)
-                case .timedOut:
-                    throw ProviderError.timeout(timeoutSecs)
+
+                let timeoutTask = Task {
+                    try? await Task.sleep(for: .seconds(timeoutSecs))
+                    guard !Task.isCancelled else { return }
+                    race.resume(with: .failure(ProviderError.timeout(timeoutSecs)))
                 }
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch let urlError as URLError where urlError.code == .cancelled {
-                throw CancellationError()
+
+                race.register(dataTask: dataTask, timeoutTask: timeoutTask)
+                dataTask.resume()
             }
+        } onCancel: {
+            race.cancelForTaskCancellation()
         }
     }
 

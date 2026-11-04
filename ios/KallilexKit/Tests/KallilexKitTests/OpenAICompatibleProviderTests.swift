@@ -426,6 +426,25 @@ struct OpenAICompatibleProviderTests {
         #expect(elapsed < .seconds(5), "expected the deadline to fire within a few seconds, took \(elapsed)")
     }
 
+    @Test func aResponseArrivingJustBeforeTheDeadlineIsNotATimeout() async throws {
+        let base = StubURLProtocol.uniqueBaseURL()
+        let endpoint = expectedEndpoint(from: base.absoluteString)
+        // A generous margin between the response's delay and the profile's
+        // deadline (300 ms vs. 3 s) so this isn't flaky under a loaded test
+        // runner — the point is "arrives before the deadline", not "arrives
+        // at the last possible instant".
+        StubURLProtocol.stub(endpoint, body: successBody("just in time"), delay: .milliseconds(300))
+
+        let provider = makeProvider(profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 3))
+        let clock = ContinuousClock()
+        let start = clock.now
+        let result = try await provider.complete(systemPrompt: "s", userText: "u")
+        let elapsed = clock.now - start
+
+        #expect(result == "just in time")
+        #expect(elapsed < .seconds(3), "expected the real response to win the race, took \(elapsed)")
+    }
+
     @Test func cancellingTheCallerDuringAHangIsCancellationNotTimeout() async throws {
         let base = StubURLProtocol.uniqueBaseURL()
         let endpoint = expectedEndpoint(from: base.absoluteString)

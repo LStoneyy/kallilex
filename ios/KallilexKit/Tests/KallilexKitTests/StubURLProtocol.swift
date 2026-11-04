@@ -25,6 +25,11 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         /// `Task` cancellation), for deterministically testing both of
         /// those without a real server that's merely slow.
         var hang: Bool = false
+        /// When set, the response is delivered only after this delay
+        /// instead of synchronously from `startLoading()` — for
+        /// deterministically testing a response that lands just before (or
+        /// after) a deadline, without a real server that's merely slow.
+        var delay: Duration?
     }
 
     struct RecordedRequest: Sendable {
@@ -40,10 +45,11 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         statusCode: Int = 200,
         body: Data = Data(),
         errorCode: URLError.Code? = nil,
-        hang: Bool = false
+        hang: Bool = false,
+        delay: Duration? = nil
     ) {
         registry.withLock {
-            $0[url] = CannedResponse(statusCode: statusCode, body: body, errorCode: errorCode, hang: hang)
+            $0[url] = CannedResponse(statusCode: statusCode, body: body, errorCode: errorCode, hang: hang, delay: delay)
         }
     }
 
@@ -114,6 +120,28 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
             return
         }
 
+        if let delay = canned.delay {
+            // A real stuck-then-answers server: nothing happens until the
+            // delay elapses, then the response (or error) is delivered
+            // exactly as it would be synchronously below. Dispatched via
+            // GCD rather than an unstructured `Task` — a `Task`'s closure
+            // is a `sending` parameter, which the compiler rejects here
+            // because `self` (a live `URLProtocol` the session still
+            // holds) can't be proven disconnected from the current
+            // context; `DispatchQueue` has no such requirement, and
+            // `StubURLProtocol`'s `@unchecked Sendable` already vouches
+            // for `self` being safe to touch from another thread.
+            let seconds = Double(delay.components.seconds) + Double(delay.components.attoseconds) / 1e18
+            DispatchQueue.global().asyncAfter(deadline: .now() + seconds) {
+                self.deliver(canned, url: url)
+            }
+            return
+        }
+
+        deliver(canned, url: url)
+    }
+
+    private func deliver(_ canned: CannedResponse, url: URL) {
         if let errorCode = canned.errorCode {
             client?.urlProtocol(self, didFailWithError: URLError(errorCode))
             return
@@ -130,6 +158,10 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         client?.urlProtocolDidFinishLoading(self)
     }
 
+    /// Deliberately does nothing — a cancelled request to a genuinely
+    /// stuck server doesn't tell the client anything either; it just stops
+    /// mattering once the client has moved on. Production code (the
+    /// deadline race) must not rely on this ever being called.
     override func stopLoading() {}
 
     /// `URLRequest.httpBody` is `nil` for a request that arrives via
