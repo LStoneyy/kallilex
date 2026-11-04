@@ -671,6 +671,23 @@ h1 .accent {
   margin: 0;
 }
 
+/* Platforms (iPhone teaser) ------------------------------------------- */
+
+.platforms {
+  padding: 5rem 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.platforms__body {
+  max-width: 42rem;
+  margin: 0 auto;
+  color: var(--ash);
+}
+
+.platforms__body strong {
+  color: inherit;
+}
+
 /* Install --------------------------------------------------------------- */
 
 .install {

@@ -89,6 +89,33 @@ Provider API keys are stored in Windows Credential Manager — never written to 
 
 Two honest limitations: apps running as administrator (elevated) are off-limits to Kallilex, because Windows' User Interface Privilege Isolation (UIPI) blocks synthetic input and accessibility reads across integrity levels — capture reports no selection and Replace reports a clear failure rather than silently doing nothing; and apps that expose no accessible text (some Electron and custom-toolkit apps) fall back to the synthetic-copy capture path described below.
 
+## iOS
+
+Kallilex is coming to iPhone. The iOS version works as a share extension: select text in any app, tap Share → Kallilex, run a rewrite prompt, and paste the result back — all without leaving your writing app.
+
+The iOS app supports any OpenAI-compatible provider, and on eligible devices (iPhone 15 Pro, iPhone 15 Pro Max, or iPhone 16 and later with Apple Intelligence enabled) you can use the on-device model with no API key required.
+
+**To build it yourself:**
+
+The iOS app lives in the `ios/` directory. It requires:
+
+- Xcode 26 or later
+- iOS deployment target 26
+- Swift 6
+
+To build and run:
+
+1. Open `ios/Kallilex.xcodeproj` in Xcode.
+2. Copy `ios/Config/Local.xcconfig.example` to `ios/Config/Local.xcconfig` and set your `DEVELOPMENT_TEAM`.
+3. Select the Kallilex scheme and run on a simulator or connected device.
+
+The app uses a local Swift package (`ios/KallilexKit`) for shared logic and has no external dependencies beyond the standard library. To run tests:
+
+- Run `xcodebuild test -scheme KallilexKit-Package` in `ios/KallilexKit` for unit tests.
+- Run the `Kallilex` scheme with testing enabled in Xcode for app and UI tests.
+
+The source is Apache-2.0 licensed.
+
 ## Updates
 
 Kallilex can update itself. It checks [GitHub Releases](../../releases) for a newer version and, when there is one, says so in the tray menu and in **Settings → Updates**. There you can also:
