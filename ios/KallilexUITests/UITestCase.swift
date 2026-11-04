@@ -10,6 +10,22 @@ import XCTest
 /// survived, so the reset doesn't wipe out what the first launch wrote.
 @MainActor
 class KallilexUITestCase: XCTestCase {
+    /// The process language `launchApp` forces via `-AppleLanguages`/
+    /// `-AppleLocale` (ios-11). `.english` is the default for every test
+    /// written before ios-11 and keeps `tabButton(_:)`'s English label
+    /// match stable; `.german` is for `GermanLocalizationUITests` only.
+    enum Language {
+        case english
+        case german
+
+        var launchArguments: [String] {
+            switch self {
+            case .english: return ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+            case .german: return ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+            }
+        }
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -27,16 +43,22 @@ class KallilexUITestCase: XCTestCase {
     /// `OnboardingUITests` is the one caller that passes `skipOnboarding:
     /// false`, to actually exercise the first-run cover.
     ///
-    /// Always forces English (`-AppleLanguages (en) -AppleLocale en_US`),
-    /// regardless of the simulator's own language setting. `tabButton(_:)`
-    /// below matches tab bar buttons by their (untranslated) English label
-    /// — forcing the process language here keeps that match stable once
-    /// ios-11 adds German, rather than depending on whatever language the
-    /// CI runner's simulator happens to default to.
+    /// Forces `language` (`.english` by default, `-AppleLanguages (en)
+    /// -AppleLocale en_US`), regardless of the simulator's own language
+    /// setting. `tabButton(_:)` below matches tab bar buttons by their
+    /// (untranslated) English label — forcing the process language here
+    /// keeps that match stable for every test that doesn't opt into
+    /// `.german`, rather than depending on whatever language the CI
+    /// runner's simulator happens to default to.
     @discardableResult
-    func launchApp(resetState: Bool = true, skipOnboarding: Bool = true, extraArguments: [String] = []) -> XCUIApplication {
+    func launchApp(
+        resetState: Bool = true,
+        skipOnboarding: Bool = true,
+        language: Language = .english,
+        extraArguments: [String] = []
+    ) -> XCUIApplication {
         let app = XCUIApplication()
-        var arguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        var arguments = language.launchArguments
         if resetState {
             arguments.append("-uiTestResetState")
         }

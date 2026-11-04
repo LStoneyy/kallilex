@@ -1,0 +1,35 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "CFBundleDisplayName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex"
+          }
+        }
+      },
+      "shouldTranslate": false
+    },
+    "NSLocalNetworkUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex verbindet sich mit KI-Servern in deinem lokalen Netzwerk, etwa mit Ollama auf deinem Mac, sobald du einen einrichtest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex connects to AI servers on your local network, such as Ollama on your Mac, when you set one up."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

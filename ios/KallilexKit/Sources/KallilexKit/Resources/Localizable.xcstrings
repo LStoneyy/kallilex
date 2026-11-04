@@ -4,6 +4,12 @@
     "error.contextTooLong": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Text ist zu lang für das Kontextfenster dieses Modells. Versuche eine kürzere Auswahl."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -15,6 +21,12 @@
     "error.declined": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell auf dem Gerät hat die Verarbeitung dieses Texts abgelehnt — versuche eine andere Formulierung oder eine kürzere Auswahl."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -26,6 +38,12 @@
     "error.http": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server hat mit HTTP %lld geantwortet: %@"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -37,6 +55,12 @@
     "error.invalidBaseUrl": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Basis-URL ist ungültig: %@"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -48,6 +72,12 @@
     "error.invalidResponse": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server hat eine unerwartete Antwort gesendet: %@"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -59,6 +89,12 @@
     "error.localNetworkDenied": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex darf nicht auf dein lokales Netzwerk zugreifen. Aktiviere für Kallilex den Zugriff auf das lokale Netzwerk unter Einstellungen → Datenschutz & Sicherheit → Lokales Netzwerk."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -70,6 +106,12 @@
     "error.missingModel": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für dieses Profil ist kein Modell eingerichtet — richte eines in den Einstellungen ein."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -81,6 +123,12 @@
     "error.timeout": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage hat nach %lld s das Zeitlimit überschritten — der Endpunkt ist möglicherweise langsam oder überlastet."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -98,11 +146,18 @@
             "value": "%@"
           }
         }
-      }
+      },
+      "shouldTranslate": false
     },
     "error.unreachable": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endpunkt nicht erreichbar — läuft der Server? (%@)"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -114,6 +169,12 @@
     "ondevice.error.busy": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell auf dem Gerät ist gerade ausgelastet. Versuche es gleich noch einmal."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -125,6 +186,12 @@
     "ondevice.error.unsupportedLanguage": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Sprache wird vom Modell auf dem Gerät nicht unterstützt."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -136,6 +203,12 @@
     "ondevice.reason.appleIntelligenceNotEnabled": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiviere Apple Intelligence in den Einstellungen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -147,6 +220,12 @@
     "ondevice.reason.deviceNotEligible": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät unterstützt Apple Intelligence nicht."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -158,6 +237,12 @@
     "ondevice.reason.modelNotReady": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell wird noch heruntergeladen oder ist noch nicht bereit."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -169,6 +254,12 @@
     "ondevice.reason.unavailableOther": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence ist nicht verfügbar."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -180,6 +271,12 @@
     "ondevice.status.ready": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereit"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -191,6 +288,12 @@
     "privacy.cloud": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud: %@"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -202,6 +305,12 @@
     "privacy.lan": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Netzwerk"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -213,6 +322,12 @@
     "privacy.local": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -224,6 +339,12 @@
     "privacy.onDevice": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Gerät"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -235,6 +356,12 @@
     "privacy.unsupported": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht unterstützt"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -246,6 +373,12 @@
     "prompt.default.improveClarity": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klarer formulieren"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -257,6 +390,12 @@
     "prompt.default.rewrite": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umschreiben"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -268,6 +407,12 @@
     "prompt.default.shorten": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kürzen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -279,6 +424,12 @@
     "prompt.validation.blank": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bezeichnung und Anweisung sind erforderlich."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -290,6 +441,12 @@
     "provider.apple.onDevice": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence (auf dem Gerät)"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -301,6 +458,12 @@
     "provider.custom": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benutzerdefiniert"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -312,6 +475,12 @@
     "provider.hint.localNetwork": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS fragt beim ersten Verwenden dieses Anbieters nach dem Zugriff auf das lokale Netzwerk."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -323,6 +492,12 @@
     "provider.lmstudio": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LM Studio auf deinem Mac"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -334,6 +509,12 @@
     "provider.ollama": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ollama auf deinem Mac"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -351,11 +532,18 @@
             "value": "OpenAI"
           }
         }
-      }
+      },
+      "shouldTranslate": false
     },
     "provider.validation.blankModel": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modell ist erforderlich."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -367,6 +555,12 @@
     "provider.validation.blankName": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name ist erforderlich."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -378,6 +572,12 @@
     "provider.validation.invalidBaseUrl": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib eine gültige http:// oder https:// URL ein."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -389,6 +589,12 @@
     "provider.warning.insecureUrl": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS erlaubt http:// nur in deinem lokalen Netzwerk. Verwende für diesen Server https://."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",

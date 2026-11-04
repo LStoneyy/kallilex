@@ -4,6 +4,12 @@
     "consent.allow": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlauben"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -15,6 +21,12 @@
     "consent.body": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn du einen Prompt ausführst, werden der geteilte Text und die Anweisung des Prompts zur Verarbeitung an %@ (%@) gesendet. Kallilex selbst sammelt oder speichert deinen Text nicht; es gilt die Datenschutzerklärung des Anbieters."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -26,6 +38,12 @@
     "consent.notNow": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht jetzt"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -37,6 +55,12 @@
     "consent.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text an %@ senden?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -48,6 +72,12 @@
     "editor.cancel": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -59,6 +89,12 @@
     "editor.consent.declined": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wurde nichts gesendet."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -70,6 +106,12 @@
     "editor.consent.saveFailed": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Auswahl konnte nicht gespeichert werden. Versuche es erneut."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -81,6 +123,12 @@
     "editor.copied": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiert"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -92,6 +140,12 @@
     "editor.copy": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopieren"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -103,6 +157,12 @@
     "editor.done": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -114,6 +174,12 @@
     "editor.label": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -125,6 +191,12 @@
     "editor.notConfigured.action": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter öffnen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -136,6 +208,12 @@
     "editor.notConfigured.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richte in Kallilex einen KI-Anbieter ein, um Prompts auszuführen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -147,6 +225,12 @@
     "editor.notConfigured.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Anbieter eingerichtet"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -158,6 +242,12 @@
     "editor.retry": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut versuchen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -169,6 +259,12 @@
     "editor.running": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ wird ausgeführt…"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -180,6 +276,12 @@
     "editor.showOriginal": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original anzeigen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -191,6 +293,12 @@
     "editor.textTooLong": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lange Texte können langsam sein oder das Limit des Modells überschreiten."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -202,6 +310,12 @@
     "editor.undo": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widerrufen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -213,6 +327,12 @@
     "extension.close": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -224,6 +344,12 @@
     "extension.copyAndClose": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopieren & schließen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -235,6 +361,12 @@
     "extension.empty.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markiere zuerst den Text und tippe dann auf Teilen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -246,6 +378,12 @@
     "extension.empty.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex benötigt markierten Text"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -257,6 +395,12 @@
     "extension.notConfigured.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne die Kallilex-App, um einen Anbieter einzurichten."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -268,6 +412,12 @@
     "extension.pasteHint": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markiere nach dem Kopieren den ursprünglichen Text erneut und füge ihn ein."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -279,6 +429,12 @@
     "extension.settingsError.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex konnte die Einstellungen nicht lesen. Öffne die Kallilex-App, um das zu beheben."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -290,6 +446,12 @@
     "privacyBadge.detail.cloud": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird über das Internet an einen Cloud-Server gesendet."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -301,6 +463,12 @@
     "privacyBadge.detail.lan": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird an einen Server in deinem Netzwerk gesendet. Nichts verlässt dein Netzwerk."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -312,6 +480,12 @@
     "privacyBadge.detail.local": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird auf diesem Gerät verarbeitet. Nichts verlässt dein Gerät."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -323,6 +497,12 @@
     "privacyBadge.detail.onDevice": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird vollständig mit Apples Modell auf dem Gerät verarbeitet. Nichts verlässt dein Gerät."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -334,6 +514,12 @@
     "privacyBadge.detail.unsupported": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Anbietertyp wird von dieser Version von Kallilex nicht unterstützt."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -345,6 +531,12 @@
     "prompt.custom": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene…"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -356,6 +548,12 @@
     "prompt.custom.label": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Anweisung"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -367,6 +565,12 @@
     "prompt.custom.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Anweisung…"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -378,6 +582,12 @@
     "shareSheetGuide.step1": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markiere Text in einer beliebigen App und tippe auf Teilen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -389,6 +599,12 @@
     "shareSheetGuide.step2": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wische die App-Reihe bis zum Ende und tippe auf „Mehr“."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -400,6 +616,12 @@
     "shareSheetGuide.step3": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf „Bearbeiten“."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -411,6 +633,12 @@
     "shareSheetGuide.step4": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge Kallilex zu den Favoriten hinzu."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -422,6 +650,12 @@
     "shareSheetGuide.step5": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex erscheint jetzt am Anfang der Reihe."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",

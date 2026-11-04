@@ -4,6 +4,12 @@
     "action.add": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzufügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -15,6 +21,12 @@
     "action.cancel": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -26,6 +38,12 @@
     "action.close": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -37,6 +55,12 @@
     "action.delete": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -48,6 +72,12 @@
     "action.ok": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -59,6 +89,12 @@
     "action.save": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichern"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -70,6 +106,12 @@
     "corruption.alert.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex konnte die Einstellungen nicht lesen und hat sie zurückgesetzt. Die alte Einstellungsdatei wurde zur Fehlersuche aufbewahrt."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -81,6 +123,12 @@
     "corruption.alert.ok": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -92,6 +140,12 @@
     "corruption.alert.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen wiederhergestellt"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -103,6 +157,12 @@
     "error.alert.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etwas ist schiefgelaufen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -114,6 +174,12 @@
     "onboarding.continue": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -125,6 +191,12 @@
     "onboarding.done.start": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex jetzt nutzen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -136,6 +208,12 @@
     "onboarding.done.subtitle": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex ist bereit. Wechsle in eine beliebige App, markiere Text, tippe auf Teilen und wähle Kallilex."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -147,6 +225,12 @@
     "onboarding.done.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles bereit!"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -158,6 +242,12 @@
     "onboarding.provider.keepCurrent": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktuellen Anbieter behalten (%@)"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -169,6 +259,12 @@
     "onboarding.provider.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter auswählen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -180,6 +276,12 @@
     "onboarding.setUpLater": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Später einrichten"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -191,6 +293,12 @@
     "onboarding.testConnection.success": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ Verbindung erfolgreich"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -202,6 +310,12 @@
     "onboarding.testConnection.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung wird getestet"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -213,6 +327,12 @@
     "onboarding.welcome.step1": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markiere Text in einer beliebigen App."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -224,6 +344,12 @@
     "onboarding.welcome.step2": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf Teilen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -235,6 +361,12 @@
     "onboarding.welcome.step3": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf Kallilex."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -246,6 +378,12 @@
     "onboarding.welcome.subtitle": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutze KI, um Text direkt in jeder App umzuschreiben."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -257,6 +395,12 @@
     "onboarding.welcome.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Willkommen bei Kallilex"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -268,6 +412,12 @@
     "prompt.add.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt hinzufügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -279,6 +429,12 @@
     "prompt.delete.confirm.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ löschen?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -290,6 +446,12 @@
     "prompt.edit.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt bearbeiten"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -301,6 +463,12 @@
     "prompt.empty.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Prompts. Tippe auf Hinzufügen, um einen zu erstellen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -312,6 +480,12 @@
     "prompt.instruction.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was soll Kallilex tun?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -323,6 +497,12 @@
     "prompt.label.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt-Name"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -334,6 +514,12 @@
     "prompt.restoreDefaults": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard-Prompts wiederherstellen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -345,6 +531,12 @@
     "prompt.restoreDefaults.confirm.button": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiederherstellen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -356,6 +548,12 @@
     "prompt.restoreDefaults.confirm.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard-Prompts wiederherstellen?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -367,6 +565,12 @@
     "provider.add.button": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter hinzufügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -378,6 +582,12 @@
     "provider.apiKey.pasteAndSave": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einfügen und speichern"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -389,6 +599,12 @@
     "provider.apiKey.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API-Schlüssel einfügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -400,6 +616,12 @@
     "provider.apiKey.remove": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -411,6 +633,12 @@
     "provider.apiKey.replace": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersetzen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -422,6 +650,12 @@
     "provider.apiKey.saved": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API-Schlüssel auf diesem Gerät gespeichert"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -433,6 +667,12 @@
     "provider.apiKey.withheldForTest": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gespeicherte API-Schlüssel wird nur an %@ gesendet. Ersetze ihn, um die neue Adresse zu testen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -444,6 +684,12 @@
     "provider.availability": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verfügbarkeit"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -455,6 +701,12 @@
     "provider.availability.checking": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird geprüft…"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -466,6 +718,12 @@
     "provider.baseUrl.label": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basis-URL"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -483,11 +741,18 @@
             "value": "https://api.example.com/v1"
           }
         }
-      }
+      },
+      "shouldTranslate": false
     },
     "provider.customHeaders.add": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Header hinzufügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -499,6 +764,12 @@
     "provider.customHeaders.name.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Header-Name"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -510,6 +781,12 @@
     "provider.customHeaders.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benutzerdefinierte Header"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -521,6 +798,12 @@
     "provider.customHeaders.value.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Header-Wert"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -532,6 +815,12 @@
     "provider.delete.confirm.keyWarning": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der auf diesem Gerät gespeicherte API-Schlüssel wird ebenfalls gelöscht."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -543,6 +832,12 @@
     "provider.delete.confirm.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ löschen?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -554,6 +849,12 @@
     "provider.empty.message": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Anbieter. Tippe auf Hinzufügen, um einen einzurichten."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -565,6 +866,12 @@
     "provider.enabled": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiviert"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -576,6 +883,12 @@
     "provider.model.label": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modell"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -593,11 +906,18 @@
             "value": "gpt-4-turbo"
           }
         }
-      }
+      },
+      "shouldTranslate": false
     },
     "provider.name.label": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -609,6 +929,12 @@
     "provider.name.placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -620,6 +946,12 @@
     "provider.preset.picker.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter hinzufügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -631,6 +963,12 @@
     "provider.setActive": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Anbieter verwenden"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -642,6 +980,12 @@
     "provider.testConnection": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbindung testen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -653,6 +997,12 @@
     "provider.testConnection.success": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ Verbindung erfolgreich"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -664,6 +1014,12 @@
     "provider.timeout": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeitlimit für Anfragen (s)"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -675,6 +1031,12 @@
     "provider.unknownKind.notice": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Anbietertyp wird von dieser Version von Kallilex nicht unterstützt."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -686,6 +1048,12 @@
     "scratchpad.clear": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leeren"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -697,6 +1065,12 @@
     "settings.about.heading": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -708,6 +1082,12 @@
     "settings.about.licenses": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lizenzen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -719,6 +1099,12 @@
     "settings.about.privacyPolicy": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenschutzerklärung"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -730,6 +1116,12 @@
     "settings.about.sourceCode": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellcode"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -741,6 +1133,12 @@
     "settings.about.version": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@ (Build %@)"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -752,6 +1150,12 @@
     "settings.about.website": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Website"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -763,6 +1167,12 @@
     "settings.auto.footer": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur im Teilen-Menü."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -774,6 +1184,12 @@
     "settings.autoCopy": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch kopieren und schließen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -785,6 +1201,12 @@
     "settings.autoRun": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersten Prompt automatisch ausführen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -796,6 +1218,12 @@
     "settings.consents.deletedProvider": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gelöschter Anbieter"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -807,6 +1235,12 @@
     "settings.consents.empty": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine aktiven Zustimmungen."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -818,6 +1252,12 @@
     "settings.consents.heading": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KI-Datenweitergabe"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -829,6 +1269,12 @@
     "settings.consents.revoke.confirm.button": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widerrufen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -840,6 +1286,12 @@
     "settings.consents.revoke.confirm.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zustimmung für %@ widerrufen?"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -851,6 +1303,12 @@
     "settings.licenses.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lizenzen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -862,6 +1320,12 @@
     "settings.shareSheetGuide.body": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne das Teilen-Menü in einer beliebigen App (das Quadrat mit dem Pfeil nach oben), scrolle die obere App-Reihe bis zum Ende, tippe auf „Mehr“, aktiviere dann Kallilex und ziehe es nach oben in deine Favoriten."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -873,6 +1337,12 @@
     "settings.shareSheetGuide.button": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So fügst du Kallilex zum Teilen-Menü hinzu"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -884,6 +1354,12 @@
     "settings.shareSheetGuide.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex zum Teilen-Menü hinzufügen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -895,6 +1371,12 @@
     "settings.showOnboarding": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrichtung erneut anzeigen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -906,6 +1388,12 @@
     "startup.error.appGroupUnavailable": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex konnte nicht auf den gemeinsamen Speicher zugreifen. Versuche, die App neu zu installieren."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -917,6 +1405,12 @@
     "startup.error.generic": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex konnte die Einstellungen nicht laden. Versuche, die App neu zu starten."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -928,6 +1422,12 @@
     "startup.error.title": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex konnte nicht gestartet werden"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -939,6 +1439,12 @@
     "startup.error.unsupportedSchemaVersion": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Einstellungen wurden von einer neueren Version von Kallilex gespeichert. Aktualisiere die App, um fortzufahren."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -950,6 +1456,12 @@
     "tab.prompts": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompts"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -961,6 +1473,12 @@
     "tab.providers": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -972,6 +1490,12 @@
     "tab.scratchpad": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notizblock"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -983,6 +1507,12 @@
     "tab.settings": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
