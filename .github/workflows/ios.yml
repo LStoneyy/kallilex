@@ -107,3 +107,15 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Verify the privacy manifests
+        run: |
+          plutil -lint ios/Kallilex/Resources/PrivacyInfo.xcprivacy
+          plutil -lint ios/ShareExtension/Resources/PrivacyInfo.xcprivacy
+          APP_PATH="ios/build/app/Build/Products/Debug-iphonesimulator/Kallilex.app"
+          for BUNDLE in "$APP_PATH" "$APP_PATH/PlugIns/ShareExtension.appex"; do
+            if [ ! -f "$BUNDLE/PrivacyInfo.xcprivacy" ]; then
+              echo "PrivacyInfo.xcprivacy is missing from $BUNDLE"
+              exit 1
+            fi
+          done
