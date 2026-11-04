@@ -39,10 +39,12 @@ final class PromptsUITests: KallilexUITestCase {
 
         // Drag from near the trailing edge of the first row (where the
         // reorder handle sits in edit mode) to just below the second row,
-        // moving "Rewrite" past "Shorten".
+        // moving "Rewrite" past "Shorten". Dragging slowly and holding before
+        // the release lets the list settle on slow CI runners, where a fast
+        // drop sometimes left the order unchanged.
         let from = rewriteRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
         let to = shortenRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9))
-        from.press(forDuration: 0.5, thenDragTo: to)
+        from.press(forDuration: 0.5, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.5)
 
         app.navigationBars.buttons["Done"].waitAndAssertExists().tap()
 
