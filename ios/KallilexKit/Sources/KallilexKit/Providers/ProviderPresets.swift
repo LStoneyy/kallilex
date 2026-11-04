@@ -70,3 +70,24 @@ public func providerPresets() -> [ProviderPreset] {
         ),
     ]
 }
+
+/// `providerPresets()`, filtered to the ones actually worth offering right
+/// now (ios-10). Every `.openAICompatible` preset is always offered; the
+/// `appleOnDevice` preset is offered unless `onDeviceAvailability` is
+/// `.deviceNotEligible` (PLAN.md §18 Q4: the preset still shows up when
+/// Apple Intelligence is merely disabled or still downloading, so the user
+/// can create the profile and see why from its availability status row),
+/// or a profile of that kind already exists — at most one on-device
+/// profile at a time. Shared by `ProviderPresetPickerView` (the Providers
+/// tab's "Add provider" sheet) and `OnboardingView`'s "choose a provider"
+/// step, so the two pickers can never disagree.
+public func offeredProviderPresets(
+    existingProfiles: [ProviderProfile],
+    onDeviceAvailability: OnDeviceAvailability
+) -> [ProviderPreset] {
+    providerPresets().filter { preset in
+        guard preset.kind == .appleOnDevice else { return true }
+        guard onDeviceAvailability != .deviceNotEligible else { return false }
+        return !existingProfiles.contains { $0.kind == .appleOnDevice }
+    }
+}

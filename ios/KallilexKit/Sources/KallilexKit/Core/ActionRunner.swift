@@ -20,9 +20,9 @@ public enum RunOutcome: Equatable, Sendable {
 
 /// A `TextProvider` that always fails with `.unavailable(reason:)`. Used by
 /// `ActionRunner.defaultProviderFactory` for provider kinds this build
-/// can't actually talk to yet: `.appleOnDevice` (ios-10 replaces this with
-/// a real on-device implementation) and the unreachable fallback for
-/// `.unknown`, which `ActionRunner` never actually calls into (see below).
+/// can't actually talk to: the unreachable fallback for `.unknown`, which
+/// `ActionRunner` never actually calls into (see below). `.appleOnDevice`
+/// used this before ios-10 added `AppleOnDeviceProvider`.
 public struct UnavailableProvider: TextProvider {
     public let reason: String
 
@@ -51,11 +51,13 @@ public struct ActionRunner: ActionRunning, Sendable {
         "This provider type isn't supported by this version of Kallilex."
 
     /// The production provider factory: `.openAICompatible` talks to
-    /// `OpenAICompatibleProvider`; `.appleOnDevice` is not implemented yet
-    /// (ios-10) and always fails with `.unavailable`; `.unknown` is never
-    /// actually passed to this closure — `run`/`testConnection` short-
-    /// circuit it first — but still maps to a safe fallback rather than
-    /// crashing if that ever changes.
+    /// `OpenAICompatibleProvider`; `.appleOnDevice` talks to
+    /// `AppleOnDeviceProvider` (ios-10), with its own default
+    /// `DefaultOnDeviceModel` — the same code path the app and the Share
+    /// Extension both use, with no extension-specific branch; `.unknown` is
+    /// never actually passed to this closure — `run`/`testConnection`
+    /// short-circuit it first — but still maps to a safe fallback rather
+    /// than crashing if that ever changes.
     public static let defaultProviderFactory: @Sendable (
         ProviderProfile,
         String?
@@ -64,7 +66,7 @@ public struct ActionRunner: ActionRunning, Sendable {
         case .openAICompatible:
             return OpenAICompatibleProvider(profile: profile, apiKey: apiKey, session: OpenAICompatibleProvider.defaultSession)
         case .appleOnDevice:
-            return UnavailableProvider(reason: "Apple on-device AI isn't available yet.")
+            return AppleOnDeviceProvider()
         case .unknown:
             return UnavailableProvider(reason: ActionRunner.unsupportedProviderKindReason)
         }
@@ -135,11 +137,23 @@ public struct ActionRunner: ActionRunning, Sendable {
     /// and without a consent check (no user text is sent, just a system
     /// prompt), so the Providers screen can verify setup before going
     /// live.
+    ///
+    /// `AppleOnDeviceProvider` is special-cased to an availability-only
+    /// check (ios-10): a full on-device round trip takes about 10 s (spike
+    /// ios-01), too slow for what's meant to be a quick sanity check, and
+    /// availability is the only thing actually worth confirming up front —
+    /// there's no endpoint, model name, or key to validate.
     public func testConnection(
         profile: ProviderProfile,
         apiKey: String?
     ) async -> Result<Void, ProviderError> {
         let provider = makeProvider(profile, apiKey)
+        if let onDeviceProvider = provider as? AppleOnDeviceProvider {
+            if let error = await onDeviceProvider.checkAvailability() {
+                return .failure(error)
+            }
+            return .success(())
+        }
         do {
             _ = try await provider.complete(
                 systemPrompt: "Reply with the single word OK.",

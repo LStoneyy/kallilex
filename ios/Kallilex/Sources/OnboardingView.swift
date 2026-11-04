@@ -27,6 +27,11 @@ struct OnboardingView: View {
     @State private var showProviderEditor = false
     @State private var providerDetailsSaved = false
     @State private var savedProfile: ProviderProfile?
+    /// Starts out as if the device were ineligible, so the on-device preset
+    /// never flashes into view before `.task` below resolves the real
+    /// availability (ios-10) — same reasoning as
+    /// `ProviderPresetPickerView`.
+    @State private var onDeviceAvailability: OnDeviceAvailability = .deviceNotEligible
 
     var body: some View {
         NavigationStack {
@@ -40,6 +45,10 @@ struct OnboardingView: View {
                 case .chooseProvider:
                     OnboardingChooseProviderStepView(
                         currentProviderName: currentProviderName,
+                        presets: offeredProviderPresets(
+                            existingProfiles: appEnv.settings.profiles,
+                            onDeviceAvailability: onDeviceAvailability
+                        ),
                         onKeepCurrent: { flow.keepCurrentProvider() },
                         onSelect: selectPreset,
                         onSetUpLater: finish
@@ -79,6 +88,9 @@ struct OnboardingView: View {
             if let draft {
                 ProviderEditor(draft: draft, onSave: handleProviderSave)
             }
+        }
+        .task {
+            onDeviceAvailability = await appEnv.onDeviceModel.availability
         }
     }
 
@@ -214,13 +226,12 @@ private struct OnboardingChooseProviderStepView: View {
     /// keep; a brand-new install has nothing to duplicate either way, but
     /// there's nothing to show here regardless).
     let currentProviderName: String?
+    /// Already filtered by `offeredProviderPresets` (ios-10) — this view
+    /// has no opinion of its own on which presets to show.
+    let presets: [ProviderPreset]
     let onKeepCurrent: () -> Void
     let onSelect: (ProviderPreset) -> Void
     let onSetUpLater: () -> Void
-
-    private var presets: [ProviderPreset] {
-        providerPresets().filter { $0.kind != .appleOnDevice }
-    }
 
     var body: some View {
         VStack(spacing: 0) {

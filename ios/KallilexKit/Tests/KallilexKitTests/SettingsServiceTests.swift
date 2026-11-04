@@ -46,6 +46,17 @@ struct SettingsServiceTests {
         #expect(saved.id == "a")
     }
 
+    @Test func saveProfileAllowsAppleOnDeviceWithEmptyBaseUrlAndModelAndNoApiKey() throws {
+        // ios-10: the on-device profile has no URL, model, or key at all.
+        let (service, _, _) = makeService()
+        let profile = ProviderProfile(id: "a", name: "On-Device", kind: .appleOnDevice, baseUrl: "", model: "")
+        let saved = try service.saveProfile(profile, apiKey: nil)
+        #expect(saved.id == "a")
+        #expect(saved.baseUrl.isEmpty)
+        #expect(saved.model.isEmpty)
+        #expect(saved.hasApiKey == false)
+    }
+
     // ---- saveProfile: id generation and upsert ------------------------------
 
     @Test func saveProfileWithAnEmptyIdGeneratesOneAndReturnsIt() throws {

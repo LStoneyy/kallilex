@@ -377,4 +377,57 @@ struct ActionRunnerTests {
             #expect(error == .missingModel)
         }
     }
+
+    // ---- defaultProviderFactory (ios-10) -------------------------------------
+
+    @Test func defaultProviderFactoryReturnsAppleOnDeviceProviderForAppleOnDeviceKind() {
+        let profile = sampleProfile(kind: .appleOnDevice, baseUrl: "")
+        let provider = ActionRunner.defaultProviderFactory(profile, nil)
+        #expect(provider is AppleOnDeviceProvider)
+    }
+
+    // ---- testConnection: AppleOnDeviceProvider special case (ios-10) --------
+
+    /// `testConnection` checks on-device availability only — it never
+    /// generates text, since a full round trip takes about 10 s (spike
+    /// ios-01).
+    @Test func testConnectionForAppleOnDeviceChecksAvailabilityOnlyWithoutGenerating() async {
+        let session = FakeOnDeviceSession(.returning("should never be reached"))
+        let model = FakeOnDeviceModel(availability: .available, session: session)
+        let provider = AppleOnDeviceProvider(model: model)
+        let runner = ActionRunner(
+            settings: InMemorySettingsStore(),
+            secrets: InMemorySecretStore(),
+            makeProvider: { _, _ in provider }
+        )
+
+        let result = await runner.testConnection(profile: sampleProfile(kind: .appleOnDevice, baseUrl: ""), apiKey: nil)
+
+        switch result {
+        case .success:
+            break
+        case .failure(let error):
+            Issue.record("expected success, got \(error)")
+        }
+        #expect(session.respondCallCount == 0)
+    }
+
+    @Test func testConnectionForAppleOnDeviceSurfacesTheUnavailableReason() async {
+        let model = FakeOnDeviceModel(availability: .appleIntelligenceNotEnabled)
+        let provider = AppleOnDeviceProvider(model: model)
+        let runner = ActionRunner(
+            settings: InMemorySettingsStore(),
+            secrets: InMemorySecretStore(),
+            makeProvider: { _, _ in provider }
+        )
+
+        let result = await runner.testConnection(profile: sampleProfile(kind: .appleOnDevice, baseUrl: ""), apiKey: nil)
+
+        switch result {
+        case .success:
+            Issue.record("expected failure")
+        case .failure(let error):
+            #expect(Optional(error) == OnDeviceAvailability.appleIntelligenceNotEnabled.providerError)
+        }
+    }
 }

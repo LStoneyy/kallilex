@@ -22,6 +22,9 @@ struct ProviderEditor: View {
     @State private var isEditingApiKey = false
     @State private var testState: ProviderTestState = .idle
     @State private var testTask: Task<Void, Never>?
+    /// `nil` until the `.task` in `availabilitySection` resolves (ios-10) —
+    /// shows a transient "Checking…" row rather than a wrong answer.
+    @State private var onDeviceAvailability: OnDeviceAvailability?
 
     // Suppresses validation messages until the user has actually edited
     // the corresponding field: opening a blank "Add provider" form
@@ -135,13 +138,22 @@ struct ProviderEditor: View {
         }
     }
 
+    /// Read-only availability status for an `.appleOnDevice` profile
+    /// (ios-10): "Ready" when available, else the reason and a hint —
+    /// `OnDeviceAvailability.statusText` already composes both into one
+    /// sentence. Loaded asynchronously so switching into this section never
+    /// blocks the sheet from appearing.
     private var availabilitySection: some View {
         Section(String(localized: "provider.availability", defaultValue: "Availability")) {
-            Text(String(
-                localized: "provider.availability.comingSoon",
-                defaultValue: "On-device availability isn't checked yet in this version."
+            Text(onDeviceAvailability?.statusText ?? String(
+                localized: "provider.availability.checking",
+                defaultValue: "Checking…"
             ))
             .foregroundStyle(.secondary)
+            .accessibilityIdentifier("provider.editor.availability")
+        }
+        .task {
+            onDeviceAvailability = await appEnv.onDeviceModel.availability
         }
     }
 

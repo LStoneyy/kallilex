@@ -452,13 +452,13 @@
         }
       }
     },
-    "provider.availability.comingSoon": {
+    "provider.availability.checking": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On-device availability isn't checked yet in this version."
+            "value": "Checking…"
           }
         }
       }

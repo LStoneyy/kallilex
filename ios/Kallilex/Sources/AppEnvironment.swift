@@ -61,6 +61,12 @@ final class AppEnvironment: Sendable {
     let secretStore: any SecretStore
     let actionRunner: ActionRunner
     let service: SettingsService
+    /// Backs the Apple on-device availability check (ios-10):
+    /// `ProviderPresetPickerView`, `OnboardingView`, and `ProviderEditor`'s
+    /// availability row all read this instead of touching
+    /// `FoundationModels` directly. `DefaultOnDeviceModel` in production;
+    /// substituted by `-uiTestOnDeviceAvailability` under `DEBUG`.
+    let onDeviceModel: any OnDeviceModel
 
     private(set) var settings: AppSettings
     var lastError: String?
@@ -69,13 +75,15 @@ final class AppEnvironment: Sendable {
         settingsStore: any SettingsStore,
         secretStore: any SecretStore,
         actionRunner: ActionRunner,
-        settings: AppSettings
+        settings: AppSettings,
+        onDeviceModel: any OnDeviceModel = DefaultOnDeviceModel()
     ) {
         self.settingsStore = settingsStore
         self.secretStore = secretStore
         self.actionRunner = actionRunner
         self.service = SettingsService(settings: settingsStore, secrets: secretStore)
         self.settings = settings
+        self.onDeviceModel = onDeviceModel
     }
 
     /// Reloads `settings` from `settingsStore`, so the UI picks up anything
@@ -130,10 +138,11 @@ final class AppEnvironment: Sendable {
         do {
             let settingsStore = try AppGroupSettingsStore(appGroupId: InfoPlist.kallilexAppGroup)
             let secretStore = KeychainSecretStore(accessGroup: InfoPlist.kallilexKeychainAccessGroup)
+            let onDeviceModel = Self.makeOnDeviceModel()
             let runner = ActionRunner(
                 settings: settingsStore,
                 secrets: secretStore,
-                makeProvider: Self.providerFactory()
+                makeProvider: Self.providerFactory(onDeviceModel: onDeviceModel)
             )
             let loaded = try settingsStore.load()
             let recovered = settingsStore.consumeRecoveredFromCorruption()
@@ -141,7 +150,8 @@ final class AppEnvironment: Sendable {
                 settingsStore: settingsStore,
                 secretStore: secretStore,
                 actionRunner: runner,
-                settings: loaded
+                settings: loaded,
+                onDeviceModel: onDeviceModel
             )
             return .success((environment, recovered))
         } catch {
@@ -153,14 +163,26 @@ final class AppEnvironment: Sendable {
     /// with `-uiTestStubProvider`: then every profile resolves to a stub
     /// provider that echoes the input text uppercased, so XCUITests (part
     /// 2 of this spec) can exercise "Test connection" and the Scratchpad
-    /// without a real network call.
-    private static func providerFactory() -> @Sendable (ProviderProfile, String?) -> any TextProvider {
+    /// without a real network call. Otherwise identical to
+    /// `ActionRunner.defaultProviderFactory`, except `.appleOnDevice`
+    /// always uses `onDeviceModel` (ios-10) — `DefaultOnDeviceModel` in
+    /// production, or the `-uiTestOnDeviceAvailability` fake under `DEBUG`
+    /// — rather than `defaultProviderFactory`'s own always-real one, so
+    /// XCUITests can exercise every availability state deterministically.
+    private static func providerFactory(
+        onDeviceModel: any OnDeviceModel
+    ) -> @Sendable (ProviderProfile, String?) -> any TextProvider {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestStubProvider") {
             return { _, _ in UppercasingStubProvider() }
         }
         #endif
-        return ActionRunner.defaultProviderFactory
+        return { profile, apiKey in
+            if profile.kind == .appleOnDevice {
+                return AppleOnDeviceProvider(model: onDeviceModel)
+            }
+            return ActionRunner.defaultProviderFactory(profile, apiKey)
+        }
     }
 
     #if DEBUG
@@ -253,6 +275,41 @@ final class AppEnvironment: Sendable {
         let data = Data("{not valid json".utf8)
         try? data.write(to: container.appendingPathComponent("settings.json"), options: .atomic)
     }
+
+    /// `-uiTestOnDeviceAvailability <available|notEnabled|notReady|
+    /// notEligible>` (ios-10): substitutes a fake `OnDeviceModel` reporting
+    /// the requested availability, so XCUITests can exercise every
+    /// availability state (including ineligible, which the real
+    /// `SystemLanguageModel` can't be made to report on demand)
+    /// deterministically. Combined with `-uiTestStubProvider`,
+    /// `providerFactory` still routes every profile — including
+    /// `.appleOnDevice` — to the stub; this only affects the availability
+    /// *check* itself (the preset picker, and `ProviderEditor`'s
+    /// availability row). Absent the argument, or outside `DEBUG`, falls
+    /// back to the real `DefaultOnDeviceModel`.
+    private static func makeOnDeviceModel() -> any OnDeviceModel {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-uiTestOnDeviceAvailability"),
+              index + 1 < arguments.count else {
+            return DefaultOnDeviceModel()
+        }
+        let availability: OnDeviceAvailability
+        switch arguments[index + 1] {
+        case "available":
+            availability = .available
+        case "notEnabled":
+            availability = .appleIntelligenceNotEnabled
+        case "notReady":
+            availability = .modelNotReady
+        case "notEligible":
+            availability = .deviceNotEligible
+        default:
+            availability = .available
+        }
+        return UITestOnDeviceModel(fixedAvailability: availability)
+    }
+    #else
+    private static func makeOnDeviceModel() -> any OnDeviceModel { DefaultOnDeviceModel() }
     #endif
 }
 
@@ -263,5 +320,29 @@ private struct UppercasingStubProvider: TextProvider {
     func complete(systemPrompt: String, userText: String) async throws -> String {
         userText.uppercased()
     }
+}
+
+/// An `OnDeviceModel` fake for `-uiTestOnDeviceAvailability`: reports
+/// `fixedAvailability` regardless of the real device's actual state.
+/// `makeSession`/`tokenCount` are never exercised by the availability-only
+/// XCUITests this backs, but are implemented plausibly (an echo session, no
+/// token count) rather than left to crash, in case that changes.
+private struct UITestOnDeviceModel: OnDeviceModel {
+    let fixedAvailability: OnDeviceAvailability
+
+    var availability: OnDeviceAvailability {
+        get async { fixedAvailability }
+    }
+    var contextSize: Int {
+        get async { 4096 }
+    }
+    func tokenCount(for text: String) async throws -> Int? { nil }
+    func makeSession(instructions: String) -> any OnDeviceSession {
+        UITestOnDeviceSession()
+    }
+}
+
+private struct UITestOnDeviceSession: OnDeviceSession {
+    func respond(to text: String) async throws -> String { text }
 }
 #endif

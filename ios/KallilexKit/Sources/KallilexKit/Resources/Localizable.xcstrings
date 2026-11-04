@@ -111,6 +111,83 @@
         }
       }
     },
+    "ondevice.error.busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The on-device model is busy right now. Try again in a moment."
+          }
+        }
+      }
+    },
+    "ondevice.error.unsupportedLanguage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This language isn't supported by the on-device model."
+          }
+        }
+      }
+    },
+    "ondevice.reason.appleIntelligenceNotEnabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on Apple Intelligence in Settings."
+          }
+        }
+      }
+    },
+    "ondevice.reason.deviceNotEligible": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device doesn't support Apple Intelligence."
+          }
+        }
+      }
+    },
+    "ondevice.reason.modelNotReady": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model is still downloading or not yet ready."
+          }
+        }
+      }
+    },
+    "ondevice.reason.unavailableOther": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence is not available."
+          }
+        }
+      }
+    },
+    "ondevice.status.ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        }
+      }
+    },
     "privacy.cloud": {
       "extractionState": "manual",
       "localizations": {

@@ -3,13 +3,20 @@ import KallilexKit
 
 /// The "Add provider" sheet: a list of `providerPresets()`, each opening
 /// the provider editor pre-filled with its defaults (ios-06). The on-device
-/// preset is hidden until ios-10 adds an eligibility check.
+/// preset is offered per `offeredProviderPresets` (ios-10): hidden on an
+/// ineligible device, or once an on-device profile already exists.
 struct ProviderPresetPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppEnvironment.self) private var appEnv
     let onSelect: (ProviderDraft) -> Void
 
+    /// Starts out as if the device were ineligible, so the on-device
+    /// preset never flashes into view before `.task` below resolves the
+    /// real availability.
+    @State private var onDeviceAvailability: OnDeviceAvailability = .deviceNotEligible
+
     private var presets: [ProviderPreset] {
-        providerPresets().filter { $0.kind != .appleOnDevice }
+        offeredProviderPresets(existingProfiles: appEnv.settings.profiles, onDeviceAvailability: onDeviceAvailability)
     }
 
     var body: some View {
@@ -31,6 +38,9 @@ struct ProviderPresetPickerView: View {
                     }
                 }
             }
+        }
+        .task {
+            onDeviceAvailability = await appEnv.onDeviceModel.availability
         }
     }
 }
