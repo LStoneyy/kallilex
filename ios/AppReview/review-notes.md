@@ -69,6 +69,16 @@ The app's core feature is the share extension. On first use, the user sees a con
 
 The app collects no data itself — text goes directly to the provider the user configured. API keys are stored in the iOS Keychain, on-device only, and never transmitted except in the requests the user initiates.
 
+## App Transport Security
+
+The app and the share extension set `NSAllowsArbitraryLoads`. Kallilex only
+connects to the AI server the user enters themselves. Self-hosted servers
+(Ollama, LM Studio, llama.cpp) usually serve plain HTTP and are often reached
+through a VPN address such as Tailscale's `100.64.0.0/10` range or a router
+host name such as `ai-pc.fritz.box`. The narrower `NSAllowsLocalNetworking`
+exception doesn't cover those. The built-in cloud preset (OpenAI) uses HTTPS,
+and the app makes no network requests of its own.
+
 ## Bundle IDs
 
 - App: `com.webcommits.kallilex`

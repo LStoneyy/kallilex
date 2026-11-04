@@ -555,12 +555,14 @@ Settings:
 
 ### 10.3 Network
 
-- `NSAllowsLocalNetworking = YES` (for LAN Ollama or LM Studio over http).
-  Arbitrary loads stay off.
+- `NSAllowsArbitraryLoads = YES`, so plain `http://` works to any server the
+  user enters, including Tailscale/VPN addresses and router host names that
+  `NSAllowsLocalNetworking` doesn't cover (changed in ios-14; this replaces
+  the original "arbitrary loads stay off").
 - `NSLocalNetworkUsageDescription`: "Kallilex connects to AI servers on your
   local network, such as Ollama on your Mac, when you set one up."
-- Public `http://` hosts aren't supported on iOS: https only, a documented
-  difference from the desktop.
+- Like the desktop, `http://` is allowed to any host; the user is responsible
+  for choosing it (ios-14).
 
 ## 11. Localization and accessibility
 
@@ -713,6 +715,7 @@ separate from desktop: `spec-ios-NN-*.md`.
 | ios-11 | Localization and accessibility | ios-09 | §11 |
 | ios-12 | Privacy manifest, App Review package, website | ios-09 | §10.2, the privacy policy, review notes, screenshots |
 | ios-13 | Manual release and 1.0.0 | ios-11, ios-12, paid developer account | §13: manual archive/upload, versioning and `ios-v*` tags, paid-app setup, `docs/ios-release-checklist.md`, host-app matrix |
+| ios-14 | Plain HTTP to any user-configured server | ios-05, ios-12 | §10.3: `NSAllowsArbitraryLoads` instead of `NSAllowsLocalNetworking` |
 
 The spike's (ios-01) unknowns:
 
