@@ -44,7 +44,7 @@ You own your API keys. They are stored in your phone's Keychain and never leave 
 
 **Privacy:**
 
-- Kallilex is free and open source.
+- Kallilex is open source: one purchase, no subscription.
 - No accounts, no subscriptions, no telemetry.
 - Your text goes directly to the provider you configure — the developer never sees it.
 - The app can be built and run from source (Apache-2.0 license) if you prefer.
@@ -73,7 +73,7 @@ Du besitzt deine API-Schlüssel. Sie werden im Schlüsselbund deines iPhones ges
 
 **Datenschutz:**
 
-- Kallilex ist kostenlos und Open Source.
+- Kallilex ist Open Source: einmal kaufen, kein Abo.
 - Keine Konten, keine Abos, keine Telemetrie.
 - Dein Text geht direkt an den Anbieter, den du gewählt hast — der Entwickler sieht ihn nicht.
 - Die App kann aus dem Quellcode (Apache-2.0-Lizenz) gebaut und ausgeführt werden, falls du das bevorzugst.
