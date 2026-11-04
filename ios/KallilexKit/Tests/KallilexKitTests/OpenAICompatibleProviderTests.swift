@@ -509,6 +509,9 @@ struct OpenAICompatibleProviderTests {
     /// cancellation can resume it, and the data task winning the race is
     /// exactly what cancels it. So success here can only mean the response
     /// won; it cannot mean "the deadline happened not to have elapsed yet".
+    /// The profile timeout is generous on purpose: it is also URLSession's
+    /// idle timeout, and on a starved CI runner the stubbed response has
+    /// taken longer than a few seconds to arrive.
     @Test func aResponseArrivingJustBeforeTheDeadlineIsNotATimeout() async throws {
         let base = StubURLProtocol.uniqueBaseURL()
         let endpoint = expectedEndpoint(from: base.absoluteString)
@@ -516,7 +519,7 @@ struct OpenAICompatibleProviderTests {
 
         let sleeper = NeverFiringSleeper()
         let provider = makeProvider(
-            profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 3),
+            profile: makeProfile(baseUrl: base.absoluteString, timeoutSecs: 120),
             deadlineSleep: sleeper.sleep
         )
         let result = try await provider.complete(systemPrompt: "s", userText: "u")
