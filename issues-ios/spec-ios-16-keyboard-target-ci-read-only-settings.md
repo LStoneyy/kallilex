@@ -148,7 +148,9 @@ Extend the existing verification steps to the keyboard appex
 ## Further Notes
 
 - PLAN-keyboard.md §10.1, §10.3.
-- **Setup note:** `xcodebuild -allowProvisioningUpdates` registers a new App
-  ID but doesn't assign the App Group to it. Tick "App Groups" once in Xcode
-  (target → Signing & Capabilities) after the first build, and the group will
-  be assigned on the next build.
+- **Setup note:** on the free Personal Team, `xcodebuild
+  -allowProvisioningUpdates` sometimes registers a new App ID without its App
+  Group (seen in the spike, not for the real keyboard). If the first device
+  build fails with "Provisioning profile … doesn't match the entitlements
+  file's value for the com.apple.security.application-groups entitlement",
+  tick "App Groups" once in Xcode (target → Signing & Capabilities).

@@ -23,6 +23,12 @@ enum AppStartupError: Error, Equatable {
                 self = .unsupportedSchemaVersion(version)
             case .underlying(let message):
                 self = .other(message)
+            case .readOnly:
+                // Never thrown by the app's own `AppGroupSettingsStore`
+                // usage — only `ReadOnlySettingsStore` (the keyboard
+                // without Full Access, ios-16) throws this — but the
+                // switch must stay exhaustive.
+                self = .other(error.localizedDescription)
             }
         default:
             self = .other(error.localizedDescription)

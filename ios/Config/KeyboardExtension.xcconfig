@@ -1,0 +1,7 @@
+#include "Common.xcconfig"
+PRODUCT_NAME = KeyboardExtension
+PRODUCT_BUNDLE_IDENTIFIER = $(KALLILEX_APP_ID).keyboard
+INFOPLIST_FILE = KeyboardExtension/Info.plist
+CODE_SIGN_ENTITLEMENTS = KeyboardExtension/KeyboardExtension.entitlements
+APPLICATION_EXTENSION_API_ONLY = YES
+SKIP_INSTALL = YES

@@ -72,7 +72,7 @@ jobs:
             -derivedDataPath ../build/kit \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Build and test Kallilex app (embeds and builds the extension, runs UI tests)
+      - name: Build and test Kallilex app (embeds and builds the extensions, runs UI tests)
         run: |
           xcodebuild test \
             -project ios/Kallilex.xcodeproj \
@@ -94,12 +94,15 @@ jobs:
       - name: Verify app and extension share the same App Group
         run: |
           APP_PATH="ios/build/app/Build/Products/Debug-iphonesimulator/Kallilex.app"
-          EXT_PATH="$APP_PATH/PlugIns/ShareExtension.appex"
+          SHARE_PATH="$APP_PATH/PlugIns/ShareExtension.appex"
+          KEYBOARD_PATH="$APP_PATH/PlugIns/KeyboardExtension.appex"
           APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :KallilexAppGroup" "$APP_PATH/Info.plist")
-          EXT_GROUP=$(/usr/libexec/PlistBuddy -c "Print :KallilexAppGroup" "$EXT_PATH/Info.plist")
+          SHARE_GROUP=$(/usr/libexec/PlistBuddy -c "Print :KallilexAppGroup" "$SHARE_PATH/Info.plist")
+          KEYBOARD_GROUP=$(/usr/libexec/PlistBuddy -c "Print :KallilexAppGroup" "$KEYBOARD_PATH/Info.plist")
           echo "App group (app): $APP_GROUP"
-          echo "App group (extension): $EXT_GROUP"
-          if [ "$APP_GROUP" != "$EXT_GROUP" ]; then
+          echo "App group (ShareExtension): $SHARE_GROUP"
+          echo "App group (KeyboardExtension): $KEYBOARD_GROUP"
+          if [ "$APP_GROUP" != "$SHARE_GROUP" ] || [ "$APP_GROUP" != "$KEYBOARD_GROUP" ]; then
             echo "App and extension KallilexAppGroup values differ"
             exit 1
           fi
@@ -111,10 +114,21 @@ jobs:
               ;;
           esac
 
+          APP_KEYCHAIN=$(/usr/libexec/PlistBuddy -c "Print :KallilexKeychainAccessGroup" "$APP_PATH/Info.plist")
+          SHARE_KEYCHAIN=$(/usr/libexec/PlistBuddy -c "Print :KallilexKeychainAccessGroup" "$SHARE_PATH/Info.plist")
+          KEYBOARD_KEYCHAIN=$(/usr/libexec/PlistBuddy -c "Print :KallilexKeychainAccessGroup" "$KEYBOARD_PATH/Info.plist")
+          echo "Keychain group (app): $APP_KEYCHAIN"
+          echo "Keychain group (ShareExtension): $SHARE_KEYCHAIN"
+          echo "Keychain group (KeyboardExtension): $KEYBOARD_KEYCHAIN"
+          if [ "$APP_KEYCHAIN" != "$SHARE_KEYCHAIN" ] || [ "$APP_KEYCHAIN" != "$KEYBOARD_KEYCHAIN" ]; then
+            echo "App and extension KallilexKeychainAccessGroup values differ"
+            exit 1
+          fi
+
       - name: Verify plain HTTP is allowed to any server
         run: |
           APP_PATH="ios/build/app/Build/Products/Debug-iphonesimulator/Kallilex.app"
-          for BUNDLE in "$APP_PATH" "$APP_PATH/PlugIns/ShareExtension.appex"; do
+          for BUNDLE in "$APP_PATH" "$APP_PATH/PlugIns/ShareExtension.appex" "$APP_PATH/PlugIns/KeyboardExtension.appex"; do
             ARBITRARY=$(/usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity:NSAllowsArbitraryLoads" "$BUNDLE/Info.plist")
             if [ "$ARBITRARY" != "true" ]; then
               echo "NSAllowsArbitraryLoads is not true in $BUNDLE"
@@ -131,10 +145,26 @@ jobs:
         run: |
           plutil -lint ios/Kallilex/Resources/PrivacyInfo.xcprivacy
           plutil -lint ios/ShareExtension/Resources/PrivacyInfo.xcprivacy
+          plutil -lint ios/KeyboardExtension/Resources/PrivacyInfo.xcprivacy
           APP_PATH="ios/build/app/Build/Products/Debug-iphonesimulator/Kallilex.app"
-          for BUNDLE in "$APP_PATH" "$APP_PATH/PlugIns/ShareExtension.appex"; do
+          for BUNDLE in "$APP_PATH" "$APP_PATH/PlugIns/ShareExtension.appex" "$APP_PATH/PlugIns/KeyboardExtension.appex"; do
             if [ ! -f "$BUNDLE/PrivacyInfo.xcprivacy" ]; then
               echo "PrivacyInfo.xcprivacy is missing from $BUNDLE"
               exit 1
             fi
           done
+
+      - name: Verify the keyboard requests Full Access
+        run: |
+          APP_PATH="ios/build/app/Build/Products/Debug-iphonesimulator/Kallilex.app"
+          KEYBOARD_PATH="$APP_PATH/PlugIns/KeyboardExtension.appex"
+          REQUESTS_OPEN_ACCESS=$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:RequestsOpenAccess" "$KEYBOARD_PATH/Info.plist")
+          if [ "$REQUESTS_OPEN_ACCESS" != "true" ]; then
+            echo "RequestsOpenAccess is not true in $KEYBOARD_PATH"
+            exit 1
+          fi
+          EXTENSION_POINT=$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$KEYBOARD_PATH/Info.plist")
+          if [ "$EXTENSION_POINT" != "com.apple.keyboard-service" ]; then
+            echo "NSExtensionPointIdentifier is $EXTENSION_POINT, expected com.apple.keyboard-service"
+            exit 1
+          fi

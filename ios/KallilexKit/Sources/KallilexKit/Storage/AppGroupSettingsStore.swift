@@ -94,6 +94,39 @@ public final class AppGroupSettingsStore: SettingsStore {
         }
     }
 
+    /// Reads settings without `NSFileCoordinator`, for callers that may not
+    /// have Full Access (the keyboard, ios-16) — even a read-only
+    /// coordinated access fails there (spike ios-15, unknown 2:
+    /// `NSCocoaErrorDomain 256`). A plain `Data(contentsOf:)` tolerates
+    /// this: the app always writes atomically, so a plain read sees either
+    /// the old or the new file, never a half-written one.
+    ///
+    /// A missing file returns seeded defaults, like `load()`. A corrupt or
+    /// undecodable file throws (wrapped as `.underlying`, or rethrown
+    /// as-is for `.unsupportedSchemaVersion`) instead of recovering: this
+    /// method has no write access to rename the file away, so it leaves it
+    /// untouched for the app to repair, coordinated, on its next launch.
+    /// The same `SettingsMigrator` step runs as part of `decode(_:)`, in
+    /// memory only — the migrated result is never written back.
+    public func loadReadOnly() throws -> AppSettings {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return AppSettings.seeded()
+        }
+        let data: Data
+        do {
+            data = try Data(contentsOf: fileURL)
+        } catch {
+            throw SettingsStoreError.underlying(error.localizedDescription)
+        }
+        do {
+            return try decode(data)
+        } catch let error as SettingsStoreError {
+            throw error
+        } catch {
+            throw SettingsStoreError.underlying(error.localizedDescription)
+        }
+    }
+
     @discardableResult
     public func update(_ body: (inout AppSettings) throws -> Void) throws -> AppSettings {
         try ensureDirectoryExists()

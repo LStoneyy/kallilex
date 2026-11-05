@@ -16,6 +16,10 @@ public enum SettingsStoreError: Error, Sendable, Equatable {
     /// Any other read/write failure (file I/O, file coordination, or
     /// encoding) with a human-readable description.
     case underlying(String)
+    /// A write (`save`/`update`) was attempted on a store that can only
+    /// read — `ReadOnlySettingsStore`, used by the keyboard without Full
+    /// Access.
+    case readOnly
 }
 
 /// Persistence seam for `AppSettings`. Implementations may be backed by a

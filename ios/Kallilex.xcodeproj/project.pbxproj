@@ -8,10 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		5DD54C45ED9393A4A9A8C895 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E01127B22C906919FEF272A9 /* KeyboardExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B507247365DFC0A1B4EBDC1 /* KeyboardExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		55E4610AF6A6A0134123AAEE /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = D6876D0C3AB42DEC7CCD82FB /* KallilexKit */; };
 		1724F4B8900726FE95ED9C30 /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1A09F4693EB6E0295D460AD /* KallilexKit */; };
 		C02D43689C53BCCE186FA584 /* KallilexUI in Frameworks */ = {isa = PBXBuildFile; productRef = 10E17E14BBAA9CF20DCCDB98 /* KallilexUI */; };
 		E2D1C0B9A8F7E6D5C4B3A2F1 /* KallilexUI in Frameworks */ = {isa = PBXBuildFile; productRef = D3C2B1A0F9E8D7C6B5A4F3E2 /* KallilexUI */; };
+		6F14F7FE339C062847D41437 /* KallilexKit in Frameworks */ = {isa = PBXBuildFile; productRef = 64372D0A76F6EA13AE9641B8 /* KallilexKit */; };
+		C78119C90569740E4800731C /* KallilexUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB766591E48A4305BB874A01 /* KallilexUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -21,6 +24,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 3995F444AA98065D47FEF360;
 			remoteInfo = ShareExtension;
+		};
+		2F0E955A11DA58A6CFA64A07 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F3C37EA7E0ACA645825C993 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 83C32BEA4552FA55CEB7E02D;
+			remoteInfo = KeyboardExtension;
 		};
 		4B04CE6298160C4CC4907CF7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -39,6 +49,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				5DD54C45ED9393A4A9A8C895 /* ShareExtension.appex in Embed Foundation Extensions */,
+				E01127B22C906919FEF272A9 /* KeyboardExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -48,10 +59,12 @@
 /* Begin PBXFileReference section */
 		FACF963AD6EA85BCD1F54CBB /* Kallilex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kallilex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B507247365DFC0A1B4EBDC1 /* KeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1FEF687DD4999C4FAA4CAFAF /* KallilexUITests.xctest */ = {isa = PBXFileReference; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; path = KallilexUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B20436A5C4B331E4A4CEBFB /* Common.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Common.xcconfig; sourceTree = "<group>"; };
 		6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Kallilex.xcconfig; sourceTree = "<group>"; };
 		F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ShareExtension.xcconfig; sourceTree = "<group>"; };
+		C2576AE52783C1956D3B8FD4 /* KeyboardExtension.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = KeyboardExtension.xcconfig; sourceTree = "<group>"; };
 		23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = KallilexUITests.xcconfig; sourceTree = "<group>"; };
 		CA9DE0CDCBA3DE53DDF0F376 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,6 +88,16 @@
 		F1A2B3C4D5E6F7A8B9C0D1E2 /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ShareExtension/Resources;
+			sourceTree = "<group>";
+		};
+		BE6DE2D08AEB464DBAE62A5D /* Sources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KeyboardExtension/Sources;
+			sourceTree = "<group>";
+		};
+		8BD6E6132FA1BA74C8D4D51C /* Resources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KeyboardExtension/Resources;
 			sourceTree = "<group>";
 		};
 		23DCD9F80679E09EEB3B4573 /* KallilexUITests */ = {
@@ -110,6 +133,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C6455BE06BA3BD6016730269 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6F14F7FE339C062847D41437 /* KallilexKit in Frameworks */,
+				C78119C90569740E4800731C /* KallilexUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -120,6 +152,8 @@
 				92AA3F5446DB2A7F6AFE3EF3 /* Resources */,
 				02318A735DAD1DF028FF8137 /* Sources */,
 				F1A2B3C4D5E6F7A8B9C0D1E2 /* Resources */,
+				BE6DE2D08AEB464DBAE62A5D /* Sources */,
+				8BD6E6132FA1BA74C8D4D51C /* Resources */,
 				23DCD9F80679E09EEB3B4573 /* KallilexUITests */,
 				A8A9A184B9A443CC46C1DB0A /* Config */,
 				CD9E18E30FD98018C5FF9CF3 /* Products */,
@@ -132,6 +166,7 @@
 				6B20436A5C4B331E4A4CEBFB /* Common.xcconfig */,
 				6331E2D8FB32F66021B78A27 /* Kallilex.xcconfig */,
 				F12C8B7F8F69757A74A4B9A6 /* ShareExtension.xcconfig */,
+				C2576AE52783C1956D3B8FD4 /* KeyboardExtension.xcconfig */,
 				23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */,
 				CA9DE0CDCBA3DE53DDF0F376 /* Local.xcconfig.example */,
 			);
@@ -143,6 +178,7 @@
 			children = (
 				FACF963AD6EA85BCD1F54CBB /* Kallilex.app */,
 				30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */,
+				4B507247365DFC0A1B4EBDC1 /* KeyboardExtension.appex */,
 				1FEF687DD4999C4FAA4CAFAF /* KallilexUITests.xctest */,
 			);
 			name = Products;
@@ -164,6 +200,7 @@
 			);
 			dependencies = (
 				2153679493856D813235EEBC /* PBXTargetDependency */,
+				403DE6CF8E4FF71D530E3078 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				DB92A431E6578C4E8A925529 /* Sources */,
@@ -203,6 +240,31 @@
 			productReference = 30B1FCA2B04FD5C08712E6BB /* ShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		83C32BEA4552FA55CEB7E02D /* KeyboardExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67ED79DD452DD11BDD96C0DB /* Build configuration list for PBXNativeTarget "KeyboardExtension" */;
+			buildPhases = (
+				DBD91C3D2513C00A2CBB8A99 /* Sources */,
+				C6455BE06BA3BD6016730269 /* Frameworks */,
+				4DF7306D59CB6180A6F33335 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BE6DE2D08AEB464DBAE62A5D /* Sources */,
+				8BD6E6132FA1BA74C8D4D51C /* Resources */,
+			);
+			name = KeyboardExtension;
+			packageProductDependencies = (
+				64372D0A76F6EA13AE9641B8 /* KallilexKit */,
+				BB766591E48A4305BB874A01 /* KallilexUI */,
+			);
+			productName = KeyboardExtension;
+			productReference = 4B507247365DFC0A1B4EBDC1 /* KeyboardExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		3CE622769BC7B1448CD4FBE4 /* KallilexUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AFDA769E1E48C027E6AE7AD9 /* Build configuration list for PBXNativeTarget "KallilexUITests" */;
@@ -240,6 +302,9 @@
 					3995F444AA98065D47FEF360 = {
 						CreatedOnToolsVersion = 27.2;
 					};
+					83C32BEA4552FA55CEB7E02D = {
+						CreatedOnToolsVersion = 27.2;
+					};
 					3CE622769BC7B1448CD4FBE4 = {
 						CreatedOnToolsVersion = 27.2;
 						TestTargetID = 07500AE4354AFD943A849C4C;
@@ -266,6 +331,7 @@
 			targets = (
 				07500AE4354AFD943A849C4C /* Kallilex */,
 				3995F444AA98065D47FEF360 /* ShareExtension */,
+				83C32BEA4552FA55CEB7E02D /* KeyboardExtension */,
 				3CE622769BC7B1448CD4FBE4 /* KallilexUITests */,
 			);
 		};
@@ -287,6 +353,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		76C4613A97BAEF505885BE74 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4DF7306D59CB6180A6F33335 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -317,6 +390,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DBD91C3D2513C00A2CBB8A99 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -324,6 +404,11 @@
 			isa = PBXTargetDependency;
 			target = 3995F444AA98065D47FEF360 /* ShareExtension */;
 			targetProxy = 111B30E4EFC969CEBE24DE80 /* PBXContainerItemProxy */;
+		};
+		403DE6CF8E4FF71D530E3078 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 83C32BEA4552FA55CEB7E02D /* KeyboardExtension */;
+			targetProxy = 2F0E955A11DA58A6CFA64A07 /* PBXContainerItemProxy */;
 		};
 		50F630A776F2E6E51E96E5EC /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -471,6 +556,20 @@
 			};
 			name = Release;
 		};
+		3557775B59B03D35DF21F758 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C2576AE52783C1956D3B8FD4 /* KeyboardExtension.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		277DA4117569A02932CCD738 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C2576AE52783C1956D3B8FD4 /* KeyboardExtension.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
 		9DCE046A186D455F33A1A333 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 23105BF395AE6C9F7CBE4C63 /* KallilexUITests.xcconfig */;
@@ -515,6 +614,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		67ED79DD452DD11BDD96C0DB /* Build configuration list for PBXNativeTarget "KeyboardExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3557775B59B03D35DF21F758 /* Debug */,
+				277DA4117569A02932CCD738 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		AFDA769E1E48C027E6AE7AD9 /* Build configuration list for PBXNativeTarget "KallilexUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -550,6 +658,16 @@
 			productName = KallilexUI;
 		};
 		D3C2B1A0F9E8D7C6B5A4F3E2 /* KallilexUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
+			productName = KallilexUI;
+		};
+		64372D0A76F6EA13AE9641B8 /* KallilexKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
+			productName = KallilexKit;
+		};
+		BB766591E48A4305BB874A01 /* KallilexUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 2F1F04E3677C2564597ABACF /* XCLocalSwiftPackageReference "KallilexKit" */;
 			productName = KallilexUI;
