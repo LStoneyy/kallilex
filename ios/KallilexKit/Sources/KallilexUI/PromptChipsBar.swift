@@ -19,13 +19,15 @@ public struct PromptChipsBar: View {
     private let prompts: [CustomPrompt]
     private let isRunning: Bool
     private let onSelectPrompt: (CustomPrompt) -> Void
-    private let onCustomTapped: () -> Void
+    /// `nil` hides the "Custom…" chip (the keyboard has no custom
+    /// instruction in v1).
+    private let onCustomTapped: (() -> Void)?
 
     public init(
         prompts: [CustomPrompt],
         isRunning: Bool,
         onSelectPrompt: @escaping (CustomPrompt) -> Void,
-        onCustomTapped: @escaping () -> Void
+        onCustomTapped: (() -> Void)?
     ) {
         self.prompts = prompts
         self.isRunning = isRunning
@@ -64,23 +66,25 @@ public struct PromptChipsBar: View {
             .accessibilityIdentifier("editor.chip.\(prompt.id)")
         }
 
-        Button(action: onCustomTapped) {
-            Label(
-                String(localized: "prompt.custom", defaultValue: "Custom…", bundle: .module),
-                systemImage: "square.and.pencil"
-            )
+        if let onCustomTapped {
+            Button(action: onCustomTapped) {
+                Label(
+                    String(localized: "prompt.custom", defaultValue: "Custom…", bundle: .module),
+                    systemImage: "square.and.pencil"
+                )
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .disabled(isRunning)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityHint(String(
+                localized: "prompt.custom.hint",
+                defaultValue: "Opens a field for your own instruction.",
+                bundle: .module
+            ))
+            .accessibilityIdentifier("editor.chip.custom")
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .disabled(isRunning)
-        .frame(minWidth: 44, minHeight: 44)
-        .contentShape(Rectangle())
-        .accessibilityHint(String(
-            localized: "prompt.custom.hint",
-            defaultValue: "Opens a field for your own instruction.",
-            bundle: .module
-        ))
-        .accessibilityIdentifier("editor.chip.custom")
     }
 }
 

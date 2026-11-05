@@ -20,7 +20,7 @@ let package = Package(
         ),
         .target(
             name: "KallilexUI",
-            dependencies: ["KallilexKit"],
+            dependencies: ["KallilexKit", "KallilexKeyboardCore"],
             resources: [.process("Resources")]
         ),
         .target(
@@ -29,7 +29,7 @@ let package = Package(
         ),
         .testTarget(
             name: "KallilexKitTests",
-            dependencies: ["KallilexKit", "KallilexUI"]
+            dependencies: ["KallilexKit", "KallilexUI", "KallilexKeyboardCore"]
         ),
         .testTarget(
             name: "KallilexKeyboardCoreTests",
