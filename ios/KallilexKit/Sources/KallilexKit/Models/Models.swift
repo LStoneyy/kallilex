@@ -194,6 +194,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var autoCopyResult: Bool
     public var onboardingCompleted: Bool
     public var consents: [AIConsent]
+    /// The keyboard's letter layout, as a raw `KeyboardLayoutID.rawValue`
+    /// ("qwertz"/"qwerty"). `nil` means "follow the device language"
+    /// (German → QWERTZ, everything else → QWERTY) — see
+    /// `KallilexKeyboardCore.KeyboardLayoutID.resolve`. `KallilexKit` can't
+    /// depend on `KallilexKeyboardCore`, so this stays a `String?` here;
+    /// that target maps it to the enum. Additive, iOS-only, no schema
+    /// version bump: older builds ignore the key (`Codable` skips unknown
+    /// keys), and it's encoded with `encodeIfPresent` so a `nil` value
+    /// doesn't add a key at all, keeping existing settings files untouched.
+    public var keyboardLayout: String?
 
     public init(
         schemaVersion: Int = 1,
@@ -203,7 +213,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoRunFirstPrompt: Bool = false,
         autoCopyResult: Bool = false,
         onboardingCompleted: Bool = false,
-        consents: [AIConsent] = []
+        consents: [AIConsent] = [],
+        keyboardLayout: String? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.activeProfileID = activeProfileID
@@ -213,6 +224,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoCopyResult = autoCopyResult
         self.onboardingCompleted = onboardingCompleted
         self.consents = consents
+        self.keyboardLayout = keyboardLayout
     }
 
     enum CodingKeys: String, CodingKey {
@@ -224,6 +236,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case autoCopyResult
         case onboardingCompleted
         case consents
+        case keyboardLayout
     }
 
     public init(from decoder: Decoder) throws {
@@ -241,6 +254,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoCopyResult = try container.decodeIfPresent(Bool.self, forKey: .autoCopyResult) ?? false
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
         consents = try container.decodeIfPresent([AIConsent].self, forKey: .consents) ?? []
+        keyboardLayout = try container.decodeIfPresent(String.self, forKey: .keyboardLayout)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -253,6 +267,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try container.encode(autoCopyResult, forKey: .autoCopyResult)
         try container.encode(onboardingCompleted, forKey: .onboardingCompleted)
         try container.encode(consents, forKey: .consents)
+        try container.encodeIfPresent(keyboardLayout, forKey: .keyboardLayout)
     }
 
     /// A freshly seeded value for a brand-new install or a missing/corrupt

@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "KallilexKit", targets: ["KallilexKit"]),
         .library(name: "KallilexUI", targets: ["KallilexUI"]),
+        .library(name: "KallilexKeyboardCore", targets: ["KallilexKeyboardCore"]),
     ],
     targets: [
         .target(
@@ -22,9 +23,17 @@ let package = Package(
             dependencies: ["KallilexKit"],
             resources: [.process("Resources")]
         ),
+        .target(
+            name: "KallilexKeyboardCore",
+            dependencies: []
+        ),
         .testTarget(
             name: "KallilexKitTests",
             dependencies: ["KallilexKit", "KallilexUI"]
+        ),
+        .testTarget(
+            name: "KallilexKeyboardCoreTests",
+            dependencies: ["KallilexKeyboardCore"]
         ),
     ]
 )

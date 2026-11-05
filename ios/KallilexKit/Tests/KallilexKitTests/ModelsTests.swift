@@ -233,6 +233,28 @@ struct ModelsTests {
         #expect(json2?["shortcut"] == nil)
     }
 
+    // ---- AppSettings.keyboardLayout (spec-ios-17) --------------------------
+
+    @Test func appSettingsWithoutKeyboardLayoutKeyDecodesToNil() throws {
+        let json = "{}"
+        let decoded = try Self.makeDecoder().decode(AppSettings.self, from: Data(json.utf8))
+        #expect(decoded.keyboardLayout == nil)
+    }
+
+    @Test func appSettingsKeyboardLayoutRoundTripsAndOmitsKeyWhenNil() throws {
+        let withLayout = AppSettings(prompts: [], keyboardLayout: "qwertz")
+        let data = try Self.makeEncoder().encode(withLayout)
+        let decoded = try Self.makeDecoder().decode(AppSettings.self, from: data)
+        #expect(decoded.keyboardLayout == "qwertz")
+
+        // `nil` doesn't add the key at all, so older builds that don't know
+        // about it see exactly the settings file they always have.
+        let withoutLayout = AppSettings(prompts: [])
+        let data2 = try Self.makeEncoder().encode(withoutLayout)
+        let json2 = try JSONSerialization.jsonObject(with: data2) as? [String: Any]
+        #expect(json2?["keyboardLayout"] == nil)
+    }
+
     // ---- AppSettings.seeded() ----------------------------------------------
 
     @Test func seededHasSchemaVersionOneAndDefaultPrompts() {
