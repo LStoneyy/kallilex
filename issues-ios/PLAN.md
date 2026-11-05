@@ -96,7 +96,9 @@ Other constraints that shape the design:
 
 ### Non-goals for v1
 
-- Automatic Replace or paste-back (needs the keyboard, §16).
+- Automatic Replace or paste-back (needs the keyboard, §16). Superseded on
+  2026-11-05: the keyboard is part of 1.0.0, see
+  [PLAN-keyboard.md](PLAN-keyboard.md).
 - Sync of prompts or profiles with the desktop app or between devices
   (decided, Q3: later, as an import/export format; API keys never sync).
 - A custom spell-check engine. iOS text views already underline misspellings
@@ -714,8 +716,9 @@ separate from desktop: `spec-ios-NN-*.md`.
 | ios-10 | Apple on-device model provider | ios-05, ios-06 | §7.3 on-device provider, availability UI |
 | ios-11 | Localization and accessibility | ios-09 | §11 |
 | ios-12 | Privacy manifest, App Review package, website | ios-09 | §10.2, the privacy policy, review notes, screenshots |
-| ios-13 | Manual release and 1.0.0 | ios-11, ios-12, paid developer account | §13: manual archive/upload, versioning and `ios-v*` tags, paid-app setup, `docs/ios-release-checklist.md`, host-app matrix |
+| ios-13 | Manual release and 1.0.0 | ios-11, ios-12, ios-23, paid developer account | §13: manual archive/upload, versioning and `ios-v*` tags, paid-app setup, `docs/ios-release-checklist.md`, host-app matrix |
 | ios-14 | Plain HTTP to any user-configured server | ios-05, ios-12 | §10.3: `NSAllowsArbitraryLoads` instead of `NSAllowsLocalNetworking` |
+| ios-15 – ios-23 | Kallilex Keyboard and on-device dictation | ios-14 | [PLAN-keyboard.md](PLAN-keyboard.md) §13 |
 
 The spike's (ios-01) unknowns:
 
@@ -773,7 +776,8 @@ device.
   - `selectedText` is unreliable in some web views.
   - App Review is stricter for keyboards.
 
-  It gets its own plan: [PLAN-keyboard.md](PLAN-keyboard.md) (draft).
+  Moved into 1.0.0 on 2026-11-05 (Q11), with on-device dictation (Q12).
+  Plan and specs ios-15 to ios-23: [PLAN-keyboard.md](PLAN-keyboard.md).
 - **Profile and prompt sync:** an iCloud key-value store or CloudKit between
   iOS devices, and/or an import and export file format shared with desktop
   (the same JSON field names make this cheap). Never sync API keys.
@@ -811,6 +815,8 @@ device.
 | Q8 | Localize default prompts? | Labels localized (EN/DE), instructions stay English |
 | Q9 | Release automation? | Manual archive and upload from Xcode for v1; automation later |
 | Q10 | Price? | Paid, one-time price; no in-app purchases |
+| Q11 | Keyboard extension? (2026-11-05) | In 1.0.0, part of the paid app; a Kallilex-only keyboard with Scratchpad, prompts and keys on demand ([PLAN-keyboard.md](PLAN-keyboard.md) §15) |
+| Q12 | Dictation? (2026-11-05) | Parakeet on the device (FluidAudio) in the app; the keyboard gets the transcript through the App Group |
 
 ## 19. Sources
 
