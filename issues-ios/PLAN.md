@@ -773,7 +773,7 @@ device.
   - `selectedText` is unreliable in some web views.
   - App Review is stricter for keyboards.
 
-  It gets its own plan after v1 feedback.
+  It gets its own plan: [PLAN-keyboard.md](PLAN-keyboard.md) (draft).
 - **Profile and prompt sync:** an iCloud key-value store or CloudKit between
   iOS devices, and/or an import and export file format shared with desktop
   (the same JSON field names make this cheap). Never sync API keys.
