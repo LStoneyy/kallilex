@@ -1,6 +1,6 @@
 # Spec ios-18 — Keyboard UI: Scratchpad, prompts, keys
 
-Status: draft (confirm against the ios-15 report, unknowns 5, 8, 9, 15)
+Status: ready-for-agent
 Phase: Keyboard K2 (keyboard UI)
 Depends on: ios-17
 
@@ -86,12 +86,9 @@ text.
 - **Return** label:
   - target App: from `textDocumentProxy.returnKeyType`;
   - target Scratchpad: always "return".
-- **Feedback:**
-  - `UIDevice.current.playInputClick()` (the input view adopts
-    `UIInputViewAudioFeedback`);
-  - `UIImpactFeedbackGenerator(style: .light)` on key down, only if the
-    spike shows it works (unknown 15) and only with Full Access if that's
-    required.
+- **Feedback:** none in v1 (spike unknown 15). Both haptics and input clicks
+  didn't work in the spike; if wanted later, retest with a prepared,
+  retained generator and with "Keyboard Feedback" system settings on.
 - **Appearance:** dark and light from `textDocumentProxy.keyboardAppearance`
   and the trait collection. The colors follow the system keyboard.
 - **Accessibility:** every key is a `UIAccessibilityElement` with the
@@ -100,26 +97,29 @@ text.
 
 ### Scratchpad text view (UIKit)
 
-- `ScratchpadTextView: UITextView` with `inputView = UIView()`, so it never
-  asks for a keyboard (spike unknown 8). It becomes first responder when
-  tapped in keys mode, with Scratchpad as the target.
-- `ScratchpadDocument: TextDocument` (ios-17) wraps it, using
-  `insertText`, `deleteBackward`, and the text before and after the
-  selected range.
+- `ScratchpadTextView: UITextView` with `inputView = UIView()`. It becomes
+  first responder when tapped in keys mode, with Scratchpad as the target,
+  without trying to show another keyboard.
+- `ScratchpadDocument: TextDocument` (ios-17) wraps it, using `insertText`,
+  `deleteBackward`, and the text before and after the selected range.
+- **iOS 26 scroll edge effects:** in a short text view, the top and bottom
+  edge effects (and left/right if present) meet and hide the text. Hide all
+  four with `topEdgeEffect.isHidden = true`, `bottomEdgeEffect.isHidden = true`
+  (and left/right), and set `contentInsetAdjustmentBehavior = .never` as a
+  precaution.
 - **Sync with `EditorSession.text`:**
   - user edits update `session.text` (`textViewDidChange`);
   - a result or Undo from the session sets the text view's text and moves
     the caret to the end;
   - while `session.isEditable` is false (a run in flight), the view isn't
     editable.
-- **Fallback** if unknown 8 fails: a read-only text view with our own caret
-  fixed at the end. The keys then only append and delete at the end. The
-  `ScratchpadDocument` API stays the same.
 - An empty Scratchpad shows a placeholder: "Select text, type or dictate"
   ("Text markieren, tippen oder diktieren").
 - The editor controls from `EditorToolbar` (Undo, Retry, Copy, Show
   original) sit in a compact row at the Scratchpad's bottom edge, visible
   in prompt mode only.
+- **UI test:** add a test that the Scratchpad text is visible and hittable
+  (label value).
 
 ### SwiftUI parts (KallilexUI)
 
@@ -140,6 +140,12 @@ text.
 
 ### Session and lifecycle
 
+- **Keyboard state** (`KeyboardModel`, the Scratchpad text, the last result)
+  lives in a process-wide object, not in the `UIInputViewController`. The
+  controller is deallocated on every disappearance (keyboard switch, app
+  switch, dismissal); the state survives for the lifetime of the keyboard
+  process (spike unknown 10).
+- **Never persisted to disk.**
 - `viewDidLoad`:
   - build the stores (ios-16), `ActionRunner`, `EditorSession`;
   - the session's `Pasteboard` is a `KeyboardPasteboard` that writes
@@ -150,7 +156,6 @@ text.
 - `viewWillDisappear`: `session.cancel()`.
 - `textDidChange`: rebuild the `KeyboardContext` for auto-capitalization
   (target App).
-- The Scratchpad text is kept in memory only.
 
 ### Keyboard harness (app, DEBUG)
 
@@ -175,9 +180,10 @@ text.
 
 ### Memory
 
-No SwiftUI `TextEditor`/`TextField`, one hosting controller, no images
-except SF Symbols. Measure the harness and the device keyboard with
-Instruments; the numbers go into this spec's PR description.
+- No SwiftUI `TextEditor`/`TextField`, one hosting controller, no images
+  except SF Symbols.
+- Target: **60 MB** at peak (budget). Measure the harness and the device
+  keyboard with Instruments; the numbers go into `issues-ios/release-ios-1.0.0-matrix.md`.
 
 ### Strings
 

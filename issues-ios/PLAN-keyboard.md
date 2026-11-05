@@ -1,6 +1,6 @@
 # Kallilex Keyboard for iOS — Implementation Plan
 
-Status: decisions taken 2026-11-05 (§15); specs not cut yet
+Status: decisions taken 2026-11-05 (§15); specs ios-15–23 cut; spike done (spike-ios-15-report.md)
 Branch: `ios-plan`
 Date: 2026-11-05
 Builds on: [PLAN.md](PLAN.md) (iOS v1, specs ios-01 to ios-14)
@@ -42,7 +42,7 @@ stay as they are.
 | Shared Keychain access group | Assumed **no** (spike) | Yes |
 | General pasteboard | No | Yes |
 | **Microphone** | **No** | **No** |
-| Haptics, input clicks | Unclear (spike) | Yes |
+| Haptics, input clicks | None in v1 | Yes |
 | Apple on-device model (Foundation Models) | Unknown (spike) | Unknown (spike) |
 
 - `RequestsOpenAccess = YES` makes the "Allow Full Access" switch appear in
@@ -58,9 +58,9 @@ stay as they are.
 - **No system keyboard inside the keyboard.** A text field inside a
   keyboard extension can't summon the iOS keyboard. Typing into the
   keyboard's own Scratchpad needs our own keys.
-- **Memory.** Apple doesn't publish the limit; reports put it at about
-  50–60 MB on current iOS, and jetsam kills the keyboard silently above it.
-  Target: **under 40 MB at peak**, measured on a device (§12).
+- **Memory.** The measured limit on iPhone 16 / iOS 27 is about **177 MB**; jetsam
+  kills the keyboard silently above it. Target: **60 MB** (budget, about a
+  third of the measured limit), measured on a device (§12).
 - **Lifecycle.** The keyboard lives while it's on screen. Dismissing it,
   switching keyboards or switching apps suspends it and can kill it. A
   request in flight doesn't survive that.
@@ -280,10 +280,11 @@ keyboard session; a new session starts on "Scratchpad".
 
 The Scratchpad is a UIKit `UITextView`, not a SwiftUI `TextEditor`
 (memory). The user can tap to move the cursor and select text in it. Our keys
-edit it through `UITextInput`. Whether a `UITextView` inside a keyboard
-extension can be first responder without trying to show a keyboard (with an
-empty `inputView`) is spike unknown 8. If it can't, the fallback is a
-read-only text view with our own caret at the end (append and delete only).
+edit it through `UITextInput`. A `UITextView` inside a keyboard extension can be
+first responder with an empty `inputView` without showing another keyboard
+(spike unknown 8 confirmed). The iOS 26 scroll edge effects hide the text in a
+short text view; hiding them with `topEdgeEffect.isHidden = true` (and bottom,
+left, right) and setting `contentInsetAdjustmentBehavior = .never` fixes it.
 
 ## 7. The AI part
 
@@ -482,10 +483,12 @@ ios/
 ### 10.3 Changes to existing code
 
 - `AppGroupSettingsStore.load()` coordinates with **write intent** (for
-  corruption recovery), which probably fails on a read-only container. Add
-  a **read-only load**: read-only coordination, no rename of a corrupt
-  file, corruption reported as a settings error. The keyboard uses it while
-  `hasFullAccess` is false.
+  corruption recovery), which fails on a read-only container without Full
+  Access (spike unknown 2). Add a **read-only load**: a plain `Data(contentsOf:)`
+  read with no coordination, no rename of a corrupt file, corruption reported
+  as a settings error. The app writes atomically, so a plain read sees either
+  the old or the new file. The keyboard uses this while `hasFullAccess` is
+  false.
 - `KeychainSecretStore` read failures without Full Access already degrade to
   "no key". The keyboard shows the Full Access card instead of an "invalid
   key" error in that case.
@@ -496,9 +499,9 @@ ios/
 
 - UIKit keys and `UITextView`, one `UIHostingController` for the SwiftUI
   parts, no SwiftUI text input views.
-- The ShareExtension peaked at 36 MB with SwiftUI, network and a rewrite.
-  The keyboard has to stay under about 40 MB with the key grid added; the
-  spike measures it.
+- Target: **60 MB**. The measured limit is about 177 MB on iPhone 16 / iOS 27,
+  and the budget is about a third of it, leaving room for older devices and
+  iOS 26. ios-18 and ios-23 measure the real keyboard's peak.
 - Settings load once per `viewWillAppear`, not per keystroke.
 
 ## 11. Testing
@@ -542,6 +545,10 @@ ios/
   - the privacy manifest is present.
 
 ## 12. Spike unknowns (ios-15)
+
+The spike report (spike-ios-15-report.md) covers all of these and records the
+results. See the report for answers and the "Changed decisions" table for the
+implications for each spec.
 
 1. **Foundation Models in a keyboard:** available, and does a rewrite run,
    with and without Full Access? Memory cost?

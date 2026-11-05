@@ -1,6 +1,6 @@
 # Spec ios-16 — Keyboard target, CI, read-only settings
 
-Status: draft (confirm against the ios-15 report, unknowns 2, 3, 4)
+Status: ready-for-agent
 Phase: Keyboard K1 (foundation)
 Depends on: ios-15
 
@@ -10,8 +10,9 @@ The keyboard needs its own extension target, wired into the project, the
 signing setup and CI like the Share Extension. It also has to read the
 shared settings without Full Access, when the App Group container is
 read-only. `AppGroupSettingsStore.load()` coordinates the file with write
-intent (so it can rename a corrupt file), which fails or misbehaves on a
-read-only container (ios-15, unknown 2).
+intent (so it can rename a corrupt file), which fails on a read-only container
+without Full Access (spike unknown 2: coordinated reads fail with
+`NSCocoaErrorDomain 256`).
 
 ## Solution
 
@@ -93,7 +94,10 @@ read-only container (ios-15, unknown 2).
 
 - New method on `AppGroupSettingsStore`:
   `public func loadReadOnly() throws -> AppSettings`.
-  - It coordinates for **reading only** (`coordinate(readingItemAt:)`).
+  - It reads with a plain `Data(contentsOf:)`, **not** `NSFileCoordinator`.
+    Without Full Access even a read-only coordinated read fails (spike unknown
+    2). The app writes atomically, so a plain read sees either the old or the
+    new file.
   - A missing file returns `AppSettings.seeded()`, like `load()`.
   - A corrupt file throws the same error `load()` would report after its
     recovery, but **doesn't rename** the file and doesn't set the
@@ -144,6 +148,7 @@ Extend the existing verification steps to the keyboard appex
 ## Further Notes
 
 - PLAN-keyboard.md §10.1, §10.3.
-- If ios-15 shows that write-intent coordination works on a read-only
-  container, `loadReadOnly()` is still worth having: it guarantees the
-  keyboard never renames the user's settings file.
+- **Setup note:** `xcodebuild -allowProvisioningUpdates` registers a new App
+  ID but doesn't assign the App Group to it. Tick "App Groups" once in Xcode
+  (target → Signing & Capabilities) after the first build, and the group will
+  be assigned on the next build.

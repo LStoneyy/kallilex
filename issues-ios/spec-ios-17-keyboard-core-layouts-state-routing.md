@@ -1,6 +1,6 @@
 # Spec ios-17 — Keyboard core: layouts, state, input routing
 
-Status: draft (confirm against the ios-15 report, unknown 8)
+Status: ready-for-agent
 Phase: Keyboard K1 (foundation)
 Depends on: ios-16
 
@@ -182,8 +182,9 @@ public final class EditRouter {
 - `.deleteWordBackward` is resolved against `documentContextBeforeInput` of
   the active document. It deletes back to the previous word boundary, plus
   the whitespace in front of it, by counting `Character`s. Each counted
-  `Character` becomes one `deleteBackward`; the spike (unknown 11) confirms
-  that counting holds.
+  `Character` becomes one `deleteBackward`; counting is confirmed in Notes,
+  Mail and a UITextView (spike unknown 11). Web views are checked in ios-19's
+  matrix; if any app class miscounts, disable Undo for those characters.
 - The extension implements `TextDocument` twice:
   - a `HostDocument` around `textDocumentProxy`;
   - a `ScratchpadDocument` around the Scratchpad `UITextView` (ios-18).
@@ -234,7 +235,8 @@ public final class EditRouter {
 
 ## Out of Scope
 
-- Drawing keys, popups, timers, haptics (ios-18).
+- Drawing keys, popups, timers (ios-18).
+- Haptics and input clicks (none in v1).
 - Autocorrect and suggestions.
 
 ## Further Notes

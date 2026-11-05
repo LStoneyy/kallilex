@@ -1,6 +1,6 @@
 # Spec ios-19 — Host bridge: take selection, Insert, Undo, consent, Full Access
 
-Status: draft (confirm against the ios-15 report, unknowns 1, 3, 6, 10, 11)
+Status: ready-for-agent
 Phase: Keyboard K3 (AI flow)
 Depends on: ios-18
 
@@ -125,23 +125,26 @@ public final class HostBridge {
 
 ### Full Access states
 
-- `hasFullAccess == false` and the active profile is a network provider:
-  the chips are shown but tapping one shows the **Full Access card** in the
-  chips area (identifier `keyboard.fullAccessCard`):
+- **On-device provider** (spike unknown 1): runs without Full Access.
+- **Network provider without Full Access:** the chips are shown but tapping
+  one shows the **Full Access card** in the chips area (identifier
+  `keyboard.fullAccessCard`):
   - "Prompts need Full Access to reach your AI provider. Typing, Insert and
     dictation work without it.";
   - "Settings → General → Keyboard → Keyboards → Kallilex → Allow Full
     Access";
-  - a **Settings** button only if the spike found an allowed way to open
-    Settings (unknown 7). There's never an "Open Kallilex" button.
-- The on-device provider without Full Access: runs if the spike shows it
-  works (unknown 1). Otherwise it gets the same card.
+  - a **Settings** button that opens `UIApplication.openSettingsURLString`
+    through the responder chain (allowed by 4.4.1; never `App-prefs:`).
+    There's never an "Open Kallilex" button.
+- **Keychain read failure without Full Access** (spike unknown 3): the runner
+  degrades to "no key".
+- **Network failures without Full Access** (spike unknown 4): every request fails at
+  once with `NSPOSIXErrorDomain 1` ("Operation not permitted"), because the
+  keyboard has no network without Full Access. Show the Full Access card instead of a network error whenever
+  `hasFullAccess` is false and the error is `.http(status: 401 or 403, …)`,
+  `NSPOSIXErrorDomain 1`, or the run had no key.
 - **Copy** without Full Access: the Copy button shows a short note "Copy
   needs Full Access" instead of copying.
-- **Keychain read failure without Full Access** (unknown 3): the runner
-  degrades to "no key". Show the Full Access card instead of an
-  authentication error whenever `hasFullAccess` is false and the error is
-  `.http(status: 401 or 403, …)` or the run had no key.
 
 ### Not configured
 
@@ -180,7 +183,9 @@ only. Typing still works.
   The harness gets a `-uiTestKeyboardNoFullAccess` argument that makes
   `hasFullAccess` report false. Without Full Access the card appears and
   typing still works.
-- **Manual host-app matrix** (device), the apps from ios-15. Per app:
+- **Manual host-app matrix** (device): Notes, Mail, Messages, Safari (address
+  bar, `<textarea>`, `contenteditable`), WhatsApp, Signal, Slack, Google Docs,
+  Pages, Gmail, and a selection of about 3,000 characters. Per app:
   - is the selection taken over;
   - does Replace replace;
   - does Undo work.

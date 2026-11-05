@@ -1,6 +1,6 @@
 # Spec ios-22 — App setup for the keyboard
 
-Status: draft (confirm against the ios-15 report, unknown 12)
+Status: ready-for-agent
 Phase: Keyboard K5 (setup)
 Depends on: ios-19
 
@@ -20,7 +20,8 @@ layout choice.
   - the same guide;
   - the layout choice;
   - a test field.
-- The keyboard-added check, if the spike finds a public way to do it.
+  (No status row: there's no public way to detect the added keyboard. Only a
+  private KVC key exists, which must not ship. Spike unknown 12.)
 
 ## User Stories
 
@@ -30,10 +31,9 @@ layout choice.
    before I see Apple's warning, so that I can decide calmly.
 3. As a user, I want one tap that takes me as close to the keyboard
    settings as iOS allows.
-4. As a user, I want to see whether the keyboard is already added.
-5. As a user, I want to choose QWERTZ or QWERTY.
-6. As a user, I want a test field in the app to try the keyboard.
-7. As a user who skipped the step, I want to find it again in Settings.
+4. As a user, I want to choose QWERTZ or QWERTY.
+5. As a user, I want a test field in the app to try the keyboard.
+6. As a user who skipped the step, I want to find it again in Settings.
 
 ## Implementation Decisions
 
@@ -65,14 +65,6 @@ layout choice.
 
 A new section in `SettingsView` (`settings.keyboard`):
 
-- **Status row:**
-  - if the spike found a public check (unknown 12): "Added" or "Not
-    added";
-  - otherwise no status, only the guide link.
-
-  The candidate API is `UITextInputMode.activeInputModes`, matched by the
-  keyboard's identifier. If that works only through private keys, don't use
-  it.
 - **How to add the keyboard:** pushes `KeyboardGuideView`.
 - **Layout:**
   - a picker, Automatic / QWERTZ (German) / QWERTY (English);
@@ -104,9 +96,7 @@ A new section in `SettingsView` (`settings.keyboard`):
     (`keyboard.key.y` is in the bottom letter row);
   - the accessibility audit on `KeyboardGuideView` and the section.
 - **Manual (device):**
-  - Open Settings lands on the app's page with "Keyboards";
-  - after adding the keyboard, the status row (if any) updates when the app
-    returns to the foreground.
+  - Open Settings lands on the app's page with "Keyboards".
 
 ## Out of Scope
 

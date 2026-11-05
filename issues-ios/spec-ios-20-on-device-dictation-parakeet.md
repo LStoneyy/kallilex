@@ -1,6 +1,6 @@
 # Spec ios-20 — On-device dictation in the app (Parakeet)
 
-Status: draft (confirm against the ios-15 report, unknowns 13, 14)
+Status: ready-for-agent
 Phase: Keyboard K4 (dictation)
 Depends on: ios-15
 
@@ -50,14 +50,15 @@ The keyboard hand-off is ios-21.
 
 - Add FluidAudio as a Swift Package dependency of the **app target only**,
   not `KallilexKit`, not the extensions.
-- Pin an exact version (`exact:`), and record the version and its license
+- **Pin an exact version:** `0.18.2`. Record the version and its license
   (Apache-2.0) in the Licenses screen.
-- **Model:** `parakeet-tdt-0.6b-v3-coreml` (CC-BY-4.0), or the German
-  fine-tune if the spike shows it's clearly better and its license allows
-  redistribution (unknown 13). The choice and its attribution are recorded
-  in `ios/AppReview/review-notes.md` and the Licenses screen ("Speech model:
-  NVIDIA Parakeet TDT 0.6B v3, CoreML conversion by FluidInference,
-  CC-BY-4.0").
+- **Note:** `DownloadUtils.enforceOffline` is now `ModelHub.offlineMode`.
+- **Model:** `parakeet-tdt-0.6b-v3-coreml` (v3, CC-BY-4.0). The German
+  fine-tune is rejected (spike unknown 13): no more accurate on test
+  recordings (same WER), 1.22 GB (2.5× larger), 203 s first load (6× slower).
+  Attribution: "Speech model: NVIDIA Parakeet TDT 0.6B v3, CoreML conversion
+  by FluidInference, CC-BY-4.0" in `ios/AppReview/review-notes.md` and the
+  Licenses screen.
 
 ### `DictationEngine`
 
@@ -77,11 +78,19 @@ protocol DictationEngine: AnyObject, Sendable {
   it shouldn't count against the group container.
 - **`prepare()`** runs right after the download, with the status
   "Preparing the speech model…". This keeps the first dictation from taking
-  about 15 s longer. It runs again after an app update if FluidAudio
-  requires it.
-- **Memory:** load the model on first use per app session. Unload it
-  (`didReceiveMemoryWarning`, or 2 minutes after the last transcription) to
-  give the RAM back.
+  about 33 s longer (spike unknown 13: first load on v3 is 33 s). It runs
+  again after an app update if FluidAudio requires it.
+- **Memory:** the spike (unknown 13) measured 0.5–1.7 GB while loaded, with a
+  peak up to 2.35 GB during download and first load. Load the model only on
+  the Dictation screen (the first 🎤 tap). Unload it when the screen closes
+  and on a `didReceiveMemoryWarning` to give the RAM back. Later loads take
+  9–26 s, so show a visible "Preparing…" state each time.
+- **Follow-ups:**
+  - investigate why the second run used three times the memory: compute
+    units, CoreML's compile cache after a delete;
+  - check whether `encoderComputeUnits: .cpuAndNeuralEngine` should be set
+    explicitly for v3 too;
+  - test on a 6 GB device (iPhone 15 / 16e class) before 1.0.0.
 - **`languageHint`:** the app language. If the spike shows hints don't
   improve v3, it's ignored.
 - **Errors (`DictationError`):** `microphoneDenied`, `modelMissing`,
@@ -91,18 +100,16 @@ protocol DictationEngine: AnyObject, Sendable {
 
 ### Model delivery
 
-- **Preferred:** an Apple-hosted Background Assets asset pack, if the spike
-  confirms it works (unknown 14). Then:
-  - the pack is configured in the project;
-  - the download goes through the Background Assets API;
-  - no third-party server is involved.
-- **Fallback:** a download from the model's Hugging Face URL:
-  - pinned to a fixed revision and checked against a SHA-256 list in the
-    app;
-  - over `URLSession` with a progress callback;
-  - resumable;
-  - the privacy policy and the App Store privacy details mention the
-    download (ios-23).
+- **For 1.0.0:** a download from the model's Hugging Face URL, pinned to a
+  fixed revision (spike unknown 13: v3 is 483 MB, about 33–42 s download).
+  - Verified with SHA-256 checks (custom downloader into FluidAudio's
+    expected folder layout, like the spike did for "de").
+  - Over `URLSession` with a progress callback; resumable.
+  - The privacy policy and the App Store privacy details mention the
+    download (ios-23): Hugging Face is the download source.
+- **Later (ios-13, after the paid account exists):** re-evaluate Apple-hosted
+  Background Assets. Spike unknown 14: requires a paid developer account,
+  App Store Connect, and a TestFlight build for testing.
 - **Either way:**
   - the user starts the download explicitly;
   - the confirmation shows the size ("Download the speech model
@@ -147,6 +154,8 @@ protocol DictationEngine: AnyObject, Sendable {
   - the size on disk;
   - Download / Delete;
   - the model name and its license line.
+  - Several SwiftUI `Button`s in one `List` row all fire on one tap; use
+    `.buttonStyle(.borderless)` to avoid the bug (spike unknown 13).
 - All strings EN/DE in the app's String Catalog.
 
 ### Stub for UI tests

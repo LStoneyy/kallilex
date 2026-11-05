@@ -1,6 +1,6 @@
 # Spec ios-23 — Keyboard polish: localization, accessibility, memory, privacy, review
 
-Status: draft
+Status: ready-for-agent
 Phase: Keyboard K6 (polish, before the 1.0.0 release)
 Depends on: ios-21, ios-22
 
@@ -87,7 +87,7 @@ One pass over the keyboard and dictation features covering:
   - a cloud prompt;
   - an on-device prompt (if supported);
   - taking a long selection (about 20,000 characters).
-- Every number must be below 40 MB. The numbers go into
+- Memory budget: **60 MB** at peak. The numbers go into
   `issues-ios/release-ios-1.0.0-matrix.md`.
 - If a number exceeds the budget, fix it before release (e.g. trim the
   hosting controller, lazy-load the settings).
@@ -119,7 +119,7 @@ One pass over the keyboard and dictation features covering:
   - **Dictation:**
     - the microphone is used only while recording;
     - audio is transcribed on the device and deleted right after;
-    - the speech model download: its source and size.
+    - the speech model download: its source (Hugging Face) and size (483 MB).
 
 ### App Review package
 

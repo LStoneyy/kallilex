@@ -1,6 +1,6 @@
 # Spec ios-21 — Dictation for the keyboard
 
-Status: draft (confirm against the ios-15 report, unknowns 2, 7)
+Status: ready-for-agent
 Phase: Keyboard K4 (dictation)
 Depends on: ios-19, ios-20
 
@@ -58,6 +58,10 @@ public final class PendingTranscriptStore: Sendable {
 
 - **The file:** `pending-transcript.json` in the App Group, written
   atomically with file coordination, like `AppGroupSettingsStore`.
+- **Reading:** the keyboard reads with a plain `Data(contentsOf:)`, no file
+  coordination. The app writes atomically (spike unknown 2), so a plain read
+  sees either the old or the new file. This is the only way the keyboard
+  can read without Full Access.
 - **Expiry:** 10 minutes after `createdAt`, enforced on read. The app also
   deletes expired files at launch and when it goes to the background.
 - **Without Full Access the keyboard can't delete the file.** It keeps the
@@ -92,10 +96,16 @@ public final class PendingTranscriptStore: Sendable {
       "Tastaturen können das Mikrofon nicht nutzen. Öffne Kallilex →
       Diktieren und komm dann hierher zurück.");
     - **Take dictation** if a pending transcript exists.
-  - **Path B** (feature flag `KeyboardFeatures.opensAppForDictation`, on
-    only if the spike confirms it):
-    - 🎤 opens `kallilex://dictate` through the responder chain;
-    - if the call fails or returns false, show the path A panel.
+  - **Path B** (feature flag `KeyboardFeatures.opensAppForDictation`, off in
+    1.0.0, tested in TestFlight before shipping):
+    - 🎤 opens `kallilex://dictate` through the responder chain. The spike
+      (unknown 7) confirmed this works: the responder chain call returns true
+      and the app opens with the URL.
+    - 1.0.0 ships with `KeyboardFeatures.opensAppForDictation` off; path B is
+      built but inactive, and path A is the only active path.
+    - If the call fails, show the path A panel.
+    - Path B needs App Review: 4.4.1 forbids launching apps other than
+      Settings. TestFlight will show whether the review risk is acceptable.
 - **Taking a dictation:** on `viewWillAppear`, if `current()` returns a
   transcript newer than the keyboard's last taken id:
   - after path B within the last 3 minutes: put it into the Scratchpad
