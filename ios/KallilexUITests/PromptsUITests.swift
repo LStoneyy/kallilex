@@ -39,12 +39,22 @@ final class PromptsUITests: KallilexUITestCase {
 
         // Drag from near the trailing edge of the first row (where the
         // reorder handle sits in edit mode) to just below the second row,
-        // moving "Rewrite" past "Shorten". Dragging slowly and holding before
-        // the release lets the list settle on slow CI runners, where a fast
-        // drop sometimes left the order unchanged.
-        let from = rewriteRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
-        let to = shortenRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9))
-        from.press(forDuration: 0.5, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.5)
+        // moving "Rewrite" past "Shorten". On slow CI runners a drop
+        // sometimes leaves the order unchanged even when dragged slowly, so
+        // check the on-screen order and try again a few times before
+        // relaunching. The test is about persistence, not drag gestures.
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "prompt.row."))
+        for _ in 0..<3 {
+            let from = rewriteRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+            let to = shortenRow.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9))
+            from.press(forDuration: 0.5, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.5)
+            if rows.element(boundBy: 0).identifier == "prompt.row.builtin-shorten" { break }
+        }
+        XCTAssertEqual(
+            rows.element(boundBy: 0).identifier,
+            "prompt.row.builtin-shorten",
+            "The drag should have moved Shorten to the top before relaunch"
+        )
 
         app.navigationBars.buttons["Done"].waitAndAssertExists().tap()
 
