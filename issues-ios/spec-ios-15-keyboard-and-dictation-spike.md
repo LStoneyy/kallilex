@@ -1,6 +1,6 @@
 # Spec ios-15 — Keyboard and dictation spike
 
-Status: ready-for-agent (device steps by the product owner)
+Status: done (report: spike-ios-15-report.md)
 Phase: Keyboard K0 (spike, throwaway prototype)
 Depends on: ios-14
 
