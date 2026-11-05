@@ -3,7 +3,9 @@
 Status: ready-for-agent (the agent writes the checklist and docs; the
 product owner performs the App Store Connect and upload steps)
 Phase: Phase 6 (Release)
-Depends on: ios-11, ios-12, and a paid Apple Developer Program membership
+Depends on: ios-11, ios-12, ios-23 (the keyboard ships in 1.0.0, decided
+2026-11-05, see PLAN-keyboard.md), and a paid Apple Developer Program
+membership
 
 ## Problem Statement
 
