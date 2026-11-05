@@ -42,10 +42,17 @@ public struct KeyboardTargetSwitch: View {
                 .font(.footnote.weight(isSelected ? .semibold : .regular))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .frame(minHeight: 28)
                 .background(isSelected ? Color(.systemBackground) : .clear, in: Capsule())
         }
         .buttonStyle(.plain)
+        // At least 44 pt wide (the accessibility audit's minimum hit-region
+        // size), applied to the button itself (not just its label) so the
+        // extra, otherwise-invisible space actually grows the tappable/
+        // accessibility frame: the 36 pt toolbar row can't also grow this
+        // tall, but a title as short as "App" would otherwise leave a hit
+        // area far too narrow to tap reliably.
+        .frame(minWidth: 44, minHeight: 28)
+        .contentShape(Rectangle())
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityIdentifier(identifier)
     }

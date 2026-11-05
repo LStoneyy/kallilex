@@ -322,7 +322,10 @@ final class AppEnvironment: Sendable {
 #if DEBUG
 /// A `TextProvider` that returns `userText` uppercased, ignoring
 /// `systemPrompt` — used only for XCUITests via `-uiTestStubProvider`.
-private struct UppercasingStubProvider: TextProvider {
+/// Internal (not `private`): `KeyboardHarnessView`'s `HarnessKeyboardController`
+/// reuses it so the keyboard harness's `-uiTestStubProvider` behaves exactly
+/// like the app's own.
+struct UppercasingStubProvider: TextProvider {
     func complete(systemPrompt: String, userText: String) async throws -> String {
         userText.uppercased()
     }

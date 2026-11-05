@@ -24,6 +24,9 @@ struct KallilexApp: App {
                     if ProcessInfo.processInfo.arguments.contains("-uiTestShareHarness") {
                         ShareHarnessView()
                             .environment(environment)
+                    } else if ProcessInfo.processInfo.arguments.contains("-uiTestKeyboardHarness") {
+                        KeyboardHarnessView()
+                            .environment(environment)
                     } else {
                         RootTabView(suppressOnboardingCover: showCorruptionAlert)
                             .environment(environment)

@@ -26,6 +26,12 @@ public final class ScratchpadTextView: UITextView {
     public init() {
         super.init(frame: .zero, textContainer: nil)
         accessibilityIdentifier = "keyboard.scratchpad"
+        // Otherwise VoiceOver (and the accessibility audit) has nothing to
+        // describe this element with while it's empty: the placeholder
+        // shown then is a separate, non-accessible `UILabel` sibling
+        // (`placeholderLabel`), not part of this text view's own
+        // accessible value. Reuses `EditorView`'s own `editor.label` key.
+        accessibilityLabel = String(localized: "editor.label", defaultValue: "Text", bundle: .module)
         inputView = UIView()
         font = .preferredFont(forTextStyle: .body)
         adjustsFontForContentSizeCategory = true
