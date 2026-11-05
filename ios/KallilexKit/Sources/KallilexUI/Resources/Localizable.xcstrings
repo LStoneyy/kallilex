@@ -579,6 +579,23 @@
         }
       }
     },
+    "keyboard.consent.inlinePrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An %@ senden erlauben?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow sending to %@?"
+          }
+        }
+      }
+    },
     "keyboard.insert.placeholder": {
       "extractionState": "manual",
       "localizations": {
@@ -847,6 +864,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show prompts"
+          }
+        }
+      }
+    },
+    "keyboard.status.dismissNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwerfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        }
+      }
+    },
+    "keyboard.status.notConfigured": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richte in der Kallilex-App einen Anbieter ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up a provider in the Kallilex app."
           }
         }
       }

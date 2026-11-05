@@ -131,8 +131,8 @@ private struct KeyboardControllerContainer: UIViewControllerRepresentable {
 /// stores are the app's own — the same App Group/Keychain the real keyboard
 /// extension would read from — so state set up through the app's own UI
 /// (providers, prompts) is visible to the harness too. `makeProviderFactory
-/// ()` honors `-uiTestStubProvider` exactly like `AppEnvironment`'s own
-/// provider factory does on the app side.
+/// ()` honors `-uiTestStubProvider`/`-uiTestStubProviderFails` exactly
+/// like `AppEnvironment`'s own provider factory does on the app side.
 ///
 /// `textDocumentProxy` is overridden to `FakeTextDocumentProxy`, backed by
 /// `hostTextView` (set once `KeyboardHarnessHostTextView.makeUIView` builds
@@ -176,6 +176,9 @@ final class HarnessKeyboardController: KallilexKeyboardController {
     override func makeSecretStore() -> any SecretStore { harnessSecretStore }
 
     override func makeProviderFactory() -> @Sendable (ProviderProfile, String?) -> any TextProvider {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestStubProviderFails") {
+            return { _, _ in FailingStubProvider() }
+        }
         if ProcessInfo.processInfo.arguments.contains("-uiTestStubProvider") {
             return { _, _ in UppercasingStubProvider() }
         }

@@ -179,6 +179,9 @@ final class AppEnvironment: Sendable {
         onDeviceModel: any OnDeviceModel
     ) -> @Sendable (ProviderProfile, String?) -> any TextProvider {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestStubProviderFails") {
+            return { _, _ in FailingStubProvider() }
+        }
         if ProcessInfo.processInfo.arguments.contains("-uiTestStubProvider") {
             return { _, _ in UppercasingStubProvider() }
         }
@@ -328,6 +331,18 @@ final class AppEnvironment: Sendable {
 struct UppercasingStubProvider: TextProvider {
     func complete(systemPrompt: String, userText: String) async throws -> String {
         userText.uppercased()
+    }
+}
+
+/// A `TextProvider` that always throws `ProviderError.unreachable` —
+/// used only by XCUITests via `-uiTestStubProviderFails` to exercise the
+/// `.failed` state deterministically (e.g. the keyboard's compact
+/// `KeyboardStatusRow`), without needing a real unreachable endpoint.
+/// Internal (not `private`), same reason as `UppercasingStubProvider`:
+/// `HarnessKeyboardController`'s `makeProviderFactory()` reuses it.
+struct FailingStubProvider: TextProvider {
+    func complete(systemPrompt: String, userText: String) async throws -> String {
+        throw ProviderError.unreachable("stub failure")
     }
 }
 

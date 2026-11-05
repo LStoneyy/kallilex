@@ -263,6 +263,87 @@ final class KeyboardUITests: KallilexUITestCase {
         XCTAssertNotEqual(scratchpad.value as? String, beforeFirstRun.uppercased(), "The Scratchpad should have changed again")
     }
 
+    // MARK: - Compact status row (KeyboardStatusRow)
+
+    /// ios-18 bugfix: `StatusBanner`'s `.failed` card is 100+ pt tall and
+    /// overflowed the fixed 44 pt chips row; `KeyboardStatusRow` replaces
+    /// it with a one-line row whose Retry/dismiss buttons stay hittable,
+    /// and dismissing returns to the chips without retrying.
+    func testFailedStateShowsRetryAndDismissThenDismissBringsBackChips() {
+        let setup = launchApp()
+        setup.tabButton("tab.providers").tap()
+        setup.addCustomProvider(name: "LAN Server", baseUrl: "http://192.168.1.10:11434/v1", model: "llama-3")
+        setup.terminate()
+
+        let app = launchKeyboardHarness(resetState: false, extraArguments: ["-uiTestStubProviderFails"])
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("hello", on: app)
+
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+
+        let retry = app.buttons["keyboard.status.retry"]
+        let dismiss = app.buttons["keyboard.status.dismiss"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 10), "keyboard.status.retry did not appear")
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 5), "keyboard.status.dismiss did not appear")
+        XCTAssertTrue(retry.isHittable, "keyboard.status.retry should be hittable")
+        XCTAssertTrue(dismiss.isHittable, "keyboard.status.dismiss should be hittable")
+
+        dismiss.tap()
+
+        let rewriteChip = app.buttons["editor.chip.builtin-rewrite"]
+        XCTAssertTrue(rewriteChip.waitForExistence(timeout: 5), "Dismiss should bring the chips back")
+        XCTAssertTrue(rewriteChip.isHittable, "The chips should be hittable again after dismissing the error")
+    }
+
+    /// ios-18 bugfix: the not-configured state used to show `StatusBanner`
+    /// 's full card (overflowing the row); `KeyboardStatusRow` shows the
+    /// text only — there's nowhere for the keyboard to navigate to — and
+    /// the action row below stays hittable.
+    func testNotConfiguredShowsTextAndActionRowStaysHittable() {
+        let app = launchKeyboardHarness()
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("hello", on: app)
+
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+
+        app.staticTexts["Set up a provider in the Kallilex app."].waitAndAssertExists(timeout: 10)
+
+        let keysButton = app.buttons["keyboard.mode.keys"]
+        XCTAssertTrue(keysButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(keysButton.isHittable, "keyboard.mode.keys should stay hittable while the not-configured row is shown")
+    }
+
+    /// Consent inline (ios-19 replaces this with a proper compact consent
+    /// view; this only checks the one-line stand-in's buttons work): a
+    /// cloud custom provider without consent shows Allow/Not now inline,
+    /// both hittable, mirroring `ShareExtensionUITests
+    /// .testConsentInlineThenAllowRunsThePrompt`'s provider setup.
+    func testConsentInlineAllowAndNotNowAreHittable() {
+        let setup = launchApp()
+        setup.tabButton("tab.providers").tap()
+        setup.addCustomProvider(name: "Cloud Server", baseUrl: "https://api.example.com/v1", model: "gpt-4-turbo")
+        setup.terminate()
+
+        let app = launchKeyboardHarness(resetState: false, extraArguments: ["-uiTestStubProvider"])
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("hello", on: app)
+
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+
+        let allow = app.buttons["consent.allow"]
+        let notNow = app.buttons["consent.notNow"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 10), "consent.allow did not appear")
+        XCTAssertTrue(notNow.waitForExistence(timeout: 5), "consent.notNow did not appear")
+        XCTAssertTrue(allow.isHittable, "consent.allow should be hittable")
+        XCTAssertTrue(notNow.isHittable, "consent.notNow should be hittable")
+    }
+
     // MARK: - Accessibility audit
 
     /// Same audit types and known-issue filtering as `AccessibilityUITests`.

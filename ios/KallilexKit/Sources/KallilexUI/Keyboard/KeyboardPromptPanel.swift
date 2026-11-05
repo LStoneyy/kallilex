@@ -3,11 +3,17 @@ import KallilexKit
 
 /// Prompt mode's non-Scratchpad content (ios-18, PLAN-keyboard.md §5): a
 /// 44 pt chips row — the existing `PromptChipsBar`, replaced by
-/// `StatusBanner` only while a run is in flight, for a pending consent
-/// request, or for an error — and a 44 pt action row: 🌐 (only if
+/// `KeyboardStatusRow` only while a run is in flight, for a pending
+/// consent request, or for an error — and a 44 pt action row: 🌐 (only if
 /// `showsGlobe`), ⌨ (`keyboard.mode.keys`), a hidden 🎤 placeholder
 /// (ios-21), the active provider's `KeyboardCompactPrivacyBadge`, and a
 /// hidden Insert placeholder (ios-19).
+///
+/// `KeyboardStatusRow`, not `StatusBanner` itself, renders every non-chips
+/// state: `StatusBanner`'s `.failed`/`.notConfigured` cards are 100+ pt
+/// tall — built for the app's full `EditorScreen` — and would overflow
+/// this 44 pt row into the action row below (ios-18 bugfix). The app's
+/// own `StatusBanner`/`EditorScreen` are unaffected.
 ///
 /// A successful run (`.result`) is treated like `.idle` for this row: the
 /// chips come back immediately rather than getting stuck behind a
@@ -36,6 +42,7 @@ public struct KeyboardPromptPanel: View {
     private let onConsentAllow: () -> Void
     private let onConsentDecline: () -> Void
     private let onDismissError: () -> Void
+    private let onDismissNote: () -> Void
     private let onGlobe: () -> Void
     private let onShowKeys: () -> Void
 
@@ -53,6 +60,7 @@ public struct KeyboardPromptPanel: View {
         onConsentAllow: @escaping () -> Void,
         onConsentDecline: @escaping () -> Void,
         onDismissError: @escaping () -> Void,
+        onDismissNote: @escaping () -> Void,
         onGlobe: @escaping () -> Void,
         onShowKeys: @escaping () -> Void
     ) {
@@ -69,6 +77,7 @@ public struct KeyboardPromptPanel: View {
         self.onConsentAllow = onConsentAllow
         self.onConsentDecline = onConsentDecline
         self.onDismissError = onDismissError
+        self.onDismissNote = onDismissNote
         self.onGlobe = onGlobe
         self.onShowKeys = onShowKeys
     }
@@ -83,7 +92,7 @@ public struct KeyboardPromptPanel: View {
     /// `.idle`/`.result` (with no `inlineNote`) show the chips;
     /// `.running`/`.failed`/`.consentRequired`/`.notConfigured` (or an
     /// idle state with a note, e.g. right after declining consent) show
-    /// `StatusBanner` instead.
+    /// `KeyboardStatusRow` instead.
     @ViewBuilder
     private var chipsRow: some View {
         if (state == .idle || state == .result), inlineNote == nil {
@@ -94,7 +103,7 @@ public struct KeyboardPromptPanel: View {
                 onCustomTapped: nil
             )
         } else {
-            StatusBanner(
+            KeyboardStatusRow(
                 state: state,
                 runningLabel: runningLabel,
                 inlineNote: inlineNote,
@@ -102,7 +111,8 @@ public struct KeyboardPromptPanel: View {
                 onRetry: onRetry,
                 onConsentAllow: onConsentAllow,
                 onConsentDecline: onConsentDecline,
-                onDismissError: onDismissError
+                onDismissError: onDismissError,
+                onDismissNote: onDismissNote
             )
         }
     }

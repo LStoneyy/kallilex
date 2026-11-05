@@ -25,6 +25,12 @@ public struct KeyboardRootView: View {
     /// shows any "Done" state of its own once a result is treated like
     /// idle.
     @State private var showsDoneOverlay = false
+    /// Bumped every time a new "Fertig" overlay is shown, so a stale hide
+    /// `Task` from an earlier `.result` can't hide a later one's overlay —
+    /// e.g. a second run completing (and re-showing the overlay) while the
+    /// first run's 1.2 s timer is still pending would otherwise hide the
+    /// second overlay immediately instead of after its own 1.2 s.
+    @State private var doneGeneration = 0
 
     public init(model: KeyboardModel, showsGlobe: Bool, onGlobe: @escaping () -> Void) {
         self.model = model
@@ -76,6 +82,7 @@ public struct KeyboardRootView: View {
                     onConsentAllow: { model.grantConsentAndRetry() },
                     onConsentDecline: { model.declineConsent() },
                     onDismissError: { model.session.cancel() },
+                    onDismissNote: { model.session.inlineNote = nil },
                     onGlobe: onGlobe,
                     onShowKeys: { model.mode = .keys }
                 )
@@ -87,9 +94,12 @@ public struct KeyboardRootView: View {
         }
         .onChange(of: model.session.state) { _, newState in
             guard newState == .result else { return }
+            doneGeneration += 1
+            let generation = doneGeneration
             showsDoneOverlay = true
             Task {
                 try? await Task.sleep(for: .seconds(1.2))
+                guard generation == doneGeneration else { return }
                 showsDoneOverlay = false
             }
         }
