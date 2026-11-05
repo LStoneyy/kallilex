@@ -375,6 +375,23 @@
         }
       }
     },
+    "editor.statusBanner.dismiss": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehler verwerfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss error"
+          }
+        }
+      }
+    },
     "editor.textTooLong": {
       "extractionState": "manual",
       "localizations": {
@@ -728,6 +745,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "symbols"
+          }
+        }
+      }
+    },
+    "keyboard.privacyBadge.cloud": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud"
+          }
+        }
+      }
+    },
+    "keyboard.privacyBadge.localNetwork": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokales Netzwerk"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local network"
           }
         }
       }

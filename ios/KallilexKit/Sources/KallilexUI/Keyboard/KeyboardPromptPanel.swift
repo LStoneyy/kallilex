@@ -3,11 +3,17 @@ import KallilexKit
 
 /// Prompt mode's non-Scratchpad content (ios-18, PLAN-keyboard.md §5): a
 /// 44 pt chips row — the existing `PromptChipsBar`, replaced by
-/// `StatusBanner` during a run, an error, the not-configured state, or a
-/// pending consent request — and a 44 pt action row: 🌐 (only if
+/// `StatusBanner` only while a run is in flight, for a pending consent
+/// request, or for an error — and a 44 pt action row: 🌐 (only if
 /// `showsGlobe`), ⌨ (`keyboard.mode.keys`), a hidden 🎤 placeholder
-/// (ios-21), the active provider's `PrivacyBadge`, and a hidden Insert
-/// placeholder (ios-19).
+/// (ios-21), the active provider's `KeyboardCompactPrivacyBadge`, and a
+/// hidden Insert placeholder (ios-19).
+///
+/// A successful run (`.result`) is treated like `.idle` for this row: the
+/// chips come back immediately rather than getting stuck behind a
+/// permanent "Fertig" banner with no way back (ios-18 bugfix). The
+/// not-configured state still shows `StatusBanner`'s own card, since there
+/// is nothing the chips could usefully run against.
 ///
 /// The "Custom…" chip is hidden (`onCustomTapped: nil`): a typed custom
 /// instruction from the keyboard isn't in 1.0.0's scope (PLAN-keyboard.md
@@ -17,6 +23,11 @@ public struct KeyboardPromptPanel: View {
     private let state: EditorSession.State
     private let runningLabel: String
     private let inlineNote: String?
+    /// `true` while the Scratchpad is empty or whitespace-only — disables
+    /// every chip (ios-18 bugfix: a prompt can't usefully run against no
+    /// text). Mirrors `EditorSession.canCopy`'s own "nothing to act on"
+    /// check, trimmed so whitespace-only text counts as empty too.
+    private let isScratchpadEmpty: Bool
     private let activeProfile: ProviderProfile?
     private let showsGlobe: Bool
     private let onSelectPrompt: (CustomPrompt) -> Void
@@ -24,6 +35,7 @@ public struct KeyboardPromptPanel: View {
     private let onRetry: () -> Void
     private let onConsentAllow: () -> Void
     private let onConsentDecline: () -> Void
+    private let onDismissError: () -> Void
     private let onGlobe: () -> Void
     private let onShowKeys: () -> Void
 
@@ -32,6 +44,7 @@ public struct KeyboardPromptPanel: View {
         state: EditorSession.State,
         runningLabel: String,
         inlineNote: String?,
+        isScratchpadEmpty: Bool,
         activeProfile: ProviderProfile?,
         showsGlobe: Bool,
         onSelectPrompt: @escaping (CustomPrompt) -> Void,
@@ -39,6 +52,7 @@ public struct KeyboardPromptPanel: View {
         onRetry: @escaping () -> Void,
         onConsentAllow: @escaping () -> Void,
         onConsentDecline: @escaping () -> Void,
+        onDismissError: @escaping () -> Void,
         onGlobe: @escaping () -> Void,
         onShowKeys: @escaping () -> Void
     ) {
@@ -46,6 +60,7 @@ public struct KeyboardPromptPanel: View {
         self.state = state
         self.runningLabel = runningLabel
         self.inlineNote = inlineNote
+        self.isScratchpadEmpty = isScratchpadEmpty
         self.activeProfile = activeProfile
         self.showsGlobe = showsGlobe
         self.onSelectPrompt = onSelectPrompt
@@ -53,23 +68,28 @@ public struct KeyboardPromptPanel: View {
         self.onRetry = onRetry
         self.onConsentAllow = onConsentAllow
         self.onConsentDecline = onConsentDecline
+        self.onDismissError = onDismissError
         self.onGlobe = onGlobe
         self.onShowKeys = onShowKeys
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            chipsRow.frame(height: 44)
-            actionRow.frame(height: 44)
+            chipsRow.frame(height: KeyboardPromptMetrics.chipsHeight)
+            actionRow.frame(height: KeyboardPromptMetrics.actionHeight)
         }
     }
 
+    /// `.idle`/`.result` (with no `inlineNote`) show the chips;
+    /// `.running`/`.failed`/`.consentRequired`/`.notConfigured` (or an
+    /// idle state with a note, e.g. right after declining consent) show
+    /// `StatusBanner` instead.
     @ViewBuilder
     private var chipsRow: some View {
-        if case .idle = state, inlineNote == nil {
+        if (state == .idle || state == .result), inlineNote == nil {
             PromptChipsBar(
                 prompts: prompts,
-                isRunning: false,
+                isRunning: isScratchpadEmpty,
                 onSelectPrompt: onSelectPrompt,
                 onCustomTapped: nil
             )
@@ -81,7 +101,8 @@ public struct KeyboardPromptPanel: View {
                 onCancel: onCancel,
                 onRetry: onRetry,
                 onConsentAllow: onConsentAllow,
-                onConsentDecline: onConsentDecline
+                onConsentDecline: onConsentDecline,
+                onDismissError: onDismissError
             )
         }
     }
@@ -115,7 +136,7 @@ public struct KeyboardPromptPanel: View {
             Spacer()
 
             if let activeProfile {
-                PrivacyBadge(profile: activeProfile, interactive: false)
+                KeyboardCompactPrivacyBadge(profile: activeProfile)
             }
 
             // ios-19: Insert. Hidden placeholder, same reason as above.

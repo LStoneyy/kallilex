@@ -24,6 +24,12 @@ public struct StatusBanner: View {
     private let onConsentAllow: () -> Void
     private let onConsentDecline: () -> Void
     private let onOpenProviders: (() -> Void)?
+    /// Shows a dismiss (×) button alongside Retry in the `.failed` case
+    /// when non-`nil` — the keyboard's prompt mode (ios-18) needs a way
+    /// back to the chips row after an error without retrying; the app's
+    /// own `EditorScreen` doesn't pass this, so its failed state is
+    /// unchanged (Retry only).
+    private let onDismissError: (() -> Void)?
 
     public init(
         state: EditorSession.State,
@@ -33,7 +39,8 @@ public struct StatusBanner: View {
         onRetry: @escaping () -> Void,
         onConsentAllow: @escaping () -> Void,
         onConsentDecline: @escaping () -> Void,
-        onOpenProviders: (() -> Void)? = nil
+        onOpenProviders: (() -> Void)? = nil,
+        onDismissError: (() -> Void)? = nil
     ) {
         self.state = state
         self.runningLabel = runningLabel
@@ -43,6 +50,7 @@ public struct StatusBanner: View {
         self.onConsentAllow = onConsentAllow
         self.onConsentDecline = onConsentDecline
         self.onOpenProviders = onOpenProviders
+        self.onDismissError = onDismissError
     }
 
     public var body: some View {
@@ -91,6 +99,23 @@ public struct StatusBanner: View {
                     Image(systemName: "exclamationmark.circle.fill")
                         .foregroundStyle(.red)
                     Text(error.localizedDescription)
+                    if let onDismissError {
+                        Spacer()
+                        Button {
+                            onDismissError()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel(String(
+                            localized: "editor.statusBanner.dismiss",
+                            defaultValue: "Dismiss error",
+                            bundle: .module
+                        ))
+                        .accessibilityIdentifier("editor.statusBanner.dismiss")
+                    }
                 }
                 Button(String(localized: "editor.retry", defaultValue: "Retry", bundle: .module)) {
                     onRetry()

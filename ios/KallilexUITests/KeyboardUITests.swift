@@ -164,7 +164,9 @@ final class KeyboardUITests: KallilexUITestCase {
         let beforeRun = app.textViews["keyboard.scratchpad"].value as? String ?? ""
 
         app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
-        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists()
+        attachScreenshot(app.screenshot(), name: "keyboard-prompt-idle")
+        app.buttons["editor.chip.builtin-rewrite"].tap()
 
         let scratchpad = app.textViews["keyboard.scratchpad"]
         let expectation = XCTNSPredicateExpectation(
@@ -172,9 +174,93 @@ final class KeyboardUITests: KallilexUITestCase {
             object: scratchpad
         )
         XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 10), .completed, "Expected the stub provider's uppercased result")
+        attachScreenshot(app.screenshot(), name: "keyboard-prompt-after-run")
 
         app.buttons["editor.undo"].waitAndAssertExists().tap()
         XCTAssertEqual(scratchpad.value as? String, beforeRun, "Undo should restore the pre-run text")
+    }
+
+    /// ios-18 bugfix: the hosting view used to be 32 pt too short for its
+    /// own SwiftUI content (toolbar + chips + action row), so everything
+    /// below the toolbar overflowed and wasn't hit-testable at all.
+    func testPromptModeControlsAreHittable() {
+        let app = launchKeyboardHarness()
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("hello", on: app)
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+
+        let identifiers = [
+            "editor.chip.builtin-rewrite",
+            "editor.chip.builtin-shorten",
+            "editor.chip.builtin-improve-clarity",
+            "keyboard.mode.keys",
+            "editor.undo",
+        ]
+        for identifier in identifiers {
+            let element = app.buttons[identifier]
+            XCTAssertTrue(element.waitForExistence(timeout: 5), "\(identifier) did not appear")
+            XCTAssertTrue(element.isHittable, "\(identifier) should be hittable in prompt mode")
+        }
+    }
+
+    /// ios-18 bugfix: a prompt can't usefully run against no text.
+    func testEmptyScratchpadDisablesChips() {
+        let app = launchKeyboardHarness()
+        let chip = app.buttons["editor.chip.builtin-rewrite"]
+        chip.waitAndAssertExists()
+        XCTAssertFalse(chip.isEnabled, "Expected the rewrite chip to be disabled while the Scratchpad is empty")
+    }
+
+    /// ios-18 bugfix: a successful run used to replace the chips row with a
+    /// permanent "Fertig" `StatusBanner`, with no way back to run another
+    /// prompt. Runs two different chips back to back and checks the chips
+    /// come back hittable after each.
+    func testChipsComeBackAfterARunAndASecondRunAlsoWorks() {
+        let setup = launchApp()
+        setup.tabButton("tab.providers").tap()
+        setup.addCustomProvider(name: "LAN Server", baseUrl: "http://192.168.1.10:11434/v1", model: "llama-3")
+        setup.terminate()
+
+        let app = launchKeyboardHarness(resetState: false, extraArguments: ["-uiTestStubProvider"])
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("hello", on: app)
+        let beforeFirstRun = app.textViews["keyboard.scratchpad"].value as? String ?? ""
+
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+
+        let scratchpad = app.textViews["keyboard.scratchpad"]
+        let afterFirstRun = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", beforeFirstRun.uppercased()),
+            object: scratchpad
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [afterFirstRun], timeout: 10), .completed)
+
+        let rewriteChip = app.buttons["editor.chip.builtin-rewrite"]
+        XCTAssertTrue(rewriteChip.waitForExistence(timeout: 5))
+        XCTAssertTrue(rewriteChip.isHittable, "The chips should come back after a successful run")
+
+        // Append more text (in keys mode) so the second run's input really
+        // differs from the first result, then run a second, different chip.
+        app.buttons["keyboard.mode.keys"].waitAndAssertExists().tap()
+        app.textViews["keyboard.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("world", on: app)
+        let beforeSecondRun = scratchpad.value as? String ?? ""
+
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+        let shortenChip = app.buttons["editor.chip.builtin-shorten"]
+        XCTAssertTrue(shortenChip.waitForExistence(timeout: 5))
+        XCTAssertTrue(shortenChip.isHittable)
+        shortenChip.tap()
+
+        let afterSecondRun = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", beforeSecondRun.uppercased()),
+            object: scratchpad
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [afterSecondRun], timeout: 10), .completed, "Expected the second run's uppercased result")
+        XCTAssertNotEqual(scratchpad.value as? String, beforeFirstRun.uppercased(), "The Scratchpad should have changed again")
     }
 
     // MARK: - Accessibility audit
@@ -188,6 +274,7 @@ final class KeyboardUITests: KallilexUITestCase {
         let app = launchKeyboardHarness()
         app.buttons["keyboard.mode.keys"].waitAndAssertExists().tap()
         app.textViews["keyboard.scratchpad"].waitAndAssertExists()
+        attachScreenshot(app.screenshot(), name: "keyboard-keys-mode")
         try app.performAccessibilityAudit(for: auditTypes)
     }
 

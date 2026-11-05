@@ -250,6 +250,15 @@ open class KallilexKeyboardController: UIInputViewController {
                 textBeforeCursor: model.scratchpadDocument.documentContextBeforeInput
             ))
         }
+        // A tap into the Scratchpad places the caret (default `UITextView`
+        // behavior) and sets the typing target to Scratchpad, in either
+        // mode — but never switches the mode itself: prompt mode's own
+        // Scratchpad tap (e.g. to reposition the caret before running a
+        // prompt) must not silently jump to keys mode underneath the user
+        // (ios-18 bugfix item 8).
+        scratchpadTextView.onBeginEditing = { [weak model] in
+            model?.target = .scratchpad
+        }
     }
 
     private func setUpKeyGrid(model: KeyboardModel) {
@@ -312,7 +321,7 @@ open class KallilexKeyboardController: UIInputViewController {
 
         promptsModeConstraints = [
             scratchpadTextView.bottomAnchor.constraint(equalTo: hostingController.view.topAnchor, constant: -4),
-            hostingController.view.heightAnchor.constraint(equalToConstant: 88),
+            hostingController.view.heightAnchor.constraint(equalToConstant: KeyboardPromptMetrics.total),
             hostingController.view.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
         ]
 
