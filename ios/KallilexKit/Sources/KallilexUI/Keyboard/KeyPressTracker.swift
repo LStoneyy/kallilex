@@ -36,7 +36,8 @@ public struct KeyPressTracker<TouchID: Hashable> {
         /// under the finger (it may have moved — see `moveTouch`), or to
         /// the selected alternate if the popup was showing. Eligible for
         /// rollover: a new touch's `beginTouch` commits an in-progress
-        /// `.character` press immediately.
+        /// `.character` press immediately — whether the new touch is
+        /// itself `.character` or `.immediate` (see `.immediate` below).
         case character
         /// Shift, globe, the layer-switch keys: commit on lift, but only
         /// if the finger is still over the original key at that point
@@ -46,6 +47,10 @@ public struct KeyPressTracker<TouchID: Hashable> {
         /// Delete, space, return: already committed by the caller on
         /// touch-down. Tracked only so `endTouch`/`cancelAll` have
         /// something to clean up; always resolves to no further commit.
+        /// Also rollover-eligible as the *new* touch (but never as the
+        /// in-progress one being rolled over, which must be `.character`)
+        /// — matches the system keyboard, where hitting space/delete/
+        /// return while a letter is still down commits that letter first.
         case immediate
     }
 
@@ -64,14 +69,44 @@ public struct KeyPressTracker<TouchID: Hashable> {
     public init() {}
 
     /// Call on touch-down. Returns the commit for *another* touch's
-    /// still-in-progress `.character` press, if any (rollover) — the
-    /// caller applies that commit, then this touch's own press begins
-    /// tracking from `keyIndex`.
+    /// still-in-progress `.character` press, if any (rollover: triggered
+    /// by a new `.character` or `.immediate` touch, never by `.deferred`)
+    /// — the caller applies that commit, then this touch's own press
+    /// begins tracking from `keyIndex`. Equivalent to `takeRolloverCommit()`
+    /// (only for rollover-eligible kinds) followed by `registerTouch` —
+    /// kept as a convenience for callers that don't need to act on the
+    /// rollover commit (e.g. rebuild something) before registering the
+    /// new touch; `KeyGridView` calls the two separately instead, since a
+    /// rollover commit can itself change the layout the new touch's
+    /// `keyIndex` needs to be resolved against.
     @discardableResult
     public mutating func beginTouch(_ id: TouchID, at keyIndex: Int, kind: PressKind) -> Commit? {
-        let rollover = kind == .character ? rolloverCharacterCommit() : nil
-        presses[id] = Press(kind: kind, currentKeyIndex: keyIndex)
+        let rollover = (kind == .character || kind == .immediate) ? takeRolloverCommit() : nil
+        registerTouch(id, at: keyIndex, kind: kind)
         return rollover
+    }
+
+    /// Commits (and stops tracking) an in-progress `.character` press, if
+    /// any, without starting to track any new touch — the
+    /// rollover half of `beginTouch`, split out so a caller can apply the
+    /// commit (which may itself change state the new touch's `keyIndex`
+    /// needs to be resolved against) before calling `registerTouch`.
+    /// Normally at most one `.character` press is in progress when a new
+    /// touch lands (two-finger typing); if there were ever more than one,
+    /// which one is committed is unspecified (dictionary order).
+    @discardableResult
+    public mutating func takeRolloverCommit() -> Commit? {
+        guard let id = presses.first(where: { $0.value.kind == .character })?.key else { return nil }
+        return endTouch(id, cancelled: false)
+    }
+
+    /// Starts tracking a new touch at `keyIndex`, with no rollover check
+    /// of its own — the non-rollover half of `beginTouch`. Also used
+    /// outside of touch-down, to re-register a touch that survived a
+    /// mid-press grid rebuild (`KeyGridView`'s layer-switch remap) at its
+    /// new key index.
+    public mutating func registerTouch(_ id: TouchID, at keyIndex: Int, kind: PressKind) {
+        presses[id] = Press(kind: kind, currentKeyIndex: keyIndex)
     }
 
     /// Call on touch-move for a `.character` press: moves it to
@@ -142,15 +177,5 @@ public struct KeyPressTracker<TouchID: Hashable> {
     /// otherwise be abandoned.
     public mutating func cancelAll() {
         presses.removeAll()
-    }
-
-    /// The commit for the oldest in-progress `.character` press, if any
-    /// — used by `beginTouch` for rollover. Normally at most one such
-    /// press is in progress when a second touch lands (two-finger
-    /// typing); this resolves deterministically even if there were ever
-    /// more than one.
-    private mutating func rolloverCharacterCommit() -> Commit? {
-        guard let id = presses.first(where: { $0.value.kind == .character })?.key else { return nil }
-        return endTouch(id, cancelled: false)
     }
 }

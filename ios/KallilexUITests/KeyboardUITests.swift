@@ -129,6 +129,26 @@ final class KeyboardUITests: KallilexUITestCase {
         XCTAssertEqual(app.textViews["keyboard.scratchpad"].value as? String, "A. BCd")
     }
 
+    // MARK: - Layer switching
+
+    /// 123 redraws the grid as the numbers pad (its digit keys exist and
+    /// type digits), and ABC brings the letters back.
+    func testNumbersKeySwitchesTheGridAndLettersKeySwitchesBack() {
+        let app = launchKeyboardHarness()
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+
+        keyboardKey("numbers", on: app).waitAndAssertExists().tap()
+        keyboardKey("1", on: app).waitAndAssertExists().tap()
+        keyboardKey("2", on: app).waitAndAssertExists().tap()
+
+        keyboardKey("letters", on: app).waitAndAssertExists().tap()
+        keyboardKey("a", on: app).waitAndAssertExists().tap()
+
+        let value = app.textViews["keyboard.scratchpad"].value as? String ?? ""
+        XCTAssertEqual(value.lowercased(), "12a")
+    }
+
     // MARK: - Scratchpad visibility
 
     func testScratchpadIsVisibleAndHittable() {

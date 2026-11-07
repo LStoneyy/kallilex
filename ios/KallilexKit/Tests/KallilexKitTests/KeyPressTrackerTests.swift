@@ -70,6 +70,59 @@ struct KeyPressTrackerTests {
         #expect(rollover == .init(keyIndex: 3, alternateIndex: nil))
     }
 
+    // ---- rollover also triggered by an immediate new touch (space/delete/return) --
+
+    @Test func anImmediateNewTouchAlsoCommitsTheEarlierCharacterPress() {
+        var tracker = Tracker()
+        tracker.beginTouch(1, at: 0, kind: .character)
+
+        // Hitting space/delete/return while a letter is still down
+        // commits that letter first, matching the system keyboard.
+        let rollover = tracker.beginTouch(2, at: 9, kind: .immediate)
+
+        #expect(rollover == .init(keyIndex: 0, alternateIndex: nil))
+        #expect(tracker.currentKeyIndex(for: 1) == nil)
+    }
+
+    @Test func aDeferredNewTouchDoesNotCommitTheEarlierCharacterPress() {
+        var tracker = Tracker()
+        tracker.beginTouch(1, at: 0, kind: .character)
+
+        // Shift/globe/layer-switch beginning never itself rolls over an
+        // in-progress character press — only a `.character` or
+        // `.immediate` new touch does.
+        let rollover = tracker.beginTouch(2, at: 9, kind: .deferred)
+
+        #expect(rollover == nil)
+        #expect(tracker.currentKeyIndex(for: 1) == 0)
+    }
+
+    // ---- registerTouch is the non-rollover half of beginTouch -----------------
+
+    @Test func takeRolloverCommitCommitsAndStopsTrackingTheInProgressCharacterPress() {
+        var tracker = Tracker()
+        tracker.beginTouch(1, at: 0, kind: .character)
+
+        let commit = tracker.takeRolloverCommit()
+
+        #expect(commit == .init(keyIndex: 0, alternateIndex: nil))
+        #expect(tracker.currentKeyIndex(for: 1) == nil)
+    }
+
+    @Test func registerTouchNeverRollsOverAnInProgressCharacterPress() {
+        var tracker = Tracker()
+        tracker.beginTouch(1, at: 0, kind: .character)
+
+        // Unlike `beginTouch`, `registerTouch` performs no rollover check
+        // at all — callers that already applied `takeRolloverCommit()`
+        // themselves (`KeyGridView`, after it may have rebuilt the grid)
+        // use this instead so it isn't done a second time.
+        tracker.registerTouch(2, at: 5, kind: .character)
+
+        #expect(tracker.currentKeyIndex(for: 1) == 0)
+        #expect(tracker.currentKeyIndex(for: 2) == 5)
+    }
+
     // ---- an alternate selection commits exactly one insert ------------------
 
     @Test func alternateSelectionCommitsExactlyOneInsert() {

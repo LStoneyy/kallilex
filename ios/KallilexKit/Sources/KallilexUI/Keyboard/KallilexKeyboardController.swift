@@ -114,6 +114,18 @@ open class KallilexKeyboardController: UIInputViewController {
         reloadSettings()
     }
 
+    /// Disables `delaysTouchesBegan` on the window's own gesture
+    /// recognizers once the keyboard is actually in a window: in a
+    /// keyboard extension, the system's edge-gesture gate (for the
+    /// interactive dismiss/switch-keyboard gesture) otherwise delays
+    /// `touchesBegan` for touches near the screen edges — the left
+    /// column and bottom row of keys — which reads as sluggish fast
+    /// typing even though this view's own touch handling is instant.
+    open override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        view.window?.gestureRecognizers?.forEach { $0.delaysTouchesBegan = false }
+    }
+
     open override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateHeightConstraint()

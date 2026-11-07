@@ -72,6 +72,14 @@ public final class KeyGridView: UIView {
     private var deleteRepeatStarts: [ObjectIdentifier: Date] = [:]
     private var calloutLayers: [ObjectIdentifier: CALayer] = [:]
     private var alternatesLayers: [ObjectIdentifier: CALayer] = [:]
+    /// Each active touch's last-known location in this view's coordinate
+    /// space — set in `touchesBegan`/`touchesMoved`, removed in
+    /// `cleanUpTouch`/`cancelActivePress`. Lets `refreshLabels()`'s
+    /// layer-switch remap resolve which key each still-down touch now
+    /// lands on after the grid is rebuilt, without needing a live
+    /// `UITouch` (which `touchesBegan`'s own point is also captured from,
+    /// to avoid re-deriving it from a possibly-stale `UITouch` later).
+    private var touchPoints: [ObjectIdentifier: CGPoint] = [:]
 
     private struct KeyLayerInfo {
         let key: Key
@@ -79,7 +87,29 @@ public final class KeyGridView: UIView {
         var frame: CGRect = .zero
         let background: CALayer
         let text: CATextLayer
+        /// The string last assigned to `text.string` — lets
+        /// `updateLabelsText()` skip re-setting (and re-rasterizing) a
+        /// `CATextLayer` whose label hasn't actually changed.
+        var lastDisplayText: String?
     }
+
+    /// The accessibility elements built by `buildAccessibilityElements()`,
+    /// parallel to `keyLayers` by index — kept around so `refreshLabels()`
+    /// can update an element's `accessibilityLabel` in place on a shift/
+    /// caps-lock change instead of rebuilding the whole array (which would
+    /// also have to happen on every keystroke).
+    private var accessibilityElementsList: [UIAccessibilityElement] = []
+
+    /// The `bounds.size` `layoutKeyLayers()` last computed frames for —
+    /// together with `needsKeyLayout`, lets `layoutSubviews()` skip
+    /// relaying out ~33 key frames (and rebuilding accessibility elements)
+    /// on every call; only a real size change or `rebuildLayers()` needs it.
+    private var lastLaidOutSize: CGSize = .zero
+    /// The `KeyboardState.layer` the current `rows`/`keyLayers` were built
+    /// for — `refreshLabels()` rebuilds the grid when the model's layer
+    /// no longer matches it.
+    private var shownLayer: KeyboardLayer = .letters
+    private var needsKeyLayout = true
 
     public init(model: KeyboardModel) {
         self.model = model
@@ -102,42 +132,93 @@ public final class KeyGridView: UIView {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        layoutKeyLayers()
+        // Frames (and the accessibility elements derived from them) only
+        // need recomputing when the bounds size actually changed, or when
+        // `rebuildLayers()` asked for it (a layout/globe change) — every
+        // other `layoutSubviews()` pass (e.g. one triggered by a keystroke
+        // elsewhere in the extension's view hierarchy) is a no-op here.
+        guard needsKeyLayout || bounds.size != lastLaidOutSize else { return }
+        performWithoutAnimation {
+            layoutKeyLayers()
+        }
+        lastLaidOutSize = bounds.size
+        needsKeyLayout = false
     }
 
-    /// Repaints key labels (text + accessibility labels) without
-    /// rebuilding the whole layer tree — call after anything that can
-    /// change what a key *shows* without changing the layout (shift,
-    /// caps lock, a layer switch already handled by `rebuildLayers`).
+    /// Repaints key labels (text + accessibility labels) without touching
+    /// layout — call after anything that can change what a key *shows*
+    /// (shift, caps lock). If the press switched `KeyboardState.layer`
+    /// (123, #+=, ABC, or the automatic return to letters after a space),
+    /// the grid itself is rebuilt for the new layer instead, and every
+    /// other touch still down is remapped onto it (see
+    /// `remapAfterLayerChange()`) rather than unconditionally cancelled —
+    /// a second finger mid-press when a layer switch happens elsewhere
+    /// must not simply lose its key.
     public func refreshLabels() {
-        updateLabelsText()
-        layoutKeyLayers()
+        guard model.keyboardState.layer == shownLayer else {
+            remapAfterLayerChange()
+            return
+        }
+        performWithoutAnimation {
+            updateLabelsText()
+            updateAccessibilityLabels()
+        }
     }
 
     private var displayScale: CGFloat {
         traitCollection.displayScale > 0 ? traitCollection.displayScale : 2
     }
 
+    /// Runs `body` with implicit Core Animation actions disabled, so any
+    /// standalone-`CALayer` property this view touches inside it (frames,
+    /// colors, `CATextLayer` strings, added/removed popup layers) changes
+    /// instantly instead of animating for 0.25 s — without this, every
+    /// highlight and popup visibly lags behind the finger. Safe to nest:
+    /// `CATransaction` keeps its own stack.
+    private func performWithoutAnimation(_ body: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        body()
+        CATransaction.commit()
+    }
+
     // MARK: - Layer construction
 
     private func rebuildLayers() {
-        rows = KeyboardLayout.rows(layoutID, layer: model.keyboardState.layer, showsGlobe: showsGlobe)
-        layer.sublayers?.forEach { $0.removeFromSuperlayer() }
-        keyLayers = []
-        for row in rows {
-            for key in row {
-                let background = CALayer()
-                background.cornerRadius = 5
-                let text = CATextLayer()
-                text.contentsScale = displayScale
-                text.alignmentMode = .center
-                layer.addSublayer(background)
-                background.addSublayer(text)
-                keyLayers.append(KeyLayerInfo(key: key, name: Self.accessibilityName(for: key), background: background, text: text))
+        performWithoutAnimation {
+            shownLayer = model.keyboardState.layer
+            rows = KeyboardLayout.rows(layoutID, layer: shownLayer, showsGlobe: showsGlobe)
+            layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+            keyLayers = []
+            for row in rows {
+                for key in row {
+                    let background = CALayer()
+                    background.cornerRadius = 5
+                    let text = CATextLayer()
+                    text.contentsScale = displayScale
+                    text.alignmentMode = .center
+                    layer.addSublayer(background)
+                    background.addSublayer(text)
+                    keyLayers.append(KeyLayerInfo(key: key, name: Self.accessibilityName(for: key), background: background, text: text))
+                }
+            }
+            updateColors()
+            updateLabelsText()
+            // Lay out immediately whenever the view already has a real
+            // size, instead of waiting for the next `layoutSubviews()` —
+            // a fresh rebuild's frames (and the accessibility elements
+            // derived from them) must be correct right away, since
+            // `beginPress`'s rollover and `remapAfterLayerChange()` both
+            // need to resolve touches against the *current* grid in the
+            // very same run-loop turn a rebuild happens in.
+            if bounds.width > 0, bounds.height > 0 {
+                layoutKeyLayers()
+                lastLaidOutSize = bounds.size
+                needsKeyLayout = false
+            } else {
+                needsKeyLayout = true
             }
         }
-        updateColors()
-        updateLabelsText()
         setNeedsLayout()
     }
 
@@ -213,27 +294,40 @@ public final class KeyGridView: UIView {
     // MARK: - Touch handling
 
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            guard let index = nearestKeyIndex(at: touch.location(in: self)) else { continue }
-            beginPress(id: ObjectIdentifier(touch), at: index, event: event)
+        performWithoutAnimation {
+            for touch in touches {
+                let point = touch.location(in: self)
+                let id = ObjectIdentifier(touch)
+                touchPoints[id] = point
+                beginPress(id: id, at: point, event: event)
+            }
         }
     }
 
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            movePress(id: ObjectIdentifier(touch), to: touch.location(in: self), event: event)
+        performWithoutAnimation {
+            for touch in touches {
+                let point = touch.location(in: self)
+                let id = ObjectIdentifier(touch)
+                touchPoints[id] = point
+                movePress(id: id, to: point, event: event)
+            }
         }
     }
 
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            finishPress(id: ObjectIdentifier(touch), event: event, cancelled: false)
+        performWithoutAnimation {
+            for touch in touches {
+                finishPress(id: ObjectIdentifier(touch), event: event, cancelled: false)
+            }
         }
     }
 
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            finishPress(id: ObjectIdentifier(touch), event: event, cancelled: true)
+        performWithoutAnimation {
+            for touch in touches {
+                finishPress(id: ObjectIdentifier(touch), event: event, cancelled: true)
+            }
         }
     }
 
@@ -242,19 +336,34 @@ public final class KeyGridView: UIView {
         onGlobeTouch?(self, event)
     }
 
-    private func beginPress(id: ObjectIdentifier, at index: Int, event: UIEvent?) {
-        let info = keyLayers[index]
-        let kind = Self.pressKind(for: info.key)
+    private func beginPress(id: ObjectIdentifier, at point: CGPoint, event: UIEvent?) {
+        guard let initialIndex = nearestKeyIndex(at: point) else { return }
+        let initialKind = Self.pressKind(for: keyLayers[initialIndex].key)
 
         // A second touch landing while an earlier character press is
         // still down commits that earlier press right now (rollover
-        // typing), at whatever key it's currently tracking.
-        if let rollover = tracker.beginTouch(id, at: index, kind: kind) {
+        // typing) — triggered by this touch being `.character` or
+        // `.immediate` (space/delete/return), matching the system
+        // keyboard. Applying that commit — which may itself rebuild the
+        // grid, e.g. space returning to the letters layer — *before*
+        // resolving which key this touch lands on keeps `index`/`info`
+        // below from ever referring to a stale, pre-rebuild grid.
+        if initialKind == .character || initialKind == .immediate, let rollover = tracker.takeRolloverCommit() {
             commit(rollover)
         }
 
+        guard let index = nearestKeyIndex(at: point) else { return }
+        let info = keyLayers[index]
+        let kind = Self.pressKind(for: info.key)
+        tracker.registerTouch(id, at: index, kind: kind)
+
+        var didChangeState = false
         switch info.key.kind {
         case .character:
+            // Nothing that affects a label happens at touch-down for a
+            // character key — the edit (and any shift/caps change it
+            // triggers) only lands at `commit`, so `refreshLabels()` would
+            // be pure overhead here.
             showCallout(id: id, for: info)
             if !info.key.alternates.isEmpty {
                 startLongPressTimer(id: id, for: index)
@@ -262,6 +371,7 @@ public final class KeyGridView: UIView {
         case .delete:
             model.press(info.key, context: buildContext())
             startDeleteRepeat(id: id)
+            didChangeState = true
         case .globe:
             // The commit itself (a no-op edit) is deferred to
             // `finishPress`, like shift and the layer keys below — but
@@ -271,12 +381,15 @@ public final class KeyGridView: UIView {
             if let event { onGlobeTouch?(self, event) }
         case .space, .returnKey:
             model.press(info.key, context: buildContext())
+            didChangeState = true
         case .shift, .layerSwitch:
             break // Deferred to `finishPress`: committed only if the
                   // finger is still over this key at lift.
         }
         syncHighlights()
-        refreshLabels()
+        if didChangeState {
+            refreshLabels()
+        }
     }
 
     private func movePress(id: ObjectIdentifier, to point: CGPoint, event: UIEvent?) {
@@ -352,6 +465,7 @@ public final class KeyGridView: UIView {
         deleteRepeatTimers[id]?.invalidate()
         deleteRepeatTimers[id] = nil
         deleteRepeatStarts[id] = nil
+        touchPoints[id] = nil
         // `KeyboardState`'s repeat-step counters are shared (ios-17, not
         // per-touch); resetting them once no touch is still repeating
         // delete is the closest sound behavior without redesigning that.
@@ -367,27 +481,137 @@ public final class KeyGridView: UIView {
     /// popups and highlights all torn down, nothing committed. Call when
     /// the keyboard is about to disappear.
     public func cancelActivePress() {
-        for timer in longPressTimers.values { timer.invalidate() }
-        for timer in deleteRepeatTimers.values { timer.invalidate() }
-        longPressTimers.removeAll()
-        deleteRepeatTimers.removeAll()
-        deleteRepeatStarts.removeAll()
-        model.resetDeleteRepeat()
-        for layer in calloutLayers.values { layer.removeFromSuperlayer() }
-        for layer in alternatesLayers.values { layer.removeFromSuperlayer() }
-        calloutLayers.removeAll()
-        alternatesLayers.removeAll()
-        tracker.cancelAll()
-        syncHighlights()
+        performWithoutAnimation {
+            for timer in longPressTimers.values { timer.invalidate() }
+            for timer in deleteRepeatTimers.values { timer.invalidate() }
+            longPressTimers.removeAll()
+            deleteRepeatTimers.removeAll()
+            deleteRepeatStarts.removeAll()
+            touchPoints.removeAll()
+            model.resetDeleteRepeat()
+            for layer in calloutLayers.values { layer.removeFromSuperlayer() }
+            for layer in alternatesLayers.values { layer.removeFromSuperlayer() }
+            calloutLayers.removeAll()
+            alternatesLayers.removeAll()
+            tracker.cancelAll()
+            syncHighlights()
+        }
+    }
+
+    /// Called by `refreshLabels()` when a commit changed
+    /// `KeyboardState.layer` out from under the currently shown grid
+    /// (123, #+=, ABC, or an automatic return to letters) — rebuilds the
+    /// grid for the new layer, then remaps every touch still down onto
+    /// it instead of just cancelling everything, so a second finger
+    /// mid-press doesn't lose its key just because a different finger's
+    /// commit happened to change the layer:
+    /// - a touch whose point now lands on a `.character` key resumes as
+    ///   a fresh character press there (no edit — commits normally at
+    ///   its own lift, same as any other character press);
+    /// - a held delete whose point still lands on `.delete` keeps
+    ///   repeating, retargeted to the new index (its repeat timer/start
+    ///   time are left running, untouched);
+    /// - anything else still down (a held space/return, or shift/globe/
+    ///   layer-switch) simply stops being tracked — nothing to commit for
+    ///   those at lift anyway (`.immediate`), or lifting elsewhere than a
+    ///   now-meaningless old key position was already how `.deferred`
+    ///   cancels.
+    private func remapAfterLayerChange() {
+        performWithoutAnimation {
+            // Every popup/long-press timer is keyed to the old grid's
+            // frames/indices, so all of them are torn down regardless of
+            // what happens to each touch below — but not the delete-
+            // repeat timers: a held delete key must keep repeating across
+            // the rebuild for whichever touch keeps tracking it.
+            for timer in longPressTimers.values { timer.invalidate() }
+            longPressTimers.removeAll()
+            for layer in calloutLayers.values { layer.removeFromSuperlayer() }
+            calloutLayers.removeAll()
+            for layer in alternatesLayers.values { layer.removeFromSuperlayer() }
+            alternatesLayers.removeAll()
+
+            // Touches still tracked *before* the rebuild — the ones this
+            // remaps; anything already removed from `tracker` (e.g. the
+            // very commit that triggered this) is correctly left alone.
+            // Each is paired with whether it was a character press on the
+            // old grid: only those may resume as a character press below,
+            // so a held shift/globe/layer key can never turn into a typed
+            // letter just because a letter now sits under that finger.
+            let stillTracked: [(id: ObjectIdentifier, oldKind: Key.Kind)] = touchPoints.keys.compactMap { id in
+                guard let oldIndex = tracker.currentKeyIndex(for: id), keyLayers.indices.contains(oldIndex) else { return nil }
+                return (id, keyLayers[oldIndex].key.kind)
+            }
+
+            rebuildLayers()
+            // Every key got a brand-new background layer at its default
+            // color; any continuing press is re-highlighted below via
+            // `syncHighlights()`, which only acts on indices that changed
+            // since the last call — so the stale old set must be cleared
+            // first, or a still-pressed key would never get re-painted.
+            lastHighlightedIndices = []
+
+            for (id, oldKind) in stillTracked {
+                let wasCharacter: Bool
+                if case .character = oldKind { wasCharacter = true } else { wasCharacter = false }
+                guard let point = touchPoints[id], let newIndex = nearestKeyIndex(at: point) else {
+                    cancelRemappedTouch(id)
+                    continue
+                }
+                let newInfo = keyLayers[newIndex]
+                switch newInfo.key.kind {
+                case .character where wasCharacter:
+                    tracker.registerTouch(id, at: newIndex, kind: .character)
+                    showCallout(id: id, for: newInfo)
+                    if !newInfo.key.alternates.isEmpty {
+                        startLongPressTimer(id: id, for: newIndex)
+                    }
+                case .delete where deleteRepeatTimers[id] != nil:
+                    tracker.registerTouch(id, at: newIndex, kind: .immediate)
+                case .space, .returnKey:
+                    // Already committed at touch-down (and possibly the
+                    // very press that switched the layer); kept tracked
+                    // only so its key stays highlighted until lift.
+                    if newInfo.key.kind == oldKind {
+                        tracker.registerTouch(id, at: newIndex, kind: .immediate)
+                    } else {
+                        cancelRemappedTouch(id)
+                    }
+                default:
+                    cancelRemappedTouch(id)
+                }
+            }
+            syncHighlights()
+        }
+    }
+
+    /// Stops tracking `id`'s press without committing it, and tears down
+    /// any delete-repeat timer it was holding — used by
+    /// `remapAfterLayerChange()` for a touch whose key no longer makes
+    /// sense to keep tracking in the freshly rebuilt grid. The touch
+    /// itself isn't necessarily lifted yet; its physical lift later
+    /// (`touchesEnded`/`touchesCancelled`) still runs `cleanUpTouch`
+    /// harmlessly, since `tracker.endTouch` is a no-op for an already-
+    /// untracked id.
+    private func cancelRemappedTouch(_ id: ObjectIdentifier) {
+        tracker.endTouch(id, cancelled: true)
+        deleteRepeatTimers[id]?.invalidate()
+        deleteRepeatTimers[id] = nil
+        deleteRepeatStarts[id] = nil
+        if deleteRepeatTimers.isEmpty {
+            model.resetDeleteRepeat()
+        }
     }
 
     /// Block-based (not target/selector) so the timer doesn't retain
     /// `self` strongly — `[weak self]` lets it, and the view, be
-    /// deallocated even if something failed to invalidate it.
+    /// deallocated even if something failed to invalidate it. The timer
+    /// already fires on the main run loop, so `MainActor.assumeIsolated`
+    /// (rather than hopping through `Task { @MainActor in … }`) applies
+    /// the tick without an extra async round-trip.
     private func startLongPressTimer(id: ObjectIdentifier, for index: Int) {
         longPressTimers[id]?.invalidate()
         let timer = Timer(timeInterval: 0.4, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.longPressFired(id: id, at: index) }
+            MainActor.assumeIsolated { self?.longPressFired(id: id, at: index) }
         }
         RunLoop.main.add(timer, forMode: .common)
         longPressTimers[id] = timer
@@ -395,8 +619,10 @@ public final class KeyGridView: UIView {
 
     private func longPressFired(id: ObjectIdentifier, at index: Int) {
         guard tracker.currentKeyIndex(for: id) == index else { return }
-        tracker.showAlternates(for: id)
-        showAlternates(id: id, for: keyLayers[index])
+        performWithoutAnimation {
+            tracker.showAlternates(for: id)
+            showAlternates(id: id, for: keyLayers[index])
+        }
     }
 
     private func startDeleteRepeat(id: ObjectIdentifier) {
@@ -404,8 +630,11 @@ public final class KeyGridView: UIView {
         let start = Date()
         deleteRepeatStarts[id] = start
         let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.model.deleteRepeatTick(heldFor: Date().timeIntervalSince(start))
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.performWithoutAnimation {
+                    self.model.deleteRepeatTick(heldFor: Date().timeIntervalSince(start))
+                }
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -529,10 +758,18 @@ public final class KeyGridView: UIView {
 
     // MARK: - Labels
 
+    /// Re-sets a `CATextLayer`'s `string`/`fontSize` only when the label
+    /// actually changed since last time — each real assignment makes
+    /// `CATextLayer` re-rasterize its text, so doing this for all ~33 keys
+    /// on every keystroke (most of which don't change at all) was the
+    /// single biggest per-keystroke cost in this view.
     private func updateLabelsText() {
-        for info in keyLayers {
-            info.text.string = displayText(for: info.key)
-            info.text.fontSize = fontSize(for: info.key)
+        for index in keyLayers.indices {
+            let newText = displayText(for: keyLayers[index].key)
+            guard keyLayers[index].lastDisplayText != newText else { continue }
+            keyLayers[index].lastDisplayText = newText
+            keyLayers[index].text.string = newText
+            keyLayers[index].text.fontSize = fontSize(for: keyLayers[index].key)
         }
     }
 
@@ -569,6 +806,11 @@ public final class KeyGridView: UIView {
 
     // MARK: - Accessibility
 
+    /// Rebuilds every `UIAccessibilityElement` from scratch — only safe/
+    /// worth calling when frames are also being (re)computed, i.e. from
+    /// `layoutKeyLayers()`. A label-only change (shift ⇄ caps lock) goes
+    /// through `updateAccessibilityLabels()` instead, which mutates the
+    /// existing elements in place.
     private func buildAccessibilityElements() {
         var elements: [UIAccessibilityElement] = []
         for info in keyLayers {
@@ -579,7 +821,19 @@ public final class KeyGridView: UIView {
             element.accessibilityIdentifier = "keyboard.key.\(info.name)"
             elements.append(element)
         }
+        accessibilityElementsList = elements
         accessibilityElements = elements
+    }
+
+    /// Updates each existing accessibility element's `accessibilityLabel`
+    /// in place — called from `refreshLabels()` so a shift/caps-lock
+    /// change doesn't have to reallocate ~33 `UIAccessibilityElement`s the
+    /// way rebuilding the whole array on every keystroke would.
+    private func updateAccessibilityLabels() {
+        guard accessibilityElementsList.count == keyLayers.count else { return }
+        for index in keyLayers.indices {
+            accessibilityElementsList[index].accessibilityLabel = accessibilityLabel(for: keyLayers[index].key)
+        }
     }
 
     private func accessibilityLabel(for key: Key) -> String {
@@ -625,10 +879,12 @@ public final class KeyGridView: UIView {
     // MARK: - Colors
 
     private func updateColors() {
-        backgroundColor = .clear
-        for info in keyLayers {
-            info.background.backgroundColor = keyBackgroundColor(for: info.key).cgColor
-            info.text.foregroundColor = keyTextColor.cgColor
+        performWithoutAnimation {
+            backgroundColor = .clear
+            for info in keyLayers {
+                info.background.backgroundColor = keyBackgroundColor(for: info.key).cgColor
+                info.text.foregroundColor = keyTextColor.cgColor
+            }
         }
     }
 
