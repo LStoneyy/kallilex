@@ -485,7 +485,7 @@ public final class KeyboardModel {
         else { return }
         session.inlineNote = String(
             localized: "keyboard.hint.noSelectionSharing",
-            defaultValue: "This app doesn't share selected text with keyboards. Type or dictate in the Scratchpad, or use Share → Kallilex.",
+            defaultValue: "This app doesn't share selected text with keyboards. Type in the Scratchpad, or use Share → Kallilex.",
             bundle: .module
         )
         hasShownSelectionSharingHint = true

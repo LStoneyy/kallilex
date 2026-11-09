@@ -1,8 +1,11 @@
 # Spec ios-21 — Dictation for the keyboard
 
-Status: ready-for-agent
+Status: todo (deferred 2026-11-09, not part of 1.0.0)
 Phase: Keyboard K4 (dictation)
 Depends on: ios-19, ios-20
+
+> **Deferred** together with ios-20 (decision D10 in PLAN-keyboard.md).
+> Until then the keyboard's 🎤 stays hidden.
 
 ## Problem Statement
 

@@ -4,6 +4,9 @@ Status: ready-for-agent
 Phase: Keyboard K5 (setup)
 Depends on: ios-19
 
+> Dictation is deferred (D10 in PLAN-keyboard.md): skip the Dictation
+> section and don't mention dictation in user-facing text.
+
 ## Problem Statement
 
 A keyboard is useless until the user adds it in Settings. For the AI

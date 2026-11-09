@@ -2,7 +2,11 @@
 
 Status: ready-for-agent
 Phase: Keyboard K6 (polish, before the 1.0.0 release)
-Depends on: ios-21, ios-22
+Depends on: ios-22 (ios-21 is deferred)
+
+> Dictation is deferred (D10 in PLAN-keyboard.md): skip every dictation
+> item below (Dictation screen, review notes, privacy, matrix) until
+> ios-20/ios-21 are picked up again.
 
 ## Problem Statement
 

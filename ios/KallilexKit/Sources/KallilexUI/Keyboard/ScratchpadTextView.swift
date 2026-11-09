@@ -81,7 +81,7 @@ public final class ScratchpadTextView: UITextView {
     private func setUpPlaceholder() {
         placeholderLabel.text = String(
             localized: "keyboard.scratchpad.placeholder",
-            defaultValue: "Select text, type or dictate",
+            defaultValue: "Select text or type",
             bundle: .module
         )
         placeholderLabel.font = font

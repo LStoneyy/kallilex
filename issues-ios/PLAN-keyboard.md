@@ -605,10 +605,10 @@ spec **ios-13 now also depends on ios-23**.
 | ios-17 | Keyboard core: layouts, state, input routing | ios-16 | `KallilexKeyboardCore`, §6.1–6.2, unit tests |
 | ios-18 | Keyboard UI: Scratchpad, prompts, keys | ios-17 | §5, §6.3, the UIKit key grid, mode switch, keyboard harness, `EditorSession` reuse |
 | ios-19 | Host bridge: take selection, Insert, Undo, consent, Full Access states | ios-18 | §7, §4.5 |
-| ios-20 | On-device dictation in the app (Parakeet) | ios-15 | §8.1, §8.2, §8.4, `DictationEngine`, model download, licenses |
-| ios-21 | Dictation for the keyboard | ios-19, ios-20 | §8.3 path A, and path B if the spike allows it, `PendingTranscriptStore` |
+| ios-20 | On-device dictation in the app (Parakeet). **Todo, deferred (D10)** | ios-15 | §8.1, §8.2, §8.4, `DictationEngine`, model download, licenses |
+| ios-21 | Dictation for the keyboard. **Todo, deferred (D10)** | ios-19, ios-20 | §8.3 path A, and path B if the spike allows it, `PendingTranscriptStore` |
 | ios-22 | App setup for the keyboard | ios-19 | §4.1, Settings → Keyboard and Dictation, layout setting, test field |
-| ios-23 | Keyboard polish: localization, accessibility, memory, privacy, review notes, website | ios-21, ios-22 | §9, host-app matrix, release checklist update |
+| ios-23 | Keyboard polish: localization, accessibility, memory, privacy, review notes, website | ios-22 | §9, host-app matrix, release checklist update |
 | later | Custom instruction in the keyboard; suggestions; text before the cursor; background dictation (path C) | ios-23 | §3 "Not in 1.0.0" |
 
 ios-20 depends only on the spike, so it can be built in parallel with
@@ -645,6 +645,7 @@ app target and a new package dependency, not the keyboard).
 | D7 | Dictation? | Parakeet on the device (FluidAudio), in the app; the keyboard gets the text through the app |
 | D8 | Extras in 1.0.0? | Undo Insert: yes. Custom instruction, suggestions, text before the cursor: later |
 | D9 | Role of the keys (2026-11-09) | Kept, because 4.4.1 requires real input, but only as a fallback behind ⌨ for short corrections. The main flow is: write in the host app, select, switch to Kallilex, run a prompt, Replace selection |
+| D10 | Dictation deferred (2026-11-09) | ios-20 and ios-21 are left out of 1.0.0 and stay as todo. The keyboard's 🎤 stays hidden and no user-facing text mentions dictation. ios-22 and ios-23 skip their dictation parts |
 
 ## 16. Sources
 

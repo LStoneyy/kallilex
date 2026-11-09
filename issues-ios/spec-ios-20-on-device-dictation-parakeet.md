@@ -1,8 +1,11 @@
 # Spec ios-20 — On-device dictation in the app (Parakeet)
 
-Status: ready-for-agent
+Status: todo (deferred 2026-11-09, not part of 1.0.0)
 Phase: Keyboard K4 (dictation)
 Depends on: ios-15
+
+> **Deferred.** Dictation is left out for now (decision D10 in
+> PLAN-keyboard.md). Pick this up after 1.0.0; ios-21 builds on it.
 
 ## Problem Statement
 

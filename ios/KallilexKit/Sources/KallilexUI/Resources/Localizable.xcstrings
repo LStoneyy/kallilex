@@ -619,13 +619,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prompts brauchen vollen Zugriff, um deinen KI-Anbieter zu erreichen. Tippen, Einfügen und Diktieren gehen auch ohne."
+            "value": "Prompts brauchen vollen Zugriff, um deinen KI-Anbieter zu erreichen. Tippen und Einfügen gehen auch ohne."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prompts need Full Access to reach your AI provider. Typing, Insert and dictation work without it."
+            "value": "Prompts need Full Access to reach your AI provider. Typing and Insert work without it."
           }
         }
       }
@@ -687,13 +687,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese App gibt markierten Text nicht an Tastaturen weiter. Schreib oder diktiere im Scratchpad oder nutze Teilen → Kallilex."
+            "value": "Diese App gibt markierten Text nicht an Tastaturen weiter. Schreib im Scratchpad oder nutze Teilen → Kallilex."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This app doesn't share selected text with keyboards. Type or dictate in the Scratchpad, or use Share → Kallilex."
+            "value": "This app doesn't share selected text with keyboards. Type in the Scratchpad, or use Share → Kallilex."
           }
         }
       }
@@ -942,13 +942,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Text markieren, tippen oder diktieren"
+            "value": "Text markieren oder tippen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Select text, type or dictate"
+            "value": "Select text or type"
           }
         }
       }

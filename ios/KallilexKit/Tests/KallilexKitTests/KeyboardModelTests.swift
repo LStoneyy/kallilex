@@ -889,7 +889,7 @@ struct KeyboardModelTests {
 
         model.refreshHostSelection()
 
-        #expect(model.session.inlineNote == "This app doesn't share selected text with keyboards. Type or dictate in the Scratchpad, or use Share → Kallilex.")
+        #expect(model.session.inlineNote == "This app doesn't share selected text with keyboards. Type in the Scratchpad, or use Share → Kallilex.")
     }
 
     @Test func theHintIsNotSpentWhileAnErrorRowIsShowing() async {

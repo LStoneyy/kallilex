@@ -23,7 +23,7 @@ public struct KeyboardFullAccessCard: View {
             HStack(alignment: .top, spacing: 8) {
                 Text(String(
                     localized: "keyboard.fullAccessCard.body",
-                    defaultValue: "Prompts need Full Access to reach your AI provider. Typing, Insert and dictation work without it.",
+                    defaultValue: "Prompts need Full Access to reach your AI provider. Typing and Insert work without it.",
                     bundle: .module
                 ))
                 .font(.subheadline)
