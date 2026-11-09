@@ -65,11 +65,19 @@ public final class KeyboardModel {
 
     /// Forwards to `editRouter.target`: the single source of truth for
     /// which document typed edits currently go to.
+    /// Stored in the plain (non-observable) `EditRouter`, so the getter and
+    /// setter register the access/mutation with Observation by hand —
+    /// otherwise SwiftUI (`KeyboardTargetSwitch`) never sees the change.
     public var target: TypingTargetKind {
-        get { editRouter.target }
+        get {
+            access(keyPath: \.target)
+            return editRouter.target
+        }
         set {
             guard newValue != editRouter.target else { return }
-            editRouter.target = newValue
+            withMutation(keyPath: \.target) {
+                editRouter.target = newValue
+            }
             if let activeContextProvider {
                 contextDidChange(activeContextProvider())
             }

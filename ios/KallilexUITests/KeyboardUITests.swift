@@ -81,6 +81,12 @@ final class KeyboardUITests: KallilexUITestCase {
         enterKeysModeAndFocusScratchpad(app)
         app.buttons["keyboard.target.app"].waitAndAssertExists().tap()
 
+        // The switch itself must show the new target, not just route to it.
+        let appSelected = NSPredicate(format: "isSelected == true")
+        expectation(for: appSelected, evaluatedWith: app.buttons["keyboard.target.app"])
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(app.buttons["keyboard.target.scratchpad"].isSelected)
+
         typeLetters("hallo", on: app)
 
         let hostValue = app.textViews["harness.hostText"].value as? String ?? ""
