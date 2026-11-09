@@ -192,6 +192,10 @@ Consequences for Kallilex:
 2. The user types a rough draft, taps ⌨ again (back to the prompts), runs a
    prompt, taps **Insert**.
 
+The keys are a fallback for short corrections, not the main way in (D9).
+Longer text is written with the system keyboard in the host app and taken
+over as a selection (4.2).
+
 ### 4.4 Dictation
 
 See §8.3 for both paths. The transcript lands in the Scratchpad; from there
@@ -626,6 +630,7 @@ app target and a new package dependency, not the keyboard).
 | Model download fails or is large | Dictation never set up | Explicit download step with size and progress, retry, Background Assets |
 | German misrecognized as English | Bad transcripts | Compare v3 with the German fine-tune; a language hint from the app language |
 | First third-party dependency (FluidAudio) | Supply chain and maintenance | Pin the version, review updates, app target only |
+| Fast typing on our keys drops letters (measured on iOS 27.0.1, 2026-11-09) | Typing on the keys feels unreliable | The missing taps never reach the extension's window: the same key grid embedded in the app loses none. It's outside our code. Keys stay a fallback (D9); the selection flow (4.2) is the main way in; retest on newer iOS versions |
 
 ## 15. Decisions (product owner, 2026-11-05)
 
@@ -639,6 +644,7 @@ app target and a new package dependency, not the keyboard).
 | D6 | Where do the keys type? | Switchable: Scratchpad (default) or the host app |
 | D7 | Dictation? | Parakeet on the device (FluidAudio), in the app; the keyboard gets the text through the app |
 | D8 | Extras in 1.0.0? | Undo Insert: yes. Custom instruction, suggestions, text before the cursor: later |
+| D9 | Role of the keys (2026-11-09) | Kept, because 4.4.1 requires real input, but only as a fallback behind ⌨ for short corrections. The main flow is: write in the host app, select, switch to Kallilex, run a prompt, Replace selection |
 
 ## 16. Sources
 
