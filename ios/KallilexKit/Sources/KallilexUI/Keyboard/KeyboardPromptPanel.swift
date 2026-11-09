@@ -1,13 +1,15 @@
 import SwiftUI
 import KallilexKit
 
-/// Prompt mode's non-Scratchpad content (ios-18, PLAN-keyboard.md §5): a
-/// 44 pt chips row — the existing `PromptChipsBar`, replaced by
-/// `KeyboardStatusRow` only while a run is in flight, for a pending
-/// consent request, or for an error — and a 44 pt action row: 🌐 (only if
-/// `showsGlobe`), ⌨ (`keyboard.mode.keys`), a hidden 🎤 placeholder
-/// (ios-21), the active provider's `KeyboardCompactPrivacyBadge`, and a
-/// hidden Insert placeholder (ios-19).
+/// Prompt mode's non-Scratchpad content (ios-18/ios-19, PLAN-keyboard.md
+/// §5/§7): a 44 pt chips row — the "Take selection" chip (ios-19, when
+/// `pendingTakeSelection` is non-`nil`) followed by the existing
+/// `PromptChipsBar`, replaced by `KeyboardStatusRow` only while a run is in
+/// flight, for a pending consent request, or for an error — and a 44 pt
+/// action row: 🌐 (only if `showsGlobe`), ⌨ (`keyboard.mode.keys`), a
+/// hidden 🎤 placeholder (ios-21), the active provider's
+/// `KeyboardCompactPrivacyBadge`, and Insert/"Inserted · Undo" (ios-19,
+/// `keyboard.insert`/`keyboard.undoInsert`), whichever currently applies.
 ///
 /// `KeyboardStatusRow`, not `StatusBanner` itself, renders every non-chips
 /// state: `StatusBanner`'s `.failed`/`.notConfigured` cards are 100+ pt
@@ -36,6 +38,13 @@ public struct KeyboardPromptPanel: View {
     private let isScratchpadEmpty: Bool
     private let activeProfile: ProviderProfile?
     private let showsGlobe: Bool
+    /// Non-`nil` while the "Take selection" chip (ios-19) should be shown —
+    /// see `KeyboardModel.pendingTakeSelection`. Its text itself isn't
+    /// displayed; only its presence matters here.
+    private let pendingTakeSelection: String?
+    private let canInsert: Bool
+    private let insertLabel: String
+    private let canUndoInsert: Bool
     private let onSelectPrompt: (CustomPrompt) -> Void
     private let onCancel: () -> Void
     private let onRetry: () -> Void
@@ -45,6 +54,9 @@ public struct KeyboardPromptPanel: View {
     private let onDismissNote: () -> Void
     private let onGlobe: () -> Void
     private let onShowKeys: () -> Void
+    private let onTakeSelection: () -> Void
+    private let onInsert: () -> Void
+    private let onUndoInsert: () -> Void
 
     public init(
         prompts: [CustomPrompt],
@@ -54,6 +66,10 @@ public struct KeyboardPromptPanel: View {
         isScratchpadEmpty: Bool,
         activeProfile: ProviderProfile?,
         showsGlobe: Bool,
+        pendingTakeSelection: String?,
+        canInsert: Bool,
+        insertLabel: String,
+        canUndoInsert: Bool,
         onSelectPrompt: @escaping (CustomPrompt) -> Void,
         onCancel: @escaping () -> Void,
         onRetry: @escaping () -> Void,
@@ -62,7 +78,10 @@ public struct KeyboardPromptPanel: View {
         onDismissError: @escaping () -> Void,
         onDismissNote: @escaping () -> Void,
         onGlobe: @escaping () -> Void,
-        onShowKeys: @escaping () -> Void
+        onShowKeys: @escaping () -> Void,
+        onTakeSelection: @escaping () -> Void,
+        onInsert: @escaping () -> Void,
+        onUndoInsert: @escaping () -> Void
     ) {
         self.prompts = prompts
         self.state = state
@@ -71,6 +90,10 @@ public struct KeyboardPromptPanel: View {
         self.isScratchpadEmpty = isScratchpadEmpty
         self.activeProfile = activeProfile
         self.showsGlobe = showsGlobe
+        self.pendingTakeSelection = pendingTakeSelection
+        self.canInsert = canInsert
+        self.insertLabel = insertLabel
+        self.canUndoInsert = canUndoInsert
         self.onSelectPrompt = onSelectPrompt
         self.onCancel = onCancel
         self.onRetry = onRetry
@@ -80,6 +103,9 @@ public struct KeyboardPromptPanel: View {
         self.onDismissNote = onDismissNote
         self.onGlobe = onGlobe
         self.onShowKeys = onShowKeys
+        self.onTakeSelection = onTakeSelection
+        self.onInsert = onInsert
+        self.onUndoInsert = onUndoInsert
     }
 
     public var body: some View {
@@ -96,12 +122,18 @@ public struct KeyboardPromptPanel: View {
     @ViewBuilder
     private var chipsRow: some View {
         if (state == .idle || state == .result), inlineNote == nil {
-            PromptChipsBar(
-                prompts: prompts,
-                isRunning: isScratchpadEmpty,
-                onSelectPrompt: onSelectPrompt,
-                onCustomTapped: nil
-            )
+            HStack(spacing: 8) {
+                if pendingTakeSelection != nil {
+                    TakeSelectionChip(onTap: onTakeSelection)
+                        .padding(.leading, 12)
+                }
+                PromptChipsBar(
+                    prompts: prompts,
+                    isRunning: isScratchpadEmpty,
+                    onSelectPrompt: onSelectPrompt,
+                    onCustomTapped: nil
+                )
+            }
         } else {
             KeyboardStatusRow(
                 state: state,
@@ -149,11 +181,60 @@ public struct KeyboardPromptPanel: View {
                 KeyboardCompactPrivacyBadge(profile: activeProfile)
             }
 
-            // ios-19: Insert. Hidden placeholder, same reason as above.
-            Text(String(localized: "keyboard.insert.placeholder", defaultValue: "Insert", bundle: .module))
-                .opacity(0)
-                .accessibilityHidden(true)
+            // ios-19: Insert / "Inserted · Undo" — whichever is current
+            // replaces the other in place, so the row never grows past its
+            // fixed 44 pt height.
+            if canUndoInsert {
+                Button(action: onUndoInsert) {
+                    Text(String(localized: "keyboard.undoInsert", defaultValue: "Inserted · Undo", bundle: .module))
+                        .lineLimit(1)
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("keyboard.undoInsert")
+            } else {
+                Button(action: onInsert) {
+                    Text(insertLabel)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canInsert)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("keyboard.insert")
+            }
         }
         .padding(.horizontal, 12)
+    }
+}
+
+/// The "Take selection" chip (ios-19 spec): the first item of the chips
+/// row, before the prompt chips, shown while a non-empty host selection
+/// doesn't qualify for the automatic take-over (`KeyboardModel
+/// .pendingTakeSelection`). `.borderedProminent` plus an icon, rather than
+/// `PromptChip`'s plain `.bordered` capsule, so it reads as visually
+/// distinct from the prompt chips it sits next to, per the spec.
+private struct TakeSelectionChip: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Label(
+                String(localized: "keyboard.takeSelection", defaultValue: "Take selection", bundle: .module),
+                systemImage: "text.cursor"
+            )
+            .labelStyle(.titleAndIcon)
+            .lineLimit(1)
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("keyboard.takeSelection")
+        .accessibilityHint(String(
+            localized: "keyboard.takeSelection.hint",
+            defaultValue: "Replaces the Scratchpad with the app's current selection.",
+            bundle: .module
+        ))
     }
 }

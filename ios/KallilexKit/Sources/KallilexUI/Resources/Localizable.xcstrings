@@ -596,7 +596,7 @@
         }
       }
     },
-    "keyboard.insert.placeholder": {
+    "keyboard.insert": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -609,6 +609,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Insert"
+          }
+        }
+      }
+    },
+    "keyboard.insert.replace": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markierung ersetzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace selection"
           }
         }
       }
@@ -902,6 +919,40 @@
         }
       }
     },
+    "keyboard.takeSelection": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markierung übernehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take selection"
+          }
+        }
+      }
+    },
+    "keyboard.takeSelection.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersetzt den Notizblock durch die aktuelle Markierung in der App."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replaces the Scratchpad with the app's current selection."
+          }
+        }
+      }
+    },
     "keyboard.target.app": {
       "extractionState": "manual",
       "localizations": {
@@ -932,6 +983,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scratchpad"
+          }
+        }
+      }
+    },
+    "keyboard.undoInsert": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingefügt · Rückgängig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserted · Undo"
           }
         }
       }

@@ -74,6 +74,10 @@ public struct KeyboardRootView: View {
                     isScratchpadEmpty: isScratchpadEmpty,
                     activeProfile: activeProfile,
                     showsGlobe: showsGlobe,
+                    pendingTakeSelection: model.pendingTakeSelection,
+                    canInsert: model.canInsert,
+                    insertLabel: model.insertLabel,
+                    canUndoInsert: model.canUndoInsert,
                     onSelectPrompt: { prompt in
                         model.run(.prompt(instruction: prompt.instruction), label: prompt.label)
                     },
@@ -84,7 +88,10 @@ public struct KeyboardRootView: View {
                     onDismissError: { model.session.cancel() },
                     onDismissNote: { model.session.inlineNote = nil },
                     onGlobe: onGlobe,
-                    onShowKeys: { model.mode = .keys }
+                    onShowKeys: { model.mode = .keys },
+                    onTakeSelection: { model.takeSelectionFromChip() },
+                    onInsert: { model.insert() },
+                    onUndoInsert: { model.undoInsert() }
                 )
             }
 

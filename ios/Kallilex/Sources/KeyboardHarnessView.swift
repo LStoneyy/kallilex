@@ -79,11 +79,39 @@ private struct KeyboardHarnessHostTextView: UIViewRepresentable {
         // the real system keyboard, which would otherwise cover the
         // directly-embedded `KeyboardControllerContainer` underneath.
         textView.inputView = UIView()
+        Self.applySeededContent(to: textView)
+        // Set before `controller.hostTextView` below, so the delegate
+        // forwarding (ios-19) applies to the seeded content too, and
+        // before `KeyboardControllerContainer` adds the controller as a
+        // child (which fires `viewWillAppear`'s own take-over refresh):
+        // SwiftUI builds this `VStack`'s representables in source order.
+        textView.delegate = controller
         controller.hostTextView = textView
         return textView
     }
 
     func updateUIView(_ uiView: HarnessHostTextView, context: Context) {}
+
+    /// Seeds `harness.hostText` from `-uiTestHostText <text>` and, if
+    /// present, selects a range from `-uiTestHostSelectionRange
+    /// <start>,<length>` (ios-19) — XCUITest can't reliably drive a
+    /// press-and-hold text selection gesture inside this harness, so UI
+    /// tests that need a pre-selected word seed it this way instead,
+    /// mirroring `ShareHarnessView`'s `-uiTestShareText <text>` convention.
+    private static func applySeededContent(to textView: UITextView) {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let textIndex = arguments.firstIndex(of: "-uiTestHostText") else { return }
+        let textValueIndex = arguments.index(after: textIndex)
+        guard textValueIndex < arguments.count else { return }
+        textView.text = arguments[textValueIndex]
+
+        guard let rangeIndex = arguments.firstIndex(of: "-uiTestHostSelectionRange") else { return }
+        let rangeValueIndex = arguments.index(after: rangeIndex)
+        guard rangeValueIndex < arguments.count else { return }
+        let parts = arguments[rangeValueIndex].split(separator: ",")
+        guard parts.count == 2, let start = Int(parts[0]), let length = Int(parts[1]) else { return }
+        textView.selectedRange = NSRange(location: start, length: length)
+    }
 }
 
 /// A plain `UITextView` that becomes first responder as soon as it's placed
@@ -183,6 +211,21 @@ final class HarnessKeyboardController: KallilexKeyboardController {
             return { _, _ in UppercasingStubProvider() }
         }
         return ActionRunner.defaultProviderFactory
+    }
+}
+
+/// Forwards `harness.hostText`'s own selection/text changes to the
+/// controller's `UIInputViewController` overrides (ios-19 spec), the same
+/// way the system calls them for a real keyboard extension watching the
+/// host app's text. Set as `hostTextView`'s `delegate` by
+/// `KeyboardHarnessHostTextView.makeUIView`.
+extension HarnessKeyboardController: UITextViewDelegate {
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        selectionDidChange(nil)
+    }
+
+    func textViewDidChange(_ textView: UITextView) {
+        textDidChange(nil)
     }
 }
 

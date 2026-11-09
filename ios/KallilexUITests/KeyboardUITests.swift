@@ -370,6 +370,64 @@ final class KeyboardUITests: KallilexUITestCase {
         XCTAssertTrue(notNow.isHittable, "consent.notNow should be hittable")
     }
 
+    // MARK: - Host bridge: take selection, Insert, Undo Insert (ios-19)
+
+    /// User story 1 (ios-19 spec): a selection in the host (seeded via
+    /// `-uiTestHostText`/`-uiTestHostSelectionRange`, since XCUITest can't
+    /// reliably drive a press-and-hold selection gesture in this harness —
+    /// see `KeyboardHarnessView`) lands in the Scratchpad automatically on
+    /// `viewWillAppear`, the Scratchpad being empty.
+    func testSelectingAWordInTheHostTakesItOverToTheScratchpadAutomatically() {
+        let app = launchKeyboardHarness(extraArguments: [
+            "-uiTestHostText", "Hello world today",
+            "-uiTestHostSelectionRange", "6,5",
+        ])
+
+        let scratchpad = app.textViews["keyboard.scratchpad"]
+        scratchpad.waitAndAssertExists()
+        XCTAssertEqual(scratchpad.value as? String, "world")
+    }
+
+    /// User stories 3/5: Insert's label says "Replace selection" while the
+    /// host still reports the taken-over selection; tapping it replaces
+    /// that selection in the host with the stub-uppercased result; Undo
+    /// Insert restores the original word.
+    func testReplaceSelectionInsertsTheStubResultAndUndoRestoresTheWord() {
+        let setup = launchApp()
+        setup.tabButton("tab.providers").tap()
+        setup.addCustomProvider(name: "LAN Server", baseUrl: "http://192.168.1.10:11434/v1", model: "llama-3")
+        setup.terminate()
+
+        let app = launchKeyboardHarness(resetState: false, extraArguments: [
+            "-uiTestStubProvider",
+            "-uiTestHostText", "Hello world today",
+            "-uiTestHostSelectionRange", "6,5",
+        ])
+
+        let scratchpad = app.textViews["keyboard.scratchpad"]
+        XCTAssertEqual(scratchpad.value as? String, "world")
+
+        let insertButton = app.buttons["keyboard.insert"]
+        insertButton.waitAndAssertExists()
+        XCTAssertEqual(insertButton.label, "Replace selection")
+
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+
+        let afterRun = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "WORLD"),
+            object: scratchpad
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [afterRun], timeout: 10), .completed, "Expected the stub provider's uppercased result")
+
+        app.buttons["keyboard.insert"].waitAndAssertExists().tap()
+
+        let hostText = app.textViews["harness.hostText"]
+        XCTAssertEqual(hostText.value as? String, "Hello WORLD today", "Insert should replace the selected word in the host")
+
+        app.buttons["keyboard.undoInsert"].waitAndAssertExists().tap()
+        XCTAssertEqual(hostText.value as? String, "Hello world today", "Undo Insert should restore the original word")
+    }
+
     // MARK: - Accessibility audit
 
     /// Same audit types and known-issue filtering as `AccessibilityUITests`.

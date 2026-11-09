@@ -34,6 +34,31 @@ Mark each cell with:
 | Google Docs | | | | |
 | Chrome | | | | |
 
+## Keyboard (ios-19)
+
+On the device, with Kallilex Keyboard added and Full Access on. Per app:
+
+1. **Take-over:** select text, switch to Kallilex (🌐). Does the selection land in the Scratchpad?
+2. **Replace:** run a prompt, tap "Markierung ersetzen". Is exactly the selection replaced?
+3. **Undo right after Insert:** is "Eingefügt · Rückgängig" still shown immediately after Insert? (It hides itself if the host's context changes unexpectedly; web views are the risk.)
+4. **Undo:** does it restore the original text exactly (emoji, accents, newlines)?
+
+| App | Take-over | Replace | Undo shown | Undo restores | Notes |
+|---|---|---|---|---|---|
+| Notes | | | | | |
+| Mail (compose) | | | | | |
+| Messages | | | | | |
+| Safari (address bar) | | | | | |
+| Safari (`<textarea>`) | | | | | |
+| Safari (`contenteditable`) | | | | | |
+| WhatsApp | | | | | |
+| Signal | | | | | |
+| Slack | | | | | |
+| Google Docs | | | | | |
+| Pages | | | | | |
+| Gmail | | | | | |
+| Notes, ~3,000-character selection | | | | | |
+
 ## Summary
 
 - Total apps tested: 10

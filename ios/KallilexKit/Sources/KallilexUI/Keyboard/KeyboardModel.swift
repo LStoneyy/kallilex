@@ -53,6 +53,34 @@ public final class KeyboardModel {
     public let editRouter: EditRouter
     public let scratchpadDocument: any ReplaceableTextDocument
     public let hostDocument: any TextDocument
+    /// The selection take-over / Insert / Undo Insert bridge (ios-19,
+    /// PLAN-keyboard.md §7.2–7.3), wrapping the same `hostDocument`. Not
+    /// `public`: every observable effect it has on the UI goes through
+    /// `insertWillReplaceSelection`/`canUndoInsert` below, kept in sync by
+    /// `syncHostState()` — an outside caller reading `hostBridge` directly
+    /// would see live, non-`@Observable` state that SwiftUI can silently
+    /// miss (see this type's "Host bridge" section).
+    let hostBridge: HostBridge
+
+    /// The last selection this model took over automatically (or via the
+    /// "Take selection" chip) — the take-over rule's "still holds the last
+    /// taken-over selection unchanged" check (ios-19 spec).
+    private var lastTakenOverSelection: String?
+    /// Non-`nil` while the "Take selection" chip should be shown: a
+    /// non-empty host selection arrived that doesn't match the auto-take-
+    /// over conditions. Cleared once used, or once the host selection
+    /// disappears.
+    public private(set) var pendingTakeSelection: String?
+
+    /// `hostBridge.insertWillReplaceSelection`/`canUndoInsert`, mirrored
+    /// into stored (and therefore `@Observable`-tracked) properties by
+    /// `syncHostState()` — see that method's doc comment for why reading
+    /// the bridge's own computed properties directly from a SwiftUI body
+    /// isn't safe.
+    public private(set) var insertWillReplaceSelection = false
+    public private(set) var canUndoInsert = false
+
+    private var undoInsertExpiryTask: Task<Void, Never>?
 
     /// Supplies the `KeyboardContext` for whichever document `target`
     /// currently selects — set by the controller to the same builder
@@ -84,17 +112,23 @@ public final class KeyboardModel {
         }
     }
 
+    /// `now` is forwarded to `HostBridge`'s own injectable clock (its
+    /// 30 s Undo Insert expiry) — `Date.init` in production;
+    /// `KeyboardModelTests` injects a fake to test that expiry without a
+    /// real wait.
     public init(
         session: EditorSession,
         scratchpadDocument: any ReplaceableTextDocument,
         hostDocument: any TextDocument,
-        keyboardState: KeyboardState = KeyboardState()
+        keyboardState: KeyboardState = KeyboardState(),
+        now: @escaping () -> Date = Date.init
     ) {
         self.session = session
         self.scratchpadDocument = scratchpadDocument
         self.hostDocument = hostDocument
         self.keyboardState = keyboardState
         self.editRouter = EditRouter(scratchpad: scratchpadDocument, host: hostDocument)
+        self.hostBridge = HostBridge(host: hostDocument, clock: now)
     }
 
     /// `KeyboardLayoutID.resolve`'d from the loaded `settings` (or the
@@ -112,7 +146,7 @@ public final class KeyboardModel {
     @discardableResult
     public func press(_ key: Key, context: KeyboardContext, now: Date = Date()) -> [Edit] {
         let edits = keyboardState.press(key, context: context, now: now)
-        editRouter.apply(edits)
+        applyTyping(edits)
         return edits
     }
 
@@ -121,7 +155,7 @@ public final class KeyboardModel {
     @discardableResult
     public func longPressSelect(_ alternate: String, context: KeyboardContext) -> [Edit] {
         let edits = keyboardState.longPressSelect(alternate, context: context)
-        editRouter.apply(edits)
+        applyTyping(edits)
         return edits
     }
 
@@ -137,7 +171,7 @@ public final class KeyboardModel {
     /// contract (ticks ~0.05 s apart, cumulative duration since press).
     public func deleteRepeatTick(heldFor: TimeInterval) {
         guard let edit = keyboardState.deleteRepeatEdit(heldFor: heldFor) else { return }
-        editRouter.apply([edit])
+        applyTyping([edit])
     }
 
     /// Call when the delete key is released, so the next hold starts
@@ -188,6 +222,166 @@ public final class KeyboardModel {
     /// invalidation.
     public func cancelForDisappear() {
         session.cancel()
+    }
+
+    // MARK: - Host bridge: take selection, Insert, Undo Insert (ios-19)
+
+    /// `true` while the Scratchpad is empty or whitespace-only — mirrors
+    /// `KeyboardPromptPanel`'s own check (kept duplicated rather than
+    /// shared, since that view takes it as a plain `Bool` parameter); used
+    /// here for `canInsert`.
+    public var isScratchpadEmpty: Bool {
+        session.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Insert is disabled while the Scratchpad is empty or a run is in
+    /// flight (ios-19 spec).
+    public var canInsert: Bool {
+        !isScratchpadEmpty && !session.isRunning
+    }
+
+    /// "Replace selection" while the host still reports a selection,
+    /// otherwise "Insert" — derived from the stored, `syncHostState()`-kept
+    /// `insertWillReplaceSelection`, not a live `hostBridge` read: a plain
+    /// computed property reading straight through to `hostBridge`'s own
+    /// (non-`@Observable`) computed properties would only be re-evaluated
+    /// by SwiftUI when some *other*, actually-tracked property also
+    /// changes in the same render — on a real device, the host selection
+    /// can appear/disappear (or the Undo guard's `invalidated` latch can
+    /// flip) with no such coincidental change alongside it, leaving the
+    /// label/button stale.
+    public var insertLabel: String {
+        insertWillReplaceSelection
+            ? String(localized: "keyboard.insert.replace", defaultValue: "Replace selection", bundle: .module)
+            : String(localized: "keyboard.insert", defaultValue: "Insert", bundle: .module)
+    }
+
+    /// Inserts `session.text` into the host (replacing its selection if
+    /// there is one), regardless of the current typing target (ios-19
+    /// spec, "Typing target App"), arms the 30 s Undo Insert expiry, and
+    /// syncs `canUndoInsert`/`insertWillReplaceSelection`.
+    public func insert() {
+        hostBridge.insert(session.text)
+        scheduleUndoInsertExpiry()
+        syncHostState()
+    }
+
+    /// Undoes the last Insert, if `canUndoInsert` allows it.
+    public func undoInsert() {
+        hostBridge.undoInsert()
+        undoInsertExpiryTask?.cancel()
+        syncHostState()
+    }
+
+    /// Called from `KallilexKeyboardController.viewWillDisappear`
+    /// alongside `cancelForDisappear()`: invalidates any pending Undo
+    /// Insert (the ios-19 spec's "keyboard switch → `invalidateUndo()`" —
+    /// the keyboard is about to disappear, possibly to a different
+    /// keyboard, and nothing about the host can be trusted on return).
+    public func invalidateHostUndoOnDisappear() {
+        hostBridge.invalidateUndo()
+        undoInsertExpiryTask?.cancel()
+        syncHostState()
+    }
+
+    /// Called from `KallilexKeyboardController.textDidChange(_:)`,
+    /// unconditionally (regardless of the current typing target): forwards
+    /// to `HostBridge.textDidChange()`, then syncs the observable state —
+    /// the step that actually makes a just-latched `invalidated` (e.g.
+    /// typing on our own keys into the host) hide "Inserted · Undo".
+    public func hostTextDidChange() {
+        hostBridge.textDidChange()
+        syncHostState()
+    }
+
+    /// Called from `KallilexKeyboardController.selectionDidChange(_:)`,
+    /// same reasoning as `hostTextDidChange()`: forwards to
+    /// `HostBridge.selectionDidChange()`, runs the take-over refresh
+    /// (`refreshHostSelection()`, which itself ends by syncing), so a
+    /// cursor move both invalidates a pending Undo Insert and re-evaluates
+    /// the take-over rules in one call.
+    public func hostSelectionDidChange() {
+        hostBridge.selectionDidChange()
+        refreshHostSelection()
+    }
+
+    private func scheduleUndoInsertExpiry() {
+        undoInsertExpiryTask?.cancel()
+        undoInsertExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            self?.syncHostState()
+        }
+    }
+
+    /// The take-over rules (ios-19 spec, `KeyboardModel`, "on
+    /// `viewWillAppear` and on `selectionDidChange`"): refreshes
+    /// `hostBridge`'s cached selection length, then — unless a run is in
+    /// flight — either takes a non-empty host selection over automatically
+    /// (Scratchpad empty, or still holding the last taken-over selection
+    /// unchanged) or offers it via `pendingTakeSelection` (the "Take
+    /// selection" chip). An empty/`nil` host selection clears the chip,
+    /// matching "it disappears … when the selection goes away". Always
+    /// ends by syncing the observable host state (`insertWillReplaceSelection`
+    /// changes with the selection too).
+    public func refreshHostSelection() {
+        hostBridge.refresh()
+        defer { syncHostState() }
+        guard !session.isRunning else { return }
+        guard let selection = hostBridge.takeSelection(), !selection.isEmpty else {
+            pendingTakeSelection = nil
+            return
+        }
+        if session.text.isEmpty || session.text == lastTakenOverSelection {
+            applyTakeOver(selection)
+        } else {
+            pendingTakeSelection = selection
+        }
+    }
+
+    /// Mirrors `hostBridge.insertWillReplaceSelection`/`canUndoInsert` into
+    /// this model's own stored, `@Observable`-tracked properties. The one
+    /// place that reads `hostBridge`'s live, non-`@Observable` state —
+    /// every other method that can change it (`insert()`, `undoInsert()`,
+    /// `invalidateHostUndoOnDisappear()`, `refreshHostSelection()`, and the
+    /// 30 s expiry `Task` in `scheduleUndoInsertExpiry()`) calls this
+    /// afterward, so SwiftUI always has an actually-tracked property to
+    /// re-render from.
+    /// Applies typed edits to the current target. Typing into the host is
+    /// "an edit from us" (spec ios-19): it ends Undo Insert right away,
+    /// without waiting for the system to report the change back.
+    private func applyTyping(_ edits: [Edit]) {
+        editRouter.apply(edits)
+        guard !edits.isEmpty, target == .host else { return }
+        hostBridge.invalidateUndo()
+        undoInsertExpiryTask?.cancel()
+        syncHostState()
+    }
+
+    private func syncHostState() {
+        insertWillReplaceSelection = hostBridge.insertWillReplaceSelection
+        canUndoInsert = hostBridge.canUndoInsert
+    }
+
+    /// The "Take selection" chip's tap target: takes over whatever
+    /// selection `refreshHostSelection()` last offered.
+    public func takeSelectionFromChip() {
+        guard let pendingTakeSelection else { return }
+        applyTakeOver(pendingTakeSelection)
+    }
+
+    /// Replaces `session.text` with `text` directly — the same way typing
+    /// into the Scratchpad does — and pushes it into the real text view.
+    /// Deliberately doesn't touch `EditorSession`'s run state: taking over
+    /// a selection while a result is shown (`state == .result`) therefore
+    /// leaves `canUndo` exactly as it already behaves for any edit after a
+    /// result (`text != lastInput`), so `EditorSession`'s own Undo brings
+    /// the pre-take-over text back (ios-19 spec) with no extra bookkeeping.
+    private func applyTakeOver(_ text: String) {
+        session.text = text
+        lastTakenOverSelection = text
+        pendingTakeSelection = nil
+        scratchpadDocument.setText(text)
     }
 
     /// Awaits `task`, then writes `session.text` into `scratchpadDocument`

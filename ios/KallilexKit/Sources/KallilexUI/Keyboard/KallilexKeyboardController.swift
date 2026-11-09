@@ -112,6 +112,7 @@ open class KallilexKeyboardController: UIInputViewController {
         updateHeightConstraint()
         reattachDocuments()
         reloadSettings()
+        model?.refreshHostSelection()
     }
 
     /// Disables `delaysTouchesBegan` on the window's own gesture
@@ -148,22 +149,32 @@ open class KallilexKeyboardController: UIInputViewController {
     open override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         model?.cancelForDisappear()
+        model?.invalidateHostUndoOnDisappear()
         keyGridView?.cancelActivePress()
         hostDocumentWrapper?.detach()
         scratchpadDocumentWrapper?.detach()
     }
 
-    /// Rebuilds the `KeyboardContext` for auto-capitalization when typing
-    /// into the host app (the Scratchpad's own context is rebuilt by
+    /// Forwards to `KeyboardModel.hostTextDidChange()` unconditionally
+    /// (ios-19 spec: the Undo Insert guard tracks the host's own text
+    /// regardless of the current typing target), then — only while typing
+    /// into the host — rebuilds the `KeyboardContext` for auto-
+    /// capitalization (the Scratchpad's own context is rebuilt by
     /// `ScratchpadTextView`'s `onTextChanged`/`onSelectionChanged`).
     open override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        model?.hostTextDidChange()
         guard let model, model.target == .host else { return }
         model.contextDidChange(currentKeyboardContext())
     }
 
+    /// Forwards to `KeyboardModel.hostSelectionDidChange()` (the Undo
+    /// Insert guard plus the take-over rules) unconditionally, same
+    /// reasoning as `textDidChange(_:)` above, then rebuilds the host's
+    /// `KeyboardContext` only while typing into it.
     open override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
+        model?.hostSelectionDidChange()
         guard let model, model.target == .host else { return }
         model.contextDidChange(currentKeyboardContext())
     }
