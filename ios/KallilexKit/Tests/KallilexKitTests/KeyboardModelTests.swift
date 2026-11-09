@@ -14,6 +14,7 @@ private final class FakeKeyboardDocument: ReplaceableTextDocument {
     var text: String = ""
 
     var selectedText: String? { nil }
+    var hasText: Bool { !text.isEmpty }
     var documentContextBeforeInput: String? { text }
     var documentContextAfterInput: String? { nil }
 
@@ -49,6 +50,7 @@ private final class FakeSelectableHostDocument: TextDocument {
         self.text = text
     }
 
+    var hasText: Bool { !text.isEmpty }
     var documentContextBeforeInput: String? { text }
     var documentContextAfterInput: String? { nil }
 
@@ -73,6 +75,26 @@ private final class FakeSelectableHostDocument: TextDocument {
 @MainActor
 private final class MutableClock {
     var now = Date(timeIntervalSince1970: 1_000_000)
+}
+
+/// A `TextDocument` fake with independently settable `selectedText`/
+/// `documentContextBeforeInput`/`documentContextAfterInput`/`hasText`
+/// (ios-19 part B) — unlike `FakeSelectableHostDocument` (whose context
+/// always mirrors a single `text` property, cursor-at-the-end), the
+/// "doesn't share the selection" hint's heuristic needs `hasText` and
+/// both contexts to vary independently of each other: a real selection
+/// empties both contexts while the document still has text overall,
+/// which a single shared `text` property can't represent. `insertText`/
+/// `deleteBackward` are no-ops — the hint tests below never call them.
+@MainActor
+private final class FakeHintHostDocument: TextDocument {
+    var selectedText: String?
+    var documentContextBeforeInput: String?
+    var documentContextAfterInput: String?
+    var hasText = false
+
+    func insertText(_ text: String) {}
+    func deleteBackward() {}
 }
 
 /// Tests for `KeyboardModel` (ios-18). Uses the same
@@ -491,5 +513,505 @@ struct KeyboardModelTests {
         model.refreshHostSelection()
 
         #expect(!model.canUndoInsert)
+    }
+
+    // ---- Full Access (ios-19 part B) ---------------------------------------
+
+    private func networkProfile(id: String = "p1") -> ProviderProfile {
+        ProviderProfile(id: id, name: "Cloud Server", kind: .openAICompatible, baseUrl: "https://api.example.com/v1", model: "gpt-4")
+    }
+
+    private func onDeviceProfile(id: String = "p1") -> ProviderProfile {
+        ProviderProfile(id: id, name: "On device", kind: .appleOnDevice, baseUrl: "", model: "")
+    }
+
+    private func settings(activeProfile: ProviderProfile) -> AppSettings {
+        AppSettings(activeProfileID: activeProfile.id, profiles: [activeProfile], prompts: [])
+    }
+
+    @Test func precheckShowsTheFullAccessCardAndNeverCallsTheRunnerForANetworkProfileWithoutFullAccess() {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.settings = settings(activeProfile: networkProfile())
+        model.session.text = "hello"
+
+        _ = model.run(.prompt(instruction: "Fix"), label: "Fix")
+
+        #expect(model.showsFullAccessCard)
+        #expect(runner.recordedCalls().isEmpty, "The runner must never be called when the pre-check shows the card")
+        #expect(model.session.state == .idle)
+    }
+
+    @Test func anOnDeviceProfileRunsNormallyWithoutFullAccessAndShowsNoCard() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.settings = settings(activeProfile: onDeviceProfile())
+        model.session.text = "hello"
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .ok("HELLO"))
+        await task.value
+
+        #expect(!model.showsFullAccessCard)
+        #expect(model.session.state == .result)
+        #expect(runner.recordedCalls().count == 1)
+    }
+
+    @Test func noActiveProfileRunsNormallyWithoutFullAccess() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.session.text = "hello"
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .notConfigured)
+        await task.value
+
+        #expect(!model.showsFullAccessCard)
+        #expect(model.session.state == .notConfigured)
+    }
+
+    /// Post-run fallback (ios-19 part B): without Full Access and no
+    /// active profile in `model.settings` (so the pre-check never fires),
+    /// a run that fails with one of the three "this is really just no
+    /// Full Access" errors shows the card instead of the error and
+    /// returns the session to `.idle`, leaving `text` untouched.
+    @Test(arguments: [
+        ProviderError.http(status: 401, snippet: ""),
+        ProviderError.http(status: 403, snippet: ""),
+        ProviderError.unreachable("example.com"),
+        ProviderError.localNetworkDenied,
+    ])
+    func postRunFallbackShowsTheCardInsteadOfTheErrorWithoutFullAccess(_ error: ProviderError) async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.session.text = "hello"
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .failed(error))
+        await task.value
+
+        #expect(model.showsFullAccessCard)
+        #expect(model.session.state == .idle)
+        #expect(model.session.text == "hello", "The fallback must leave the Scratchpad text untouched")
+    }
+
+    @Test(arguments: [
+        ProviderError.http(status: 401, snippet: ""),
+        ProviderError.http(status: 403, snippet: ""),
+        ProviderError.unreachable("example.com"),
+        ProviderError.localNetworkDenied,
+    ])
+    func theSameErrorsStayErrorsWithFullAccess(_ error: ProviderError) async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = true
+        model.session.text = "hello"
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .failed(error))
+        await task.value
+
+        #expect(!model.showsFullAccessCard)
+        #expect(model.session.state == .failed(error))
+    }
+
+    @Test func retryWhileTheCardIsUpAndStillWithoutFullAccessKeepsTheCardAndDoesNotRun() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.session.text = "hello"
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .failed(.unreachable("example.com")))
+        await task.value
+        #expect(model.showsFullAccessCard)
+        #expect(model.session.canRetry, "The toolbar's Retry stays enabled after the fallback")
+
+        model.settings = settings(activeProfile: networkProfile())
+        let retryTask = model.retry()
+
+        #expect(retryTask == nil)
+        #expect(model.showsFullAccessCard)
+        #expect(runner.recordedCalls().count == 1, "Retry must go through the same pre-check as run")
+    }
+
+    @Test func aSuccessfulRetryAfterFullAccessWasGrantedClearsTheCard() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.session.text = "hello"
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .failed(.unreachable("example.com")))
+        await task.value
+        #expect(model.showsFullAccessCard)
+
+        model.hasFullAccess = true
+        let retryTask = model.retry()
+        #expect(!model.showsFullAccessCard, "A retry that actually starts clears the card")
+        await runner.resolveOldest(with: .ok("HELLO"))
+        await retryTask?.value
+
+        #expect(!model.showsFullAccessCard)
+        #expect(model.session.state == .result)
+        #expect(!model.isPanelExpanded)
+    }
+
+    @Test func aHttp500DoesNotTriggerTheFallbackWithoutFullAccess() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.session.text = "hello"
+        let error = ProviderError.http(status: 500, snippet: "")
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .failed(error))
+        await task.value
+
+        #expect(!model.showsFullAccessCard)
+        #expect(model.session.state == .failed(error))
+    }
+
+    @Test func theFullAccessCardClearsOnDismiss() {
+        let model = KeyboardModel(
+            session: makeSession(),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.settings = settings(activeProfile: networkProfile())
+        model.session.text = "hello"
+        _ = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        #expect(model.showsFullAccessCard)
+
+        model.showsFullAccessCard = false
+
+        #expect(!model.showsFullAccessCard)
+    }
+
+    @Test func theFullAccessCardClearsOnSwitchingToKeysMode() {
+        let model = KeyboardModel(
+            session: makeSession(),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.settings = settings(activeProfile: networkProfile())
+        model.session.text = "hello"
+        _ = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        #expect(model.showsFullAccessCard)
+
+        model.showKeys()
+
+        #expect(model.mode == .keys)
+        #expect(!model.showsFullAccessCard)
+    }
+
+    @Test func isPanelExpandedIsTrueInPromptsModeWhileTheCardIsShown() {
+        let model = KeyboardModel(
+            session: makeSession(),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.settings = settings(activeProfile: networkProfile())
+        model.session.text = "hello"
+        #expect(!model.isPanelExpanded)
+
+        _ = model.run(.prompt(instruction: "Fix"), label: "Fix")
+
+        #expect(model.isPanelExpanded)
+
+        model.showKeys()
+        #expect(!model.isPanelExpanded, "isPanelExpanded only applies in prompts mode")
+    }
+
+    @Test func isPanelExpandedIsTrueWhileConsentIsRequired() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.session.text = "hello"
+        let profile = networkProfile()
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .consentRequired(profile))
+        await task.value
+
+        #expect(model.isPanelExpanded)
+    }
+
+    // ---- Consent flow (ios-19 part B) --------------------------------------
+
+    @Test func consentAllowRegrantsConsentAndRerunsTheAction() async throws {
+        let runner = FakeActionRunning()
+        let consentGranting = FakeConsentGranting()
+        let model = KeyboardModel(
+            session: EditorSession(
+                actionRunner: runner,
+                pasteboard: FakePasteboard(),
+                consentGranting: consentGranting,
+                feedback: FakeEditorFeedback()
+            ),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.session.text = "hello"
+        let profile = networkProfile()
+
+        let task1 = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .consentRequired(profile))
+        await task1.value
+        #expect(model.session.state == .consentRequired(profile))
+
+        let task2 = try #require(model.grantConsentAndRetry())
+        await runner.resolveOldest(with: .ok("HELLO"))
+        await task2.value
+
+        #expect(consentGranting.recordedCalls().count == 1)
+        #expect(model.session.state == .result)
+        #expect(model.session.text == "HELLO")
+    }
+
+    @Test func consentNotNowDeclinesAndLeavesANote() async {
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(
+            session: makeSession(runner: runner),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.session.text = "hello"
+        let profile = networkProfile()
+
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .consentRequired(profile))
+        await task.value
+
+        model.declineConsent()
+
+        #expect(model.session.state == .idle)
+        #expect(model.session.inlineNote == "Nothing was sent.")
+    }
+
+    // ---- Copy (ios-19 part B) ----------------------------------------------
+
+    @Test func copyWritesToThePasteboardWithFullAccess() {
+        let pasteboard = FakePasteboard()
+        let model = KeyboardModel(
+            session: EditorSession(
+                actionRunner: FakeActionRunning(),
+                pasteboard: pasteboard,
+                consentGranting: FakeConsentGranting(),
+                feedback: FakeEditorFeedback()
+            ),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = true
+        model.session.text = "hello"
+
+        model.copy()
+
+        #expect(pasteboard.recordedStrings() == ["hello"])
+        #expect(model.session.inlineNote == nil)
+    }
+
+    @Test func copyWithoutFullAccessSetsANoteAndLeavesThePasteboardUntouched() {
+        let pasteboard = FakePasteboard()
+        let model = KeyboardModel(
+            session: EditorSession(
+                actionRunner: FakeActionRunning(),
+                pasteboard: pasteboard,
+                consentGranting: FakeConsentGranting(),
+                feedback: FakeEditorFeedback()
+            ),
+            scratchpadDocument: FakeKeyboardDocument(),
+            hostDocument: FakeSelectableHostDocument()
+        )
+        model.hasFullAccess = false
+        model.session.text = "hello"
+
+        model.copy()
+
+        #expect(pasteboard.recordedStrings().isEmpty)
+        #expect(model.session.inlineNote == "Copy needs Full Access.")
+    }
+
+    // ---- "doesn't share the selection" hint (ios-19 part B) ---------------
+
+    private func makeHintModel(host: FakeHintHostDocument) -> KeyboardModel {
+        KeyboardModel(session: makeSession(), scratchpadDocument: FakeKeyboardDocument(), hostDocument: host)
+    }
+
+    @Test func theHintShowsOnceWhenTheHostHasTextButNoSelectionAndBothContextsAreEmpty() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == "This app doesn't share selected text with keyboards. Type or dictate in the Scratchpad, or use Share → Kallilex.")
+    }
+
+    @Test func theHintIsNotSpentWhileAnErrorRowIsShowing() async {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let runner = FakeActionRunning()
+        let model = KeyboardModel(session: makeSession(runner: runner), scratchpadDocument: FakeKeyboardDocument(), hostDocument: host)
+        model.session.text = "hello"
+        let task = model.run(.prompt(instruction: "Fix"), label: "Fix")
+        await runner.resolveOldest(with: .failed(.http(status: 500, snippet: "")))
+        await task.value
+        model.session.text = ""
+
+        model.refreshHostSelection()
+        #expect(model.session.inlineNote == nil, "inlineNote isn't rendered under an error row")
+
+        model.session.cancel()
+        model.refreshHostSelection()
+        #expect(model.session.inlineNote != nil, "The once-per-appearance hint must still be available")
+    }
+
+    @Test func theHintDoesNotShowWhenTheContextBeforeIsNonEmpty() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = "some text"
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == nil)
+    }
+
+    @Test func theHintDoesNotShowWhenTheContextAfterIsNonEmpty() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = "some text"
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == nil)
+    }
+
+    @Test func theHintDoesNotShowWhenTheHostHasNoText() {
+        let host = FakeHintHostDocument()
+        host.hasText = false
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == nil)
+    }
+
+    @Test func theHintDoesNotShowWhenTheScratchpadIsNotEmpty() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+        model.session.text = "my own draft"
+
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == nil)
+    }
+
+    @Test func theHintDoesNotShowWhenThereIsANonEmptySelection() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = "hello"
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == nil, "A non-empty selection means the host does share the selection")
+    }
+
+    @Test func theHintDoesNotRepeatWithinOneAppearance() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+        #expect(model.session.inlineNote != nil)
+
+        model.session.inlineNote = nil
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote == nil, "The hint must not reappear within the same appearance")
+    }
+
+    @Test func resettingTheHintFlagForAnAppearanceLetsItShowAgain() {
+        let host = FakeHintHostDocument()
+        host.hasText = true
+        host.selectedText = nil
+        host.documentContextBeforeInput = nil
+        host.documentContextAfterInput = nil
+        let model = makeHintModel(host: host)
+
+        model.refreshHostSelection()
+        #expect(model.session.inlineNote != nil)
+        model.session.inlineNote = nil
+
+        model.resetSelectionSharingHintForAppearance()
+        model.refreshHostSelection()
+
+        #expect(model.session.inlineNote != nil, "A fresh appearance resets the once-per-appearance flag")
     }
 }

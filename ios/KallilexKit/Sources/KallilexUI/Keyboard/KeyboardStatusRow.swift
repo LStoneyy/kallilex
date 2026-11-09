@@ -13,21 +13,18 @@ import KallilexKit
 /// introducing new behavior. `StatusBanner`/`EditorScreen` themselves are
 /// untouched: the app keeps its full-size cards.
 ///
-/// `.consentRequired` only gets a minimal stand-in here — a one-line
-/// "Allow sending to <host>?" plus Allow/Not now, wired to the exact same
-/// `onConsentAllow`/`onConsentDecline` callbacks `ConsentView` uses —
-/// rather than a real redesign: ios-19 replaces this with a proper compact
-/// consent view (PLAN-keyboard.md). This only keeps `ConsentView`'s
-/// full-size card, built for the app, from ever drawing inside the
-/// keyboard's bounded rows in the meantime.
+/// `.consentRequired` never reaches this view (ios-19 part B):
+/// `KeyboardPromptPanel.isExpanded` catches it first and renders the
+/// proper compact `KeyboardConsentView` instead, inside the expanded
+/// panel. The `.consentRequired` case below is therefore unreachable in
+/// practice — kept only so this `switch` stays exhaustive over
+/// `EditorSession.State` without an `@unknown default`.
 public struct KeyboardStatusRow: View {
     private let state: EditorSession.State
     private let runningLabel: String
     private let inlineNote: String?
     private let onCancel: () -> Void
     private let onRetry: () -> Void
-    private let onConsentAllow: () -> Void
-    private let onConsentDecline: () -> Void
     private let onDismissError: () -> Void
     /// Clears `inlineNote` (e.g. after consent was declined) so the chips
     /// row comes back without needing a new run — `StatusBanner`'s own
@@ -41,8 +38,6 @@ public struct KeyboardStatusRow: View {
         inlineNote: String?,
         onCancel: @escaping () -> Void,
         onRetry: @escaping () -> Void,
-        onConsentAllow: @escaping () -> Void,
-        onConsentDecline: @escaping () -> Void,
         onDismissError: @escaping () -> Void,
         onDismissNote: @escaping () -> Void
     ) {
@@ -51,8 +46,6 @@ public struct KeyboardStatusRow: View {
         self.inlineNote = inlineNote
         self.onCancel = onCancel
         self.onRetry = onRetry
-        self.onConsentAllow = onConsentAllow
-        self.onConsentDecline = onConsentDecline
         self.onDismissError = onDismissError
         self.onDismissNote = onDismissNote
     }
@@ -72,8 +65,8 @@ public struct KeyboardStatusRow: View {
             failedRow(error)
         case .notConfigured:
             notConfiguredRow
-        case .consentRequired(let profile):
-            consentRow(profile)
+        case .consentRequired:
+            EmptyView()
         case .idle, .result:
             if let inlineNote {
                 noteRow(inlineNote)
@@ -142,33 +135,17 @@ public struct KeyboardStatusRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func consentRow(_ profile: ProviderProfile) -> some View {
-        HStack(spacing: 8) {
-            Text(consentPromptText(for: profile))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(String(localized: "consent.notNow", defaultValue: "Not now", bundle: .module)) {
-                onConsentDecline()
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityIdentifier("consent.notNow")
-            Button(String(localized: "consent.allow", defaultValue: "Allow", bundle: .module)) {
-                onConsentAllow()
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityIdentifier("consent.allow")
-        }
-    }
-
     private func noteRow(_ note: String) -> some View {
         HStack(spacing: 8) {
             Text(note)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                // The "doesn't share the selection" hint (ios-19 part B)
+                // is a full sentence, not a short word like "Copied" —
+                // two lines plus a modest shrink keeps it inside this
+                // fixed 44 pt row instead of truncating to nothing useful.
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("editor.inlineNote")
@@ -196,15 +173,6 @@ public struct KeyboardStatusRow: View {
             bundle: .module
         )
     }
-
-    private func consentPromptText(for profile: ProviderProfile) -> String {
-        let host = consentHost(for: profile) ?? profile.name
-        return String(
-            localized: "keyboard.consent.inlinePrompt",
-            defaultValue: "Allow sending to \(host)?",
-            bundle: .module
-        )
-    }
 }
 
 #Preview("Running") {
@@ -214,8 +182,6 @@ public struct KeyboardStatusRow: View {
         inlineNote: nil,
         onCancel: {},
         onRetry: {},
-        onConsentAllow: {},
-        onConsentDecline: {},
         onDismissError: {},
         onDismissNote: {}
     )
@@ -228,8 +194,6 @@ public struct KeyboardStatusRow: View {
         inlineNote: nil,
         onCancel: {},
         onRetry: {},
-        onConsentAllow: {},
-        onConsentDecline: {},
         onDismissError: {},
         onDismissNote: {}
     )
@@ -242,8 +206,6 @@ public struct KeyboardStatusRow: View {
         inlineNote: nil,
         onCancel: {},
         onRetry: {},
-        onConsentAllow: {},
-        onConsentDecline: {},
         onDismissError: {},
         onDismissNote: {}
     )

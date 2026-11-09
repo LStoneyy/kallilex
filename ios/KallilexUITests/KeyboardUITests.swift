@@ -343,12 +343,15 @@ final class KeyboardUITests: KallilexUITestCase {
         XCTAssertTrue(keysButton.isHittable, "keyboard.mode.keys should stay hittable while the not-configured row is shown")
     }
 
-    /// Consent inline (ios-19 replaces this with a proper compact consent
-    /// view; this only checks the one-line stand-in's buttons work): a
-    /// cloud custom provider without consent shows Allow/Not now inline,
-    /// both hittable, mirroring `ShareExtensionUITests
-    /// .testConsentInlineThenAllowRunsThePrompt`'s provider setup.
-    func testConsentInlineAllowAndNotNowAreHittable() {
+    /// ios-19 part B: the proper compact `KeyboardConsentView`, rendered
+    /// in prompt mode's expanded panel, replaces the one-line stand-in
+    /// this test used to check — a cloud custom provider without consent
+    /// shows Allow/Not now, both hittable, and tapping Allow actually
+    /// runs the prompt (the stub provider uppercases, same as
+    /// `testPromptRunShowsStubResultAndUndoRestoresIt`), mirroring
+    /// `ShareExtensionUITests.testConsentInlineThenAllowRunsThePrompt`'s
+    /// provider setup.
+    func testConsentViewShowsAndAllowRunsThePrompt() {
         let setup = launchApp()
         setup.tabButton("tab.providers").tap()
         setup.addCustomProvider(name: "Cloud Server", baseUrl: "https://api.example.com/v1", model: "gpt-4-turbo")
@@ -358,6 +361,7 @@ final class KeyboardUITests: KallilexUITestCase {
         enterKeysModeAndFocusScratchpad(app)
         app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
         typeLetters("hello", on: app)
+        let beforeRun = app.textViews["keyboard.scratchpad"].value as? String ?? ""
 
         app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
         app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
@@ -368,6 +372,19 @@ final class KeyboardUITests: KallilexUITestCase {
         XCTAssertTrue(notNow.waitForExistence(timeout: 5), "consent.notNow did not appear")
         XCTAssertTrue(allow.isHittable, "consent.allow should be hittable")
         XCTAssertTrue(notNow.isHittable, "consent.notNow should be hittable")
+
+        allow.tap()
+
+        let scratchpad = app.textViews["keyboard.scratchpad"]
+        let afterRun = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", beforeRun.uppercased()),
+            object: scratchpad
+        )
+        XCTAssertEqual(
+            XCTWaiter().wait(for: [afterRun], timeout: 10),
+            .completed,
+            "Allow should grant consent, run the prompt, and show the stub's uppercased result"
+        )
     }
 
     // MARK: - Host bridge: take selection, Insert, Undo Insert (ios-19)
@@ -426,6 +443,59 @@ final class KeyboardUITests: KallilexUITestCase {
 
         app.buttons["keyboard.undoInsert"].waitAndAssertExists().tap()
         XCTAssertEqual(hostText.value as? String, "Hello world today", "Undo Insert should restore the original word")
+    }
+
+    // MARK: - Full Access card (ios-19 part B)
+
+    /// A network (cloud) profile's chip, tapped without Full Access, shows
+    /// the Full Access card instead of starting a run; the action row's
+    /// ⌨ stays hittable alongside it; dismissing brings the chips back.
+    /// Never taps Settings — leaving the harness/simulator untouched.
+    func testFullAccessCardAppearsForANetworkProfileWithoutFullAccessAndDismissBringsBackChips() {
+        let setup = launchApp()
+        setup.tabButton("tab.providers").tap()
+        setup.addCustomProvider(name: "Cloud Server", baseUrl: "https://api.example.com/v1", model: "gpt-4-turbo")
+        setup.terminate()
+
+        let app = launchKeyboardHarness(resetState: false, extraArguments: ["-uiTestKeyboardNoFullAccess"])
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+        typeLetters("hello", on: app)
+
+        app.buttons["keyboard.mode.prompts"].waitAndAssertExists().tap()
+        app.buttons["editor.chip.builtin-rewrite"].waitAndAssertExists().tap()
+
+        let card = app.otherElements["keyboard.fullAccessCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "keyboard.fullAccessCard did not appear")
+
+        let settingsButton = app.buttons["keyboard.fullAccessCard.settings"]
+        let keysButton = app.buttons["keyboard.mode.keys"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5), "keyboard.fullAccessCard.settings did not appear")
+        XCTAssertTrue(settingsButton.isHittable, "keyboard.fullAccessCard.settings should be hittable")
+        XCTAssertTrue(keysButton.isHittable, "keyboard.mode.keys should stay hittable while the card is shown")
+        // Deliberately never tapped: Settings would leave the app/simulator.
+
+        app.buttons["keyboard.fullAccessCard.dismiss"].waitAndAssertExists().tap()
+
+        let rewriteChip = app.buttons["editor.chip.builtin-rewrite"]
+        XCTAssertTrue(rewriteChip.waitForExistence(timeout: 5), "Dismiss should bring the chips back")
+        XCTAssertTrue(rewriteChip.isHittable, "The chips should be hittable again after dismissing the card")
+    }
+
+    /// ios-19 part B, user story 7: typing/Insert/dictation keep working
+    /// without Full Access — this checks typing into the Scratchpad.
+    func testTypingInScratchpadStillWorksWithoutFullAccess() {
+        let app = launchKeyboardHarness(extraArguments: ["-uiTestKeyboardNoFullAccess"])
+        enterKeysModeAndFocusScratchpad(app)
+        app.buttons["keyboard.target.scratchpad"].waitAndAssertExists().tap()
+
+        typeLetters("hallo", on: app)
+
+        let value = app.textViews["keyboard.scratchpad"].value as? String ?? ""
+        XCTAssertTrue(
+            value.lowercased().contains("hallo"),
+            "Typing into the Scratchpad should still work without Full Access, got \"\(value)\""
+        )
     }
 
     // MARK: - Accessibility audit

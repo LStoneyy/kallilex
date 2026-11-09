@@ -18,6 +18,11 @@ public protocol TextDocument: AnyObject {
     var selectedText: String? { get }
     var documentContextBeforeInput: String? { get }
     var documentContextAfterInput: String? { get }
+    /// Whether the document currently has any text at all (ios-19 part B,
+    /// the "hosts that don't share the selection" hint). `UITextDocumentProxy`
+    /// already has this via `UIKeyInput`; `ScratchpadDocument` derives it
+    /// from its own text view.
+    var hasText: Bool { get }
     func insertText(_ text: String)
     func deleteBackward()
 }

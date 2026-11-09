@@ -29,6 +29,8 @@ public final class ScratchpadDocument: ReplaceableTextDocument {
         return textView.text(in: range)
     }
 
+    public var hasText: Bool { !(textView?.text ?? "").isEmpty }
+
     public var documentContextBeforeInput: String? {
         guard let textView, let range = textView.selectedTextRange,
               let start = textView.textRange(from: textView.beginningOfDocument, to: range.start)
@@ -87,6 +89,7 @@ public final class HostDocument: TextDocument {
     }
 
     public var selectedText: String? { proxy?.selectedText }
+    public var hasText: Bool { proxy?.hasText ?? false }
     public var documentContextBeforeInput: String? { proxy?.documentContextBeforeInput }
     public var documentContextAfterInput: String? { proxy?.documentContextAfterInput }
 

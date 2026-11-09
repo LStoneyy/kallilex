@@ -9,12 +9,12 @@ import KallilexKit
 /// every call, rather than a stored `Bool`, since it can change while the
 /// keyboard is open (the user granting Full Access in Settings).
 /// `@unchecked Sendable`: `Pasteboard` requires `Sendable`, but
-/// `hasFullAccess` is a plain (non-`@Sendable`) closure so it can capture
-/// `[weak self]` on the (non-`Sendable`) `UIInputViewController` that
-/// builds this. Safe in practice: both the closure and `setString` are
-/// only ever called from the main actor — `EditorSession.copy()` (which
-/// calls this) is itself `@MainActor`-isolated, same as every other piece
-/// of the keyboard's UI.
+/// `hasFullAccess` is a plain `() -> Bool` — in production a `@Sendable`
+/// closure reading the lock-protected, process-wide
+/// `KallilexKeyboardController.sharedHasFullAccess` rather than whichever
+/// controller happened to build it (`makeSession()` runs once per
+/// process; ios-19 part B, latent-bug fix). `setString` itself is only
+/// called from the main actor via `EditorSession.copy()`.
 public struct KeyboardPasteboard: Pasteboard, @unchecked Sendable {
     private let hasFullAccess: () -> Bool
 

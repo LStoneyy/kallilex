@@ -193,7 +193,13 @@ final class HarnessKeyboardController: KallilexKeyboardController {
         fatalError("init(coder:) is not supported")
     }
 
-    override var effectiveHasFullAccess: Bool { true }
+    /// `true` unless launched with `-uiTestKeyboardNoFullAccess` (ios-19
+    /// part B) — this harness has no Settings toggle to flip, so a UI test
+    /// that needs the without-Full-Access path forces it via this launch
+    /// argument instead.
+    override var effectiveHasFullAccess: Bool {
+        !ProcessInfo.processInfo.arguments.contains("-uiTestKeyboardNoFullAccess")
+    }
 
     override var textDocumentProxy: UITextDocumentProxy { fakeHostProxy }
 

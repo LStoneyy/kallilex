@@ -16,6 +16,10 @@ public struct KeyboardRootView: View {
     private let model: KeyboardModel
     private let showsGlobe: Bool
     private let onGlobe: () -> Void
+    /// Opens iOS Settings through `KallilexKeyboardController
+    /// .openSystemSettings()` (ios-19 part B) — the Full Access card's
+    /// Settings button.
+    private let onOpenSettings: () -> Void
 
     /// Shows a brief, non-blocking "Fertig" overlay over the chips row
     /// right after a successful run (ios-18 bugfix item 4) — the
@@ -32,10 +36,16 @@ public struct KeyboardRootView: View {
     /// second overlay immediately instead of after its own 1.2 s.
     @State private var doneGeneration = 0
 
-    public init(model: KeyboardModel, showsGlobe: Bool, onGlobe: @escaping () -> Void) {
+    public init(
+        model: KeyboardModel,
+        showsGlobe: Bool,
+        onGlobe: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void
+    ) {
         self.model = model
         self.showsGlobe = showsGlobe
         self.onGlobe = onGlobe
+        self.onOpenSettings = onOpenSettings
     }
 
     public var body: some View {
@@ -61,7 +71,7 @@ public struct KeyboardRootView: View {
                     isShowingOriginal: model.session.showingOriginal,
                     onUndo: { model.undo() },
                     onRetry: { model.retry() },
-                    onCopy: { model.session.copy() },
+                    onCopy: { model.copy() },
                     onToggleShowOriginal: { model.session.showingOriginal.toggle() }
                 )
                 .frame(height: KeyboardPromptMetrics.toolbarHeight)
@@ -72,12 +82,13 @@ public struct KeyboardRootView: View {
                     runningLabel: model.session.lastLabel,
                     inlineNote: model.session.inlineNote,
                     isScratchpadEmpty: isScratchpadEmpty,
-                    activeProfile: activeProfile,
+                    activeProfile: model.activeProfile,
                     showsGlobe: showsGlobe,
                     pendingTakeSelection: model.pendingTakeSelection,
                     canInsert: model.canInsert,
                     insertLabel: model.insertLabel,
                     canUndoInsert: model.canUndoInsert,
+                    showsFullAccessCard: model.showsFullAccessCard,
                     onSelectPrompt: { prompt in
                         model.run(.prompt(instruction: prompt.instruction), label: prompt.label)
                     },
@@ -88,10 +99,12 @@ public struct KeyboardRootView: View {
                     onDismissError: { model.session.cancel() },
                     onDismissNote: { model.session.inlineNote = nil },
                     onGlobe: onGlobe,
-                    onShowKeys: { model.mode = .keys },
+                    onShowKeys: { model.showKeys() },
                     onTakeSelection: { model.takeSelectionFromChip() },
                     onInsert: { model.insert() },
-                    onUndoInsert: { model.undoInsert() }
+                    onUndoInsert: { model.undoInsert() },
+                    onOpenSettings: onOpenSettings,
+                    onDismissFullAccessCard: { model.showsFullAccessCard = false }
                 )
             }
 
@@ -134,10 +147,5 @@ public struct KeyboardRootView: View {
 
     private var isScratchpadEmpty: Bool {
         model.session.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var activeProfile: ProviderProfile? {
-        guard let settings = model.settings, let activeID = settings.activeProfileID else { return nil }
-        return settings.profiles.first { $0.id == activeID && $0.enabled }
     }
 }

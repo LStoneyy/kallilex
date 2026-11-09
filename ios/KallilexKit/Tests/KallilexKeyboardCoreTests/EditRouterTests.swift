@@ -13,6 +13,7 @@ private final class FakeTextDocument: TextDocument {
     }
 
     var selectedText: String? { nil }
+    var hasText: Bool { !text.isEmpty }
     var documentContextBeforeInput: String? { text }
     var documentContextAfterInput: String? { nil }
 

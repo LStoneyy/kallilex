@@ -45,6 +45,9 @@ public struct KeyboardPromptPanel: View {
     private let canInsert: Bool
     private let insertLabel: String
     private let canUndoInsert: Bool
+    /// `true` while the Full Access card (ios-19 part B) should replace
+    /// the chips/consent content — see `KeyboardModel.showsFullAccessCard`.
+    private let showsFullAccessCard: Bool
     private let onSelectPrompt: (CustomPrompt) -> Void
     private let onCancel: () -> Void
     private let onRetry: () -> Void
@@ -57,6 +60,8 @@ public struct KeyboardPromptPanel: View {
     private let onTakeSelection: () -> Void
     private let onInsert: () -> Void
     private let onUndoInsert: () -> Void
+    private let onOpenSettings: () -> Void
+    private let onDismissFullAccessCard: () -> Void
 
     public init(
         prompts: [CustomPrompt],
@@ -70,6 +75,7 @@ public struct KeyboardPromptPanel: View {
         canInsert: Bool,
         insertLabel: String,
         canUndoInsert: Bool,
+        showsFullAccessCard: Bool,
         onSelectPrompt: @escaping (CustomPrompt) -> Void,
         onCancel: @escaping () -> Void,
         onRetry: @escaping () -> Void,
@@ -81,7 +87,9 @@ public struct KeyboardPromptPanel: View {
         onShowKeys: @escaping () -> Void,
         onTakeSelection: @escaping () -> Void,
         onInsert: @escaping () -> Void,
-        onUndoInsert: @escaping () -> Void
+        onUndoInsert: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void,
+        onDismissFullAccessCard: @escaping () -> Void
     ) {
         self.prompts = prompts
         self.state = state
@@ -94,6 +102,7 @@ public struct KeyboardPromptPanel: View {
         self.canInsert = canInsert
         self.insertLabel = insertLabel
         self.canUndoInsert = canUndoInsert
+        self.showsFullAccessCard = showsFullAccessCard
         self.onSelectPrompt = onSelectPrompt
         self.onCancel = onCancel
         self.onRetry = onRetry
@@ -106,19 +115,56 @@ public struct KeyboardPromptPanel: View {
         self.onTakeSelection = onTakeSelection
         self.onInsert = onInsert
         self.onUndoInsert = onUndoInsert
+        self.onOpenSettings = onOpenSettings
+        self.onDismissFullAccessCard = onDismissFullAccessCard
+    }
+
+    /// `true` while the Full Access card or the compact consent view
+    /// should take over the panel's full height instead of the fixed
+    /// 44 pt chips row — mirrors `KeyboardModel.isPanelExpanded`'s own
+    /// `mode == .prompts && (…)` check (this view is only ever shown in
+    /// prompt mode to begin with, so only the card/consent half applies
+    /// here).
+    private var isExpanded: Bool {
+        showsFullAccessCard || isConsentRequired
+    }
+
+    private var isConsentRequired: Bool {
+        if case .consentRequired = state { return true }
+        return false
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            chipsRow.frame(height: KeyboardPromptMetrics.chipsHeight)
+            if isExpanded {
+                expandedContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                chipsRow.frame(height: KeyboardPromptMetrics.chipsHeight)
+            }
             actionRow.frame(height: KeyboardPromptMetrics.actionHeight)
         }
     }
 
+    /// The expanded panel's content (ios-19 part B, "Expanded panel"): the
+    /// Full Access card takes priority — a card shown as the post-run
+    /// fallback for an error that also happens to need consent would
+    /// otherwise have nowhere to resolve the consent request from (Allow
+    /// would just fail again without Full Access anyway).
+    @ViewBuilder
+    private var expandedContent: some View {
+        if showsFullAccessCard {
+            KeyboardFullAccessCard(onOpenSettings: onOpenSettings, onDismiss: onDismissFullAccessCard)
+        } else if case .consentRequired(let profile) = state {
+            KeyboardConsentView(profile: profile, onAllow: onConsentAllow, onDecline: onConsentDecline)
+        }
+    }
+
     /// `.idle`/`.result` (with no `inlineNote`) show the chips;
-    /// `.running`/`.failed`/`.consentRequired`/`.notConfigured` (or an
-    /// idle state with a note, e.g. right after declining consent) show
-    /// `KeyboardStatusRow` instead.
+    /// `.running`/`.failed`/`.notConfigured` (or an idle state with a
+    /// note, e.g. right after declining consent) show `KeyboardStatusRow`
+    /// instead. `.consentRequired` never reaches this view — `isExpanded`
+    /// catches it first.
     @ViewBuilder
     private var chipsRow: some View {
         if (state == .idle || state == .result), inlineNote == nil {
@@ -141,8 +187,6 @@ public struct KeyboardPromptPanel: View {
                 inlineNote: inlineNote,
                 onCancel: onCancel,
                 onRetry: onRetry,
-                onConsentAllow: onConsentAllow,
-                onConsentDecline: onConsentDecline,
                 onDismissError: onDismissError,
                 onDismissNote: onDismissNote
             )

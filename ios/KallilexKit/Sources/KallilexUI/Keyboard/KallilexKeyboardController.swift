@@ -1,4 +1,5 @@
 import UIKit
+import os
 import SwiftUI
 import Observation
 import KallilexKit
@@ -40,6 +41,13 @@ open class KallilexKeyboardController: UIInputViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var promptsModeConstraints: [NSLayoutConstraint] = []
     private var keysModeConstraints: [NSLayoutConstraint] = []
+    /// Prompt mode's expanded layout (ios-19 part B, "Expanded panel"):
+    /// hides `scratchpadTextView` and lets `hostingController.view` take
+    /// the full height down to the bottom, its top pinned where the
+    /// Scratchpad's own top is — active instead of `promptsModeConstraints`
+    /// while `model.isPanelExpanded` is `true`. The keyboard's own fixed
+    /// `heightConstraint` never changes either way.
+    private var expandedPromptsModeConstraints: [NSLayoutConstraint] = []
     private var showsGlobeInPanel = false
 
     // MARK: - Seams (overridable by the thin extension subclass and by
@@ -50,16 +58,32 @@ open class KallilexKeyboardController: UIInputViewController {
     /// without actually toggling it in Settings.
     open var effectiveHasFullAccess: Bool { hasFullAccess }
 
+    /// The process-wide Full Access flag the long-lived pasteboard and
+    /// settings-store closures read (ios-19 part B, latent-bug fix).
+    /// `makeSession()` runs once per process, but the controller it runs
+    /// on is deallocated on the first `viewWillDisappear` — a `[weak
+    /// self]` capture there went `false` (read-only, no Copy) forever.
+    /// Every controller writes this on `viewDidLoad`/`viewWillAppear`.
+    /// A lock rather than a `@MainActor` read, because `ActionRunner.run`
+    /// calls `settings.load()` off the main actor.
+    nonisolated static let sharedHasFullAccess = OSAllocatedUnfairLock(initialState: false)
+
+    private func publishFullAccess() {
+        let value = effectiveHasFullAccess
+        Self.sharedHasFullAccess.withLock { $0 = value }
+        model?.hasFullAccess = value
+    }
+
     /// Builds the `SettingsStore` the keyboard loads/runs against:
     /// read-write with Full Access, read-only (ios-16) without — chosen
-    /// fresh on every call via `effectiveHasFullAccess`, so a Full Access
+    /// fresh on every call via `sharedHasFullAccess`, so a Full Access
     /// change takes effect without the keyboard needing to be relaunched.
     /// Overridable for a harness that needs a different App Group or a
     /// different store entirely.
     open func makeSettingsStore() throws -> any SettingsStore {
         let appGroupStore = try AppGroupSettingsStore(appGroupId: InfoPlist.kallilexAppGroup)
-        return DynamicAccessSettingsStore(store: appGroupStore, hasFullAccess: { [weak self] in
-            self?.effectiveHasFullAccess ?? false
+        return DynamicAccessSettingsStore(store: appGroupStore, hasFullAccess: { @Sendable in
+            KallilexKeyboardController.sharedHasFullAccess.withLock { $0 }
         })
     }
 
@@ -77,6 +101,23 @@ open class KallilexKeyboardController: UIInputViewController {
         ActionRunner.defaultProviderFactory
     }
 
+    /// Opens iOS Settings through the responder chain (ios-19 part B,
+    /// "Opening Settings") — the Full Access card's Settings button.
+    /// Never `UIApplication.shared` (unavailable to extensions) and never
+    /// `App-prefs:` (private API); proven on device by the ios-15 spike's
+    /// `KeyboardViewController.openViaResponderChain`.
+    open func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let application = current as? UIApplication {
+                application.open(url, options: [:], completionHandler: nil)
+                return
+            }
+            responder = current.next
+        }
+    }
+
     // MARK: - Lifecycle
 
     open override func viewDidLoad() {
@@ -89,6 +130,7 @@ open class KallilexKeyboardController: UIInputViewController {
         self.model = model
         hostDocumentWrapper = hostDocument
         scratchpadDocumentWrapper = scratchpadDocument
+        publishFullAccess()
         reattachDocuments()
         model.activeContextProvider = { [weak self] in
             self?.currentKeyboardContext() ?? KeyboardContext(autocapitalization: .sentences)
@@ -102,8 +144,9 @@ open class KallilexKeyboardController: UIInputViewController {
         setUpHostingController(model: model)
         setUpLayoutConstraints()
 
-        applyMode(model.mode, animated: false)
+        applyLayout(animated: false)
         trackModeChanges()
+        trackPanelExpansion()
         trackEditableChanges()
     }
 
@@ -111,7 +154,9 @@ open class KallilexKeyboardController: UIInputViewController {
         super.viewWillAppear(animated)
         updateHeightConstraint()
         reattachDocuments()
+        publishFullAccess()
         reloadSettings()
+        model?.resetSelectionSharingHintForAppearance()
         model?.refreshHostSelection()
     }
 
@@ -150,6 +195,10 @@ open class KallilexKeyboardController: UIInputViewController {
         super.viewWillDisappear(animated)
         model?.cancelForDisappear()
         model?.invalidateHostUndoOnDisappear()
+        // ios-19 part B, "the flag is also cleared when … viewWillDisappear
+        // runs": the card is about to disappear along with everything
+        // else; nothing about why it was shown can be trusted on return.
+        model?.showsFullAccessCard = false
         keyGridView?.cancelActivePress()
         hostDocumentWrapper?.detach()
         scratchpadDocumentWrapper?.detach()
@@ -189,8 +238,15 @@ open class KallilexKeyboardController: UIInputViewController {
         return (model, hostDocument, scratchpadDocument)
     }
 
+    /// `makeSession()` runs exactly once per process (the model/session it
+    /// builds are process-wide via `KeyboardModelStore`) — see
+    /// `sharedHasFullAccess` for why `pasteboard`'s own `hasFullAccess`
+    /// closure doesn't capture `self`.
     private func makeSession() -> EditorSession {
-        let pasteboard = KeyboardPasteboard(hasFullAccess: { [weak self] in self?.effectiveHasFullAccess ?? false })
+        publishFullAccess()
+        let pasteboard = KeyboardPasteboard(hasFullAccess: { @Sendable in
+            KallilexKeyboardController.sharedHasFullAccess.withLock { $0 }
+        })
         do {
             let settingsStore = try makeSettingsStore()
             let secretStore = makeSecretStore()
@@ -311,15 +367,21 @@ open class KallilexKeyboardController: UIInputViewController {
     }
 
     private func makeRootView(model: KeyboardModel) -> KeyboardRootView {
-        KeyboardRootView(model: model, showsGlobe: showsGlobeInPanel, onGlobe: { [weak self] in
-            guard let self else { return }
-            // The SwiftUI 🌐 (prompt mode's action row) has no real touch
-            // event to forward, unlike `KeyGridView`'s own globe key —
-            // `handleInputModeList(from:with:)` still shows the list for a
-            // single tap; only long-press-for-the-list needs a genuine
-            // touch stream, which only the UIKit key grid can provide.
-            self.handleInputModeList(from: self.view, with: UIEvent())
-        })
+        KeyboardRootView(
+            model: model,
+            showsGlobe: showsGlobeInPanel,
+            onGlobe: { [weak self] in
+                guard let self else { return }
+                // The SwiftUI 🌐 (prompt mode's action row) has no real
+                // touch event to forward, unlike `KeyGridView`'s own globe
+                // key — `handleInputModeList(from:with:)` still shows the
+                // list for a single tap; only long-press-for-the-list
+                // needs a genuine touch stream, which only the UIKit key
+                // grid can provide.
+                self.handleInputModeList(from: self.view, with: UIEvent())
+            },
+            onOpenSettings: { [weak self] in self?.openSystemSettings() }
+        )
     }
 
     private func rebuildHostingRootView() {
@@ -348,6 +410,21 @@ open class KallilexKeyboardController: UIInputViewController {
             hostingController.view.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
         ]
 
+        // ios-19 part B, "Expanded panel": the Scratchpad is hidden
+        // (`isHidden`), but its own top/leading/trailing anchors above
+        // stay active, so it still needs a well-defined height — zero —
+        // rather than an ambiguous one. `hostingController.view` then
+        // spans from exactly that (now zero-height) top point down to the
+        // margins' bottom, i.e. the same vertical space
+        // `scratchpadTextView` + `promptsModeConstraints`' hosting view
+        // together occupy today, just reassigned entirely to the hosting
+        // view.
+        expandedPromptsModeConstraints = [
+            scratchpadTextView.heightAnchor.constraint(equalToConstant: 0),
+            hostingController.view.topAnchor.constraint(equalTo: scratchpadTextView.topAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
+        ]
+
         keysModeConstraints = [
             scratchpadTextView.heightAnchor.constraint(equalToConstant: 66),
             hostingController.view.topAnchor.constraint(equalTo: scratchpadTextView.bottomAnchor, constant: 2),
@@ -358,18 +435,32 @@ open class KallilexKeyboardController: UIInputViewController {
 
     // MARK: - Mode crossfade (0.2 s; the height itself never animates)
 
-    private func applyMode(_ mode: KeyboardUIMode, animated: Bool) {
+    /// Applies whichever of the three constraint sets currently matches
+    /// `model.mode`/`model.isPanelExpanded` (ios-18's mode crossfade, plus
+    /// ios-19 part B's expanded panel within prompt mode). The keyboard's
+    /// own fixed `heightConstraint` is untouched by any of the three.
+    private func applyLayout(animated: Bool) {
         let apply = { [weak self] in
-            guard let self else { return }
-            switch mode {
+            guard let self, let model = self.model else { return }
+            switch model.mode {
             case .prompts:
                 NSLayoutConstraint.deactivate(self.keysModeConstraints)
-                NSLayoutConstraint.activate(self.promptsModeConstraints)
                 self.keyGridView.isHidden = true
+                if model.isPanelExpanded {
+                    NSLayoutConstraint.deactivate(self.promptsModeConstraints)
+                    NSLayoutConstraint.activate(self.expandedPromptsModeConstraints)
+                    self.scratchpadTextView.isHidden = true
+                } else {
+                    NSLayoutConstraint.deactivate(self.expandedPromptsModeConstraints)
+                    NSLayoutConstraint.activate(self.promptsModeConstraints)
+                    self.scratchpadTextView.isHidden = false
+                }
             case .keys:
                 NSLayoutConstraint.deactivate(self.promptsModeConstraints)
+                NSLayoutConstraint.deactivate(self.expandedPromptsModeConstraints)
                 NSLayoutConstraint.activate(self.keysModeConstraints)
                 self.keyGridView.isHidden = false
+                self.scratchpadTextView.isHidden = false
             }
             self.view.layoutIfNeeded()
         }
@@ -387,9 +478,26 @@ open class KallilexKeyboardController: UIInputViewController {
             { [weak self] in _ = self?.model?.mode },
             onChange: { [weak self] in
                 Task { @MainActor in
-                    guard let self, let model = self.model else { return }
-                    self.applyMode(model.mode, animated: true)
+                    guard let self, self.model != nil else { return }
+                    self.applyLayout(animated: true)
                     self.trackModeChanges()
+                }
+            }
+        )
+    }
+
+    /// Same pattern as `trackModeChanges()`, for `model.isPanelExpanded`
+    /// (ios-19 part B) — both call the same `applyLayout(animated:)`,
+    /// which reads both properties fresh every time, so whichever one
+    /// changes first still produces the right constraint set.
+    private func trackPanelExpansion() {
+        withObservationTracking(
+            { [weak self] in _ = self?.model?.isPanelExpanded },
+            onChange: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.model != nil else { return }
+                    self.applyLayout(animated: true)
+                    self.trackPanelExpansion()
                 }
             }
         )
@@ -473,11 +581,11 @@ open class KallilexKeyboardController: UIInputViewController {
 /// future caller that tried to would get `SettingsStoreError.readOnly`
 /// rather than a silent no-op.
 ///
-/// `@unchecked Sendable`: `SettingsStore` requires `Sendable`, but
-/// `hasFullAccess` captures `[weak self]` on the (non-`Sendable`)
-/// controller that builds this. Safe in practice for the same reason as
-/// `KeyboardPasteboard`: both the closure and every `SettingsStore`
-/// method here are only ever called from the main actor.
+/// `@unchecked Sendable`: `SettingsStore` requires `Sendable`, and the
+/// stored closure type is a plain `() -> Bool`; the production closure is
+/// `@Sendable` and only reads the lock-protected
+/// `KallilexKeyboardController.sharedHasFullAccess`, so calling it from
+/// `ActionRunner.run` off the main actor is safe.
 private struct DynamicAccessSettingsStore: SettingsStore, @unchecked Sendable {
     let store: AppGroupSettingsStore
     let hasFullAccess: () -> Bool

@@ -579,19 +579,121 @@
         }
       }
     },
-    "keyboard.consent.inlinePrompt": {
+    "keyboard.consent.body": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "An %@ senden erlauben?"
+            "value": "Der Text im Scratchpad wird zur Verarbeitung an %@ gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow sending to %@?"
+            "value": "The text in the Scratchpad is sent to %@ to be processed."
+          }
+        }
+      }
+    },
+    "keyboard.copy.needsFullAccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopieren braucht vollen Zugriff."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy needs Full Access."
+          }
+        }
+      }
+    },
+    "keyboard.fullAccessCard.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompts brauchen vollen Zugriff, um deinen KI-Anbieter zu erreichen. Tippen, Einfügen und Diktieren gehen auch ohne."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompts need Full Access to reach your AI provider. Typing, Insert and dictation work without it."
+          }
+        }
+      }
+    },
+    "keyboard.fullAccessCard.dismiss.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        }
+      }
+    },
+    "keyboard.fullAccessCard.footnote": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen → Allgemein → Tastatur → Tastaturen → Kallilex → Vollen Zugriff erlauben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings → General → Keyboard → Keyboards → Kallilex → Allow Full Access"
+          }
+        }
+      }
+    },
+    "keyboard.fullAccessCard.settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "keyboard.hint.noSelectionSharing": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese App gibt markierten Text nicht an Tastaturen weiter. Schreib oder diktiere im Scratchpad oder nutze Teilen → Kallilex."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app doesn't share selected text with keyboards. Type or dictate in the Scratchpad, or use Share → Kallilex."
           }
         }
       }

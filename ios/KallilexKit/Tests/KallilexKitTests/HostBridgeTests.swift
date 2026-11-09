@@ -31,6 +31,8 @@ private final class FakeHostDocument: TextDocument {
         return String(characters[selectionRange])
     }
 
+    var hasText: Bool { !characters.isEmpty }
+
     var documentContextBeforeInput: String? {
         guard let selectionRange else { return nil }
         return String(characters[0..<selectionRange.lowerBound])

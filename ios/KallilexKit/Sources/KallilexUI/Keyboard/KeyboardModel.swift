@@ -49,6 +49,39 @@ public final class KeyboardModel {
     public var settings: AppSettings?
     public var keyboardState: KeyboardState
 
+    /// Whether the keyboard currently has Full Access (ios-19 part B) —
+    /// kept in sync with `KallilexKeyboardController.effectiveHasFullAccess`
+    /// by every controller, on both `viewDidLoad` and `viewWillAppear` (a
+    /// controller is deallocated and recreated on every appearance, but
+    /// this model — and therefore this property — survives). Defaults to
+    /// `true` so a model built before any controller has had a chance to
+    /// set it (there is none in production) never shows the Full Access
+    /// card spuriously.
+    ///
+    /// `KeyboardPasteboard`/`DynamicAccessSettingsStore`'s own
+    /// `hasFullAccess` closures (built once, in `makeSession()`) read this
+    /// property through `KeyboardModelStore.shared.model` rather than
+    /// capturing whichever controller happened to build them — the latent
+    /// bug this property's introduction fixes (see
+    /// `KallilexKeyboardController.makeSession()`'s doc comment).
+    public var hasFullAccess = true
+
+    /// `true` while the Full Access card (ios-19 part B) should replace the
+    /// chips/consent content in prompt mode's expanded panel — see
+    /// `isPanelExpanded`. Set by `run(_:label:)`'s pre-check and by
+    /// `applyFullAccessFallbackIfNeeded()`'s post-run fallback; cleared by
+    /// `KeyboardFullAccessCard`'s dismiss button, by `showKeys()`, by
+    /// `KallilexKeyboardController.viewWillDisappear`, and by a run
+    /// actually starting.
+    public var showsFullAccessCard = false
+
+    /// `true` once the "This app doesn't share selected text…" hint
+    /// (`maybeShowSelectionSharingHint()`) has been shown during the
+    /// current keyboard appearance — reset by
+    /// `resetSelectionSharingHintForAppearance()`, called from
+    /// `viewWillAppear` before the first `refreshHostSelection()`.
+    private var hasShownSelectionSharingHint = false
+
     public let session: EditorSession
     public let editRouter: EditRouter
     public let scratchpadDocument: any ReplaceableTextDocument
@@ -139,6 +172,31 @@ public final class KeyboardModel {
         KeyboardLayoutID.resolve(stored: settings?.keyboardLayout, preferredLanguages: Locale.preferredLanguages)
     }
 
+    /// The active, enabled profile in `settings`, mirroring
+    /// `ActionRunner`'s own private `activeProfile(in:)` (duplicated
+    /// rather than shared, same reasoning as `isScratchpadEmpty`): `nil`
+    /// with no `settings` loaded, no `activeProfileID`, or no matching
+    /// enabled profile.
+    public var activeProfile: ProviderProfile? {
+        guard let settings, let activeID = settings.activeProfileID else { return nil }
+        return settings.profiles.first { $0.id == activeID && $0.enabled }
+    }
+
+    /// `true` in prompt mode while either the Full Access card
+    /// (`showsFullAccessCard`) or a pending consent request
+    /// (`session.state == .consentRequired`) should take over the panel's
+    /// full height (ios-19 part B, "Expanded panel") — neither fits the
+    /// fixed 44 pt chips row. Derives only from observable stored state
+    /// (`mode`, `showsFullAccessCard`, `session.state`), so `@Observable`
+    /// tracks it correctly for `KallilexKeyboardController`'s
+    /// `trackPanelExpansion()`.
+    public var isPanelExpanded: Bool {
+        guard mode == .prompts else { return false }
+        if showsFullAccessCard { return true }
+        if case .consentRequired = session.state { return true }
+        return false
+    }
+
     // MARK: - Typing (KallilexKeyboardCore, ios-17)
 
     /// A regular key press: delegates to `keyboardState`, then applies the
@@ -185,25 +243,79 @@ public final class KeyboardModel {
     /// Runs `action`, then — once it completes — pushes the (possibly
     /// updated) `session.text` into `scratchpadDocument`. A no-op write if
     /// the run didn't change `text` (e.g. `.notConfigured`, `.cancelled`).
+    ///
+    /// Pre-check (ios-19 part B, "Pre-check before a run"): without Full
+    /// Access, a network profile (anything but `.appleOnDevice`) has no
+    /// way to reach its provider at all — rather than let the run fail
+    /// with a confusing network/auth error, this shows the Full Access
+    /// card immediately and never starts the run. An on-device profile, or
+    /// no active profile at all (the `.notConfigured` row already explains
+    /// that case), run normally.
     @discardableResult
     public func run(_ action: Action, label: String) -> Task<Void, Never> {
-        syncScratchpadAfter(session.run(action, label: label))
+        guard !needsFullAccessCardBeforeRunning else {
+            showsFullAccessCard = true
+            return Task {}
+        }
+        showsFullAccessCard = false
+        return syncScratchpadAfter(session.run(action, label: label))
     }
 
+    /// Same Full Access pre-check as `run(_:label:)`: the compact toolbar's
+    /// Retry stays tappable while the card is up (`session.canRetry` is
+    /// true again after the fallback's `cancel()`), so without this a
+    /// retry would bypass the card and, on success, leave it covering the
+    /// result.
     @discardableResult
     public func retry() -> Task<Void, Never>? {
+        guard !needsFullAccessCardBeforeRunning else {
+            showsFullAccessCard = true
+            return nil
+        }
         guard let task = session.retry() else { return nil }
+        showsFullAccessCard = false
         return syncScratchpadAfter(task)
     }
 
     @discardableResult
     public func grantConsentAndRetry() -> Task<Void, Never>? {
+        guard !needsFullAccessCardBeforeRunning else {
+            showsFullAccessCard = true
+            return nil
+        }
         guard let task = session.grantConsentAndRetry() else { return nil }
+        showsFullAccessCard = false
         return syncScratchpadAfter(task)
     }
 
     public func declineConsent() {
         session.declineConsent()
+    }
+
+    /// Switches to keys mode and clears the Full Access card (ios-19 part
+    /// B, "the flag is also cleared when … the mode switches to keys") —
+    /// the action row's ⌨ button calls this instead of setting `mode`
+    /// directly.
+    public func showKeys() {
+        mode = .keys
+        showsFullAccessCard = false
+    }
+
+    /// Copies `session.text` to the pasteboard with Full Access; without
+    /// it, `KeyboardPasteboard.setString` would already silently no-op, so
+    /// this instead leaves an explanatory `inlineNote` (ios-19 part B,
+    /// "Copy without Full Access") rather than copying nothing and saying
+    /// nothing.
+    public func copy() {
+        guard hasFullAccess else {
+            session.inlineNote = String(
+                localized: "keyboard.copy.needsFullAccess",
+                defaultValue: "Copy needs Full Access.",
+                bundle: .module
+            )
+            return
+        }
+        session.copy()
     }
 
     /// Reverts to the pre-run text (`EditorSession.undo()`) and pushes it
@@ -330,6 +442,7 @@ public final class KeyboardModel {
         guard !session.isRunning else { return }
         guard let selection = hostBridge.takeSelection(), !selection.isEmpty else {
             pendingTakeSelection = nil
+            maybeShowSelectionSharingHint()
             return
         }
         if session.text.isEmpty || session.text == lastTakenOverSelection {
@@ -337,6 +450,49 @@ public final class KeyboardModel {
         } else {
             pendingTakeSelection = selection
         }
+    }
+
+    /// Call from `KallilexKeyboardController.viewWillAppear`, before the
+    /// first `refreshHostSelection()` of the new appearance — "the hint
+    /// hasn't been shown yet in this keyboard appearance" (ios-19 part B).
+    public func resetSelectionSharingHintForAppearance() {
+        hasShownSelectionSharingHint = false
+    }
+
+    /// The narrower heuristic ios-19 part B replaces the spec's own rule
+    /// with (a real selection empties both `documentContextBeforeInput`/
+    /// `AfterInput`, while a lone caret inside text leaves at least one
+    /// non-empty — the spike's finding; the spec's "`selectedText` nil and
+    /// the context changed" would otherwise misfire on every cursor move
+    /// in apps like Notes): shown at most once per appearance, and only
+    /// while there's nothing more pressing already on screen (no note, no
+    /// run, prompt mode) and taking over the selection wouldn't have
+    /// helped anyway (the Scratchpad is empty). Called only from
+    /// `refreshHostSelection()`'s own "no/empty selection" branch, so
+    /// `selectedText` is already known nil/empty here.
+    private func maybeShowSelectionSharingHint() {
+        // `inlineNote` is only rendered in `.idle`/`.result`; setting it
+        // under an error or "not configured" row would burn the
+        // once-per-appearance budget without the user ever seeing it.
+        guard mode == .prompts,
+              session.state == .idle || session.state == .result,
+              session.inlineNote == nil,
+              !hasShownSelectionSharingHint,
+              isScratchpadEmpty,
+              hostDocument.hasText,
+              Self.isEmptyContext(hostDocument.documentContextBeforeInput),
+              Self.isEmptyContext(hostDocument.documentContextAfterInput)
+        else { return }
+        session.inlineNote = String(
+            localized: "keyboard.hint.noSelectionSharing",
+            defaultValue: "This app doesn't share selected text with keyboards. Type or dictate in the Scratchpad, or use Share → Kallilex.",
+            bundle: .module
+        )
+        hasShownSelectionSharingHint = true
+    }
+
+    private static func isEmptyContext(_ text: String?) -> Bool {
+        text == nil || text!.isEmpty
     }
 
     /// Mirrors `hostBridge.insertWillReplaceSelection`/`canUndoInsert` into
@@ -386,14 +542,56 @@ public final class KeyboardModel {
 
     /// Awaits `task`, then writes `session.text` into `scratchpadDocument`
     /// — the one place a run's result (or a no-op outcome) reaches the
-    /// real Scratchpad document. Returns a new `Task` wrapping both steps,
-    /// so callers (production and tests alike) can await the sync too.
+    /// real Scratchpad document. Also applies the Full Access post-run
+    /// fallback (`applyFullAccessFallbackIfNeeded()`) before that write,
+    /// so a fallback's `session.cancel()` (which leaves `text` untouched)
+    /// is reflected in the Scratchpad the same way a real result would be.
+    /// Returns a new `Task` wrapping both steps, so callers (production
+    /// and tests alike) can await the sync too.
     @discardableResult
     private func syncScratchpadAfter(_ task: Task<Void, Never>) -> Task<Void, Never> {
         Task { @MainActor [weak self] in
             await task.value
             guard let self else { return }
+            self.applyFullAccessFallbackIfNeeded()
             self.scratchpadDocument.setText(self.session.text)
+        }
+    }
+
+    /// `true` while a prompt chip tap should show the Full Access card
+    /// instead of starting a run (ios-19 part B, "Pre-check before a
+    /// run"): no Full Access, an active profile exists, and that profile
+    /// needs the network (every `ProviderKind` but `.appleOnDevice`).
+    private var needsFullAccessCardBeforeRunning: Bool {
+        guard !hasFullAccess, let activeProfile else { return false }
+        return activeProfile.kind != .appleOnDevice
+    }
+
+    /// The post-run fallback (ios-19 part B, "Post-run fallback"): without
+    /// Full Access, the keyboard has no network at all
+    /// (`.unreachable`/`.localNetworkDenied`) and a missing Keychain key
+    /// surfaces as an HTTP 401/403 — none of those are the real
+    /// network/auth errors they look like, so this shows the Full Access
+    /// card instead and returns the session to `.idle` via `cancel()`
+    /// (which leaves `text` untouched) rather than leaving a confusing
+    /// error on screen.
+    private func applyFullAccessFallbackIfNeeded() {
+        guard !hasFullAccess,
+              case .failed(let error) = session.state,
+              Self.isFullAccessFallbackError(error)
+        else { return }
+        showsFullAccessCard = true
+        session.cancel()
+    }
+
+    private static func isFullAccessFallbackError(_ error: ProviderError) -> Bool {
+        switch error {
+        case .http(let status, _):
+            return status == 401 || status == 403
+        case .unreachable, .localNetworkDenied:
+            return true
+        default:
+            return false
         }
     }
 }
