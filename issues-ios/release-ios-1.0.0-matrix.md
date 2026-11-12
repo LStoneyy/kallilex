@@ -66,6 +66,31 @@ On the device, with Kallilex Keyboard added and Full Access on. Per app:
 - Failures: 
 - N/A: 
 
+## Keyboard memory audit
+
+Scenario, peak memory, pass/fail against 60 MB budget:
+
+| Scenario | Peak MB | Pass/Fail | Notes |
+|---|---|---|---|
+| Idle in prompt mode | | | |
+| Keys mode while typing | | | |
+| Cloud prompt | | | |
+| On-device prompt | | | |
+| Long selection (~20,000 characters) | | | |
+
+## Full Access off / on
+
+Feature support without and with Full Access:
+
+| Feature | Full Access off | Full Access on |
+|---|---|---|
+| Typing | | |
+| Insert | | |
+| Replace selection | | |
+| On-device prompt | | |
+| Cloud prompt | | |
+| Copy result | | |
+
 ## Issues found
 
 (List any failures with reproduction steps and workarounds, if any.)

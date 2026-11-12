@@ -32,6 +32,10 @@ Kallilex is a tiny text editing tool that brings AI rewriting to any app on your
 4. Tap Copy & Close to put the result on your clipboard.
 5. Go back to your app, select the original text again, and paste.
 
+**Custom keyboard:**
+
+Kallilex also includes an optional keyboard extension. Add it in Settings → General → Keyboard → Keyboards, and you can type, run prompts, and insert results right from the keyboard in any app, without switching away.
+
 **Bring your own AI provider:**
 
 Kallilex works with any OpenAI-compatible endpoint:
@@ -61,6 +65,10 @@ Kallilex ist ein winziges Text-Bearbeitungstool, das dir KI-gestützte Umschreib
 4. Tippe „Kopieren & schließen“, um das Ergebnis in deine Zwischenablage zu legen.
 5. Geh zurück zu deiner App, markiere den ursprünglichen Text erneut und füge das Ergebnis ein.
 
+**Benutzerdefinierte Tastatur:**
+
+Kallilex enthält auch eine optionale Tastatur-Erweiterung. Füge sie unter Einstellungen → Allgemein → Tastatur → Tastaturen hinzu, und du kannst in jeder App direkt über die Tastatur tippen, Prompts ausführen und Ergebnisse einfügen, ohne die App zu wechseln.
+
 **Bring dein eigenes KI-Modell mit:**
 
 Kallilex funktioniert mit jedem OpenAI-kompatiblen Endpunkt:
@@ -80,11 +88,11 @@ Du besitzt deine API-Schlüssel. Sie werden im Schlüsselbund deines iPhones ges
 
 ## Keywords (EN, 100 chars max, comma-separated no spaces)
 
-AI,rewrite,text,editing,writing,prompts,OpenAI,local
+AI,rewrite,text,editing,writing,prompts,OpenAI,local,keyboard
 
 ## Keywords (DE, 100 chars max, comma-separated no spaces)
 
-KI,umschreiben,Text,Bearbeitung,Schreiben,Prompts,OpenAI,lokal
+KI,umschreiben,Text,Bearbeitung,Schreiben,Prompts,OpenAI,lokal,Tastatur
 
 ## Category
 
@@ -106,7 +114,7 @@ webcommits
 
 Content Restrictions: None. (The app is a text editor; it has no objectionable content, no loot boxes, no social features, no unrestricted web access.)
 
-## Screenshots (6 required for 6.9" iPhone, landscape OK, light mode preferred)
+## Screenshots (8 required for 6.9" iPhone, landscape OK, light mode preferred)
 
 Template notes (for the release implementer):
 
@@ -116,6 +124,8 @@ Template notes (for the release implementer):
 4. Screenshot 4: Prompts tab in the app, showing the list of saved prompts.
 5. Screenshot 5: Providers tab in the app, showing the list of configured providers.
 6. Screenshot 6: Scratchpad tab, showing the fallback editor.
+7. Screenshot 7: Keyboard in prompt mode (Scratchpad, prompt chips, and buttons visible).
+8. Screenshot 8: Keyboard in keys mode (letter keys, shift, delete, and space visible).
 
 Each screenshot should be annotated with a caption (30 chars max per line) describing what the user sees. Captions go into App Store Connect after upload.
 
@@ -126,6 +136,8 @@ English captions (max 30 chars per line):
 - Create and manage prompts
 - Configure your AI provider
 - Use the built-in Scratchpad
+- Keyboard: prompts mode
+- Keyboard: typing mode
 
 German captions (max 30 chars per line):
 - Öffne das Teilen-Menü
@@ -134,3 +146,5 @@ German captions (max 30 chars per line):
 - Erstelle und verwalte Prompts
 - Konfiguriere den KI-Anbieter
 - Nutze den Notizblock
+- Tastatur: Prompts-Modus
+- Tastatur: Tippen-Modus

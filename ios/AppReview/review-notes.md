@@ -57,6 +57,30 @@ The app supports any OpenAI-compatible AI endpoint (local, LAN, or cloud — suc
    - Disconnect the device from the network and try a cloud provider request — you should see "Can't reach the endpoint — is the server running?" or similar.
    - Re-enable the network and confirm it works again.
 
+## Keyboard
+
+Kallilex includes an optional custom keyboard extension that lets users type and run prompts without leaving the host app.
+
+The keyboard provides:
+- Full typing with automatic QWERTZ or QWERTY layout selection based on device language, or manually set in the app under Settings → Keyboard.
+- Two modes: prompt mode (with a Scratchpad text field and prompt chips) and keys mode (normal typing).
+- Inserting results into the host app and undoing inserts.
+
+**Full Access is optional.** Without it, typing, Insert, Replace selection, and Apple's on-device model all work. Full Access is requested only so the keyboard can send the Scratchpad text to the user's AI provider and copy results to the clipboard. The iOS warning "can transmit what you type" is the standard keyboard warning; Kallilex never records or sends keystrokes.
+
+**The keyboard never opens other apps,** except iOS Settings via an "Open Settings" button to enable Full Access if needed.
+
+### Test steps
+
+1. **Add the keyboard:** Settings → General → Keyboard → Keyboards → Add New Keyboard → Kallilex. Optionally allow Full Access if testing cloud prompts or the copy feature.
+2. **Open Notes** and select some text (or type some).
+3. **Switch to Kallilex** using the globe (🌐) key.
+4. **Take over the selection:** the selected text lands in the Scratchpad. If it doesn't, tap "Take selection".
+5. **Tap a prompt** such as "Rewrite". It runs on the provider selected in the app: Apple's on-device model, or the reviewer key's cloud provider (needs Full Access).
+6. **Tap "Replace selection"** to replace the original text in Notes.
+7. **Undo:** tap "Inserted · Undo" right after inserting to restore the original text.
+8. **Keys mode:** tap "Show keys" and type some text.
+
 ### Reviewer API Key
 
 A temporary, spend-limited OpenAI API key will be provided in the App Store Connect review notes during submission (in the "Reviewer Notes" field). This key is created right before submission and revoked immediately after the app is approved or rejected.
@@ -82,4 +106,5 @@ and the app makes no network requests of its own.
 ## Bundle IDs
 
 - App: `com.webcommits.kallilex`
-- Extension: `com.webcommits.kallilex.share`
+- Share Extension: `com.webcommits.kallilex.share`
+- Keyboard Extension: `com.webcommits.kallilex.keyboard`

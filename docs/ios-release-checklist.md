@@ -6,9 +6,10 @@ A concise, repeatable checklist for releasing Kallilex to the App Store. Work th
 
 - [ ] CI is green: `ios.yml` passes on `main` (contract fixtures, KallilexKit, app, and UI tests all pass).
 - [ ] String catalog is complete: no "new" or "needs review" states in Xcode (verified by `StringCatalogTests` in KallilexKit package tests).
-- [ ] Privacy report reviewed: Xcode's privacy report for the archive is checked, and all declared APIs match what the privacy manifests declare (neither more nor less). Check `ios/Kallilex/Resources/PrivacyInfo.xcprivacy` and `ios/ShareExtension/Resources/PrivacyInfo.xcprivacy` for validity.
+- [ ] Privacy report reviewed: Xcode's privacy report for the archive is checked, and all declared APIs match what the privacy manifests declare (neither more nor less). Check `ios/Kallilex/Resources/PrivacyInfo.xcprivacy`, `ios/ShareExtension/Resources/PrivacyInfo.xcprivacy`, and `ios/KeyboardExtension/Resources/PrivacyInfo.xcprivacy` for validity.
 - [ ] README and website describe only shipped behavior: no features promised that are not present, no version references that do not match the release being cut.
-- [ ] Memory audit passed: the app and share extension stay below 50 MB peak memory during active use (use Xcode Instruments on a device).
+- [ ] Memory audit passed: the app and share extension stay below 50 MB peak memory during active use. The keyboard extension stays below 60 MB peak during the audit scenarios (use Xcode Instruments on a device; record results in `issues-ios/release-ios-1.0.0-matrix.md`).
+  - [ ] Keyboard scenarios: idle in prompt mode, keys mode while typing, a cloud prompt, an on-device prompt, taking a long selection (~20,000 characters).
 
 ## 2. Product-owner prerequisites (one-time, before first release)
 
@@ -89,24 +90,36 @@ Keys to update:
   - [ ] Onboarding works and consent screens appear.
   - [ ] Running a prompt with the on-device model (if eligible) works.
   - [ ] Running a prompt with a cloud provider (using the reviewer API key) works.
+- [ ] Keyboard Full Access checks (record results in `issues-ios/release-ios-1.0.0-matrix.md`):
+  - [ ] Full Access off: typing, Insert, Replace selection, on-device prompt all work.
+  - [ ] Full Access on: typing, Insert, Replace selection, on-device prompt, cloud prompt, copy result all work.
+- [ ] Keyboard host-app matrix (see section 6 and `issues-ios/release-ios-1.0.0-matrix.md`): test across apps (Notes, Mail, Messages, Safari, WhatsApp, Signal, Slack, Google Docs, Pages, Gmail).
 - [ ] Manual gates (carry over from earlier specs; test on a real device):
-  - [ ] VoiceOver pass through the share flow in real apps (Notes, Mail, Safari).
+  - [ ] VoiceOver pass through the share flow and keyboard in real apps (Notes, Mail, Safari).
   - [ ] Contrast check in light and dark mode with the Accessibility Inspector.
   - [ ] Dynamic Type at the largest accessibility size works.
   - [ ] On-device model test on an Apple Intelligence device, including a refusal case (if applicable).
-  - [ ] Share extension memory use during a long run stays reasonable (< 50 MB peak).
+  - [ ] Share extension and keyboard memory use during a long run stays reasonable (< 50 MB for app and share, < 60 MB for keyboard).
   - [ ] Paste button and pasteboard behavior work on a real device.
   - [ ] Safari text selection via the share sheet works.
+  - [ ] Keyboard typing and selection take-over in Safari address bar and web textareas.
   - [ ] German UI with device language set to German displays correctly.
 
 ## 6. Manual host-app matrix
 
-- [ ] Host-app matrix results recorded in `issues-ios/release-ios-1.0.0-matrix.md`.
+- [ ] Share extension host-app matrix results recorded in `issues-ios/release-ios-1.0.0-matrix.md`.
   - [ ] Template copied and filled in after TestFlight internal run.
   - [ ] All test cases run: Safari (text selection and page only), Mail (compose and read), Notes, Messages, WhatsApp, Pages, Google Docs, Chrome.
   - [ ] Each app tested for: Appear in share sheet, Text intact, Paste-back.
   - [ ] Summary counts recorded: total apps tested, passes, failures, N/A.
   - [ ] Issues found and workarounds documented.
+  - [ ] Tester sign-off with name and date.
+- [ ] Keyboard host-app matrix results recorded in `issues-ios/release-ios-1.0.0-matrix.md`.
+  - [ ] Keyboard added and Full Access enabled.
+  - [ ] All apps tested: Notes, Mail (compose), Messages, Safari (address bar and textareas), WhatsApp, Signal, Slack, Google Docs, Pages, Gmail.
+  - [ ] Each app tested for: Take-over selection into Scratchpad, Replace selection, Undo immediately after Insert, Undo restores original text exactly.
+  - [ ] Test with ~3,000-character selection in at least one app.
+  - [ ] Issues and workarounds documented.
   - [ ] Tester sign-off with name and date.
 
 ## 7. TestFlight external (optional)

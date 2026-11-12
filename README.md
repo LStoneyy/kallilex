@@ -91,7 +91,7 @@ Two honest limitations: apps running as administrator (elevated) are off-limits 
 
 ## iOS
 
-Kallilex is coming to iPhone. The iOS version works as a share extension: select text in any app, tap Share → Kallilex, run a rewrite prompt, and paste the result back — all without leaving your writing app.
+Kallilex is coming to iPhone. The iOS version works as a share extension: select text in any app, tap Share → Kallilex, run a rewrite prompt, and paste the result back — all without leaving your writing app. An optional custom keyboard lets you type and run prompts directly.
 
 The iOS app supports any OpenAI-compatible provider, and on eligible devices (iPhone 15 Pro, iPhone 15 Pro Max, or iPhone 16 and later with Apple Intelligence enabled) you can use the on-device model with no API key required.
 
