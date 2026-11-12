@@ -393,6 +393,25 @@ struct KeyboardModelTests {
         #expect(model.canUndoInsert)
     }
 
+    /// ios-23 spec, "Prompt mode": "Insert announces 'Inserted'".
+    @Test func insertAnnouncesInsertedForVoiceOver() {
+        let host = FakeSelectableHostDocument(text: "hello world")
+        host.selectedText = "world"
+        let feedback = FakeEditorFeedback()
+        let session = EditorSession(
+            actionRunner: FakeActionRunning(),
+            pasteboard: FakePasteboard(),
+            consentGranting: FakeConsentGranting(),
+            feedback: feedback
+        )
+        let model = KeyboardModel(session: session, scratchpadDocument: FakeKeyboardDocument(), hostDocument: host)
+        model.session.text = "WORLD"
+
+        model.insert()
+
+        #expect(feedback.recordedAnnouncements() == ["Inserted"])
+    }
+
     @Test func undoInsertRevertsTheHostTextAndDisablesItself() {
         let host = FakeSelectableHostDocument(text: "hello world")
         host.selectedText = "world"

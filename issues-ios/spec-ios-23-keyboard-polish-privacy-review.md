@@ -1,6 +1,6 @@
 # Spec ios-23 — Keyboard polish: localization, accessibility, memory, privacy, review
 
-Status: ready-for-agent
+Status: done except the manual parts: Instruments memory audit and host-app matrix (release-ios-1.0.0-matrix.md)
 Phase: Keyboard K6 (polish, before the 1.0.0 release)
 Depends on: ios-22 (ios-21 is deferred)
 

@@ -1564,6 +1564,91 @@
           }
         }
       }
+    },
+    "keyboard.key.capital": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Großbuchstabe %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capital %@"
+          }
+        }
+      }
+    },
+    "keyboard.insert.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt das Ergebnis in die App ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserts the result into the app."
+          }
+        }
+      }
+    },
+    "keyboard.insert.replace.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersetzt die Markierung in der App durch das Ergebnis."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replaces the selection in the app with the result."
+          }
+        }
+      }
+    },
+    "keyboard.undoInsert.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stellt den Text von vor dem Einfügen wieder her."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restores the text from before the insert."
+          }
+        }
+      }
+    },
+    "keyboard.insert.announcement": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingefügt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserted"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

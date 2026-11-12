@@ -39,15 +39,13 @@ public final class ScratchpadTextView: UITextView {
     public init() {
         super.init(frame: .zero, textContainer: nil)
         accessibilityIdentifier = "keyboard.scratchpad"
-        // Otherwise VoiceOver (and the accessibility audit) has nothing to
-        // describe this element with while it's empty: the placeholder
-        // shown then is a separate, non-accessible `UILabel` sibling
-        // (`placeholderLabel`), not part of this text view's own
-        // accessible value. Reuses `EditorView`'s own `editor.label` key.
-        accessibilityLabel = String(localized: "editor.label", defaultValue: "Text", bundle: .module)
         inputView = UIView()
         font = .preferredFont(forTextStyle: .body)
         adjustsFontForContentSizeCategory = true
+        // Caps Dynamic Type at `.accessibility2`'s UIKit equivalent — the
+        // keyboard's height can't grow to fit anything larger (ios-23
+        // spec, "Dynamic Type").
+        maximumContentSizeCategory = .accessibilityLarge
         textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         contentInsetAdjustmentBehavior = .never
         backgroundColor = Self.fillColor
@@ -92,8 +90,18 @@ public final class ScratchpadTextView: UITextView {
         updatePlaceholderVisibility()
     }
 
+    /// Also drives this text view's own `accessibilityLabel`: the
+    /// placeholder's text while empty (VoiceOver/XCUITest otherwise have
+    /// nothing to read here at all — `placeholderLabel` itself is a
+    /// separate, non-accessible `UILabel` sibling, not part of this text
+    /// view's own accessible value), the plain "Text" label (reusing
+    /// `EditorView`'s own `editor.label` key) once there's real content.
     private func updatePlaceholderVisibility() {
-        placeholderLabel.isHidden = !(text ?? "").isEmpty
+        let isEmpty = (text ?? "").isEmpty
+        placeholderLabel.isHidden = !isEmpty
+        accessibilityLabel = isEmpty
+            ? placeholderLabel.text
+            : String(localized: "editor.label", defaultValue: "Text", bundle: .module)
     }
 
     /// Hides every scroll edge effect: in a short text view, the top and

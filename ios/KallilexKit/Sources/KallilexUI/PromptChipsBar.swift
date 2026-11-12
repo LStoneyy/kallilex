@@ -22,22 +22,31 @@ public struct PromptChipsBar: View {
     /// `nil` hides the "Custom…" chip (the keyboard has no custom
     /// instruction in v1).
     private let onCustomTapped: (() -> Void)?
+    /// `true` keeps this a single horizontally scrolling row with a fixed
+    /// height at every Dynamic Type size, never switching to the vertical
+    /// list below — the keyboard's own fixed-height chips row (ios-23
+    /// spec, "Dynamic Type": "the keyboard's height can't grow, so the
+    /// vertical chip stacking from ios-11 doesn't apply here"). The app
+    /// and Share Extension keep the default `false` (ios-11 behavior).
+    private let forcesSingleRow: Bool
 
     public init(
         prompts: [CustomPrompt],
         isRunning: Bool,
         onSelectPrompt: @escaping (CustomPrompt) -> Void,
-        onCustomTapped: (() -> Void)?
+        onCustomTapped: (() -> Void)?,
+        forcesSingleRow: Bool = false
     ) {
         self.prompts = prompts
         self.isRunning = isRunning
         self.onSelectPrompt = onSelectPrompt
         self.onCustomTapped = onCustomTapped
+        self.forcesSingleRow = forcesSingleRow
     }
 
     public var body: some View {
         Group {
-            if dynamicTypeSize >= .accessibility3 {
+            if dynamicTypeSize >= .accessibility3, !forcesSingleRow {
                 VStack(alignment: .leading, spacing: 8) {
                     chips
                 }

@@ -49,15 +49,24 @@ public struct KeyboardRootView: View {
     }
 
     public var body: some View {
-        switch model.mode {
-        case .prompts:
-            promptsContent
-        case .keys:
-            KeyboardKeysToolbar(
-                target: Binding(get: { model.target }, set: { model.target = $0 }),
-                onShowPrompts: { model.mode = .prompts }
-            )
+        // The keys themselves are UIKit (`KeyGridView`, laid out by the
+        // controller) and already don't scale; this SwiftUI root is only
+        // the Scratchpad surroundings (chips, status, toolbar), which
+        // scale up to `.accessibility2` and no further — the keyboard's
+        // height can't grow to fit anything larger (ios-23 spec,
+        // "Dynamic Type").
+        Group {
+            switch model.mode {
+            case .prompts:
+                promptsContent
+            case .keys:
+                KeyboardKeysToolbar(
+                    target: Binding(get: { model.target }, set: { model.target = $0 }),
+                    onShowPrompts: { model.mode = .prompts }
+                )
+            }
         }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     private var promptsContent: some View {
@@ -87,6 +96,7 @@ public struct KeyboardRootView: View {
                     pendingTakeSelection: model.pendingTakeSelection,
                     canInsert: model.canInsert,
                     insertLabel: model.insertLabel,
+                    insertWillReplaceSelection: model.insertWillReplaceSelection,
                     canUndoInsert: model.canUndoInsert,
                     showsFullAccessCard: model.showsFullAccessCard,
                     onSelectPrompt: { prompt in

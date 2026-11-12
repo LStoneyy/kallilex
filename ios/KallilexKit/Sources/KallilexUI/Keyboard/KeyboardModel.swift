@@ -376,6 +376,14 @@ public final class KeyboardModel {
         hostBridge.insert(session.text)
         scheduleUndoInsertExpiry()
         syncHostState()
+        // VoiceOver has no other cue that the tap landed — the Scratchpad
+        // itself doesn't change, and the button's own label just flips to
+        // "Inserted · Undo" in place (ios-23 spec, "Prompt mode").
+        session.feedback.announce(String(
+            localized: "keyboard.insert.announcement",
+            defaultValue: "Inserted",
+            bundle: .module
+        ))
     }
 
     /// Undoes the last Insert, if `canUndoInsert` allows it.

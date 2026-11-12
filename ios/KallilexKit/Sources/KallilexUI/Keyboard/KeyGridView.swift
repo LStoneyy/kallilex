@@ -839,7 +839,7 @@ public final class KeyGridView: UIView {
     private func accessibilityLabel(for key: Key) -> String {
         switch key.kind {
         case .character(let base):
-            return base
+            return Self.characterAccessibilityLabel(base: base, shift: model.keyboardState.shift)
         case .shift:
             if model.keyboardState.shift == .locked {
                 return String(localized: "keyboard.key.capsLock", defaultValue: "caps lock", bundle: .module)
@@ -860,6 +860,22 @@ public final class KeyGridView: UIView {
         case .globe:
             return String(localized: "keyboard.key.globe", defaultValue: "next keyboard", bundle: .module)
         }
+    }
+
+    /// The spoken label for a character key: just the letter while shift
+    /// is off, "Capital A" (German: "Großbuchstabe A") while shift is
+    /// `.once` or `.locked` — a VoiceOver user has no other way to tell
+    /// shift is on for a key whose own glyph doesn't change case (ios-23
+    /// spec, "Accessibility"). A pure function (no `self`) so it's
+    /// testable without a real `KeyGridView`/`KeyboardModel` — see
+    /// `KeyGridViewAccessibilityTests`.
+    ///
+    /// Only letters get the capital form: shift (especially caps lock)
+    /// survives a switch to the numbers/symbols layer, and "Capital 1"
+    /// or "Capital €" would be nonsense.
+    static func characterAccessibilityLabel(base: String, shift: ShiftState) -> String {
+        guard shift != .off, base.first?.isLetter == true else { return base }
+        return String(localized: "keyboard.key.capital", defaultValue: "Capital \(base.uppercased())", bundle: .module)
     }
 
     private static func accessibilityName(for key: Key) -> String {

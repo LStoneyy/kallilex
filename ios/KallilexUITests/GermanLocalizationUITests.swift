@@ -78,4 +78,50 @@ final class GermanLocalizationUITests: KallilexUITestCase {
         )
         attachScreenshot(app.screenshot(), name: "de-05-provider-add")
     }
+
+    // MARK: - Keyboard harness
+
+    /// Launches the keyboard harness (`KeyboardUITests`' own pattern,
+    /// duplicated here rather than shared since that helper is private to
+    /// that file) with the process language forced to German.
+    @discardableResult
+    private func launchGermanKeyboardHarness() -> XCUIApplication {
+        let app = launchApp(language: .german, extraArguments: ["-uiTestKeyboardHarness"])
+        app.textViews["harness.hostText"].waitAndAssertExists(timeout: 10)
+        return app
+    }
+
+    /// The keyboard harness in German (ios-23 spec, "Localization": "The
+    /// German UI tests … get a keyboard-harness case: switch the app
+    /// language to German, check the placeholder, the target switch and
+    /// the Insert label."): the Scratchpad's placeholder (prompt mode,
+    /// where the harness starts), the Insert button's label, and — after
+    /// switching to keys mode — the typing target switch's two labels.
+    func testKeyboardHarnessShowsGermanPlaceholderTargetSwitchAndInsertLabel() {
+        let app = launchGermanKeyboardHarness()
+
+        let scratchpad = app.textViews["keyboard.scratchpad"]
+        scratchpad.waitAndAssertExists()
+        XCTAssertEqual(
+            scratchpad.label, "Text markieren oder tippen",
+            "Expected the empty Scratchpad's placeholder to read \"Text markieren oder tippen\" in German"
+        )
+
+        let insertButton = app.buttons["keyboard.insert"]
+        insertButton.waitAndAssertExists()
+        XCTAssertTrue(
+            ["Einfügen", "Markierung ersetzen"].contains(insertButton.label),
+            "Expected the Insert button to read \"Einfügen\" or \"Markierung ersetzen\" in German, got \"\(insertButton.label)\""
+        )
+
+        app.buttons["keyboard.mode.keys"].waitAndAssertExists().tap()
+
+        let scratchpadTarget = app.buttons["keyboard.target.scratchpad"]
+        scratchpadTarget.waitAndAssertExists()
+        XCTAssertEqual(scratchpadTarget.label, "Notizblock", "Expected the Scratchpad target switch label to be German")
+
+        let appTarget = app.buttons["keyboard.target.app"]
+        appTarget.waitAndAssertExists()
+        XCTAssertEqual(appTarget.label, "App", "Expected the App target switch label to be \"App\" in German too")
+    }
 }

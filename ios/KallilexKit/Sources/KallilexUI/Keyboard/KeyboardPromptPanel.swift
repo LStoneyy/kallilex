@@ -44,6 +44,13 @@ public struct KeyboardPromptPanel: View {
     private let pendingTakeSelection: String?
     private let canInsert: Bool
     private let insertLabel: String
+    /// Selects the Insert button's hint ("Inserts the result into the
+    /// app." vs. "Replaces the selection in the app with the result.") —
+    /// mirrors `insertLabel`'s own `insertWillReplaceSelection` check
+    /// (`KeyboardModel.insertLabel`), kept as a separate parameter rather
+    /// than inferred from `insertLabel`'s text so this doesn't silently
+    /// break if that string's wording ever changes.
+    private let insertWillReplaceSelection: Bool
     private let canUndoInsert: Bool
     /// `true` while the Full Access card (ios-19 part B) should replace
     /// the chips/consent content — see `KeyboardModel.showsFullAccessCard`.
@@ -74,6 +81,7 @@ public struct KeyboardPromptPanel: View {
         pendingTakeSelection: String?,
         canInsert: Bool,
         insertLabel: String,
+        insertWillReplaceSelection: Bool,
         canUndoInsert: Bool,
         showsFullAccessCard: Bool,
         onSelectPrompt: @escaping (CustomPrompt) -> Void,
@@ -101,6 +109,7 @@ public struct KeyboardPromptPanel: View {
         self.pendingTakeSelection = pendingTakeSelection
         self.canInsert = canInsert
         self.insertLabel = insertLabel
+        self.insertWillReplaceSelection = insertWillReplaceSelection
         self.canUndoInsert = canUndoInsert
         self.showsFullAccessCard = showsFullAccessCard
         self.onSelectPrompt = onSelectPrompt
@@ -177,7 +186,8 @@ public struct KeyboardPromptPanel: View {
                     prompts: prompts,
                     isRunning: isScratchpadEmpty,
                     onSelectPrompt: onSelectPrompt,
-                    onCustomTapped: nil
+                    onCustomTapped: nil,
+                    forcesSingleRow: true
                 )
             }
         } else {
@@ -236,6 +246,11 @@ public struct KeyboardPromptPanel: View {
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
                 .accessibilityIdentifier("keyboard.undoInsert")
+                .accessibilityHint(String(
+                    localized: "keyboard.undoInsert.hint",
+                    defaultValue: "Restores the text from before the insert.",
+                    bundle: .module
+                ))
             } else {
                 Button(action: onInsert) {
                     Text(insertLabel)
@@ -246,6 +261,17 @@ public struct KeyboardPromptPanel: View {
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
                 .accessibilityIdentifier("keyboard.insert")
+                .accessibilityHint(insertWillReplaceSelection
+                    ? String(
+                        localized: "keyboard.insert.replace.hint",
+                        defaultValue: "Replaces the selection in the app with the result.",
+                        bundle: .module
+                    )
+                    : String(
+                        localized: "keyboard.insert.hint",
+                        defaultValue: "Inserts the result into the app.",
+                        bundle: .module
+                    ))
             }
         }
         .padding(.horizontal, 12)
