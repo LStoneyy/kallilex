@@ -1,6 +1,6 @@
 # Spec ios-16 — Keyboard target, CI, read-only settings
 
-Status: ready-for-agent
+Status: done
 Phase: Keyboard K1 (foundation)
 Depends on: ios-15
 

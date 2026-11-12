@@ -1,6 +1,6 @@
 # Spec ios-17 — Keyboard core: layouts, state, input routing
 
-Status: ready-for-agent
+Status: done
 Phase: Keyboard K1 (foundation)
 Depends on: ios-16
 

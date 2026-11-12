@@ -1,6 +1,6 @@
 # Spec ios-19 — Host bridge: take selection, Insert, Undo, consent, Full Access
 
-Status: ready-for-agent
+Status: done
 Phase: Keyboard K3 (AI flow)
 Depends on: ios-18
 

@@ -1,6 +1,6 @@
 # Spec ios-18 — Keyboard UI: Scratchpad, prompts, keys
 
-Status: ready-for-agent
+Status: done (Instruments memory measurement still open, see ios-23)
 Phase: Keyboard K2 (keyboard UI)
 Depends on: ios-17
 
