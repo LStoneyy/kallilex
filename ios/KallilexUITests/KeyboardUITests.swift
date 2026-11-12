@@ -498,6 +498,53 @@ final class KeyboardUITests: KallilexUITestCase {
         )
     }
 
+    // MARK: - Layout picker (ios-22)
+
+    /// Choosing a layout in Settings → Keyboard changes which letter the
+    /// harness's bottom letter row actually shows, confirming the keyboard
+    /// applies `AppSettings.keyboardLayout` reliably even from a fresh
+    /// process (ios-22 decision 5's fix: `viewWillAppear` now re-applies
+    /// `keyGridView.layoutID` after `reloadSettings()`, not just once in
+    /// `viewDidLoad`).
+    ///
+    /// `x` sits in the bottom letter row in both layouts (`KeyboardLayout
+    /// .rows`'s row 3 starts with shift, then "x" right after whichever of
+    /// "z"/"y" is in that layout) — comparing a key's vertical frame
+    /// against `x`'s is a layout-position-independent way to tell which
+    /// row it's actually in, rather than hard-coding pixel values.
+    func testChoosingALayoutInSettingsChangesTheHarnessBottomLetterRow() {
+        let setupQwerty = launchApp()
+        setupQwerty.tabButton("tab.settings").tap()
+        setupQwerty.buttons["settings.keyboard.layout"].waitAndAssertExists().tap()
+        setupQwerty.buttons["QWERTY (English)"].waitAndAssertExists().tap()
+        setupQwerty.terminate()
+
+        let qwertyApp = launchKeyboardHarness(resetState: false)
+        qwertyApp.buttons["keyboard.mode.keys"].waitAndAssertExists().tap()
+
+        let xFrameQwerty = keyboardKey("x", on: qwertyApp).waitAndAssertExists().frame
+        let zFrameQwerty = keyboardKey("z", on: qwertyApp).waitAndAssertExists().frame
+        let yFrameQwerty = keyboardKey("y", on: qwertyApp).waitAndAssertExists().frame
+        XCTAssertEqual(zFrameQwerty.midY, xFrameQwerty.midY, accuracy: 1, "QWERTY: z should sit in the bottom row alongside x")
+        XCTAssertNotEqual(yFrameQwerty.midY, xFrameQwerty.midY, "QWERTY: y should not sit in the bottom row")
+        qwertyApp.terminate()
+
+        let setupQwertz = launchApp(resetState: false)
+        setupQwertz.tabButton("tab.settings").tap()
+        setupQwertz.buttons["settings.keyboard.layout"].waitAndAssertExists().tap()
+        setupQwertz.buttons["QWERTZ (German)"].waitAndAssertExists().tap()
+        setupQwertz.terminate()
+
+        let qwertzApp = launchKeyboardHarness(resetState: false)
+        qwertzApp.buttons["keyboard.mode.keys"].waitAndAssertExists().tap()
+
+        let xFrameQwertz = keyboardKey("x", on: qwertzApp).waitAndAssertExists().frame
+        let yFrameQwertz = keyboardKey("y", on: qwertzApp).waitAndAssertExists().frame
+        let zFrameQwertz = keyboardKey("z", on: qwertzApp).waitAndAssertExists().frame
+        XCTAssertEqual(yFrameQwertz.midY, xFrameQwertz.midY, accuracy: 1, "QWERTZ: y should sit in the bottom row alongside x")
+        XCTAssertNotEqual(zFrameQwertz.midY, xFrameQwertz.midY, "QWERTZ: z should not sit in the bottom row")
+    }
+
     // MARK: - Accessibility audit
 
     /// Same audit types and known-issue filtering as `AccessibilityUITests`.

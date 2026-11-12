@@ -156,6 +156,19 @@ open class KallilexKeyboardController: UIInputViewController {
         reattachDocuments()
         publishFullAccess()
         reloadSettings()
+        // `setUpKeyGrid` sets `keyGridView.layoutID` once, in `viewDidLoad`
+        // — but the process-wide `KeyboardModel` (and the settings
+        // `reloadSettings()` just refreshed) can outlive that single
+        // `viewDidLoad` across many `viewWillAppear`s, so a fresh process
+        // would otherwise keep showing whatever layout was current at
+        // `viewDidLoad` time (the device language, before any stored
+        // `AppSettings.keyboardLayout` was even loaded) instead of the
+        // layout the user picked (ios-22). `KeyGridView.layoutID`'s
+        // `didSet` already rebuilds only on an actual change, so this is a
+        // cheap no-op on every appearance after the first.
+        if let model {
+            keyGridView?.layoutID = model.keyboardLayoutID
+        }
         model?.resetSelectionSharingHintForAppearance()
         model?.refreshHostSelection()
     }

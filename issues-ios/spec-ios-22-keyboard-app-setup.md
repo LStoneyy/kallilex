@@ -1,6 +1,6 @@
 # Spec ios-22 — App setup for the keyboard
 
-Status: ready-for-agent
+Status: done
 Phase: Keyboard K5 (setup)
 Depends on: ios-19
 

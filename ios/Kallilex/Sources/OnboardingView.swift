@@ -79,6 +79,11 @@ struct OnboardingView: View {
                         onContinue: { flow.advance() },
                         onSetUpLater: finish
                     )
+                case .keyboardGuide:
+                    OnboardingKeyboardGuideStepView(
+                        onContinue: { flow.advance() },
+                        onLater: { flow.advance() }
+                    )
                 case .done:
                     OnboardingDoneStepView(onStart: finish)
                 }
@@ -384,6 +389,43 @@ private struct OnboardingShareSheetGuideStepView: View {
         .navigationTitle(String(
             localized: "settings.shareSheetGuide.title",
             defaultValue: "Add Kallilex to your share sheet"
+        ))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Keyboard guide
+
+/// The keyboard onboarding step (ios-22): `KallilexUI.KeyboardGuideView`
+/// plus its own footer, reached right after the share-sheet guide and
+/// right before `.done`. "Later" (not "Set up later", unlike every other
+/// step's footer button) still just advances to `.done` — the next step
+/// either way — rather than calling `finish()` directly: the user still
+/// sees the "You're all set!" screen afterward, since nothing about this
+/// step actually finishes onboarding on its own.
+private struct OnboardingKeyboardGuideStepView: View {
+    let onContinue: () -> Void
+    let onLater: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            KallilexUI.KeyboardGuideView()
+            VStack(spacing: 12) {
+                Button(String(localized: "onboarding.continue", defaultValue: "Continue"), action: onContinue)
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("onboarding.keyboardGuide.continue")
+
+                Button(String(localized: "onboarding.keyboardGuide.later", defaultValue: "Later"), action: onLater)
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("onboarding.keyboardGuide.later")
+            }
+            .padding()
+        }
+        .navigationTitle(String(
+            localized: "settings.keyboard.guide.title",
+            defaultValue: "Add the Kallilex Keyboard"
         ))
         .navigationBarTitleDisplayMode(.inline)
     }

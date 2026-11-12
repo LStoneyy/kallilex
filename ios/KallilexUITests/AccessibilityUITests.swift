@@ -114,6 +114,25 @@ final class AccessibilityUITests: KallilexUITestCase {
         try performAccessibilityAudit(app)
     }
 
+    /// The Settings → Keyboard section (ios-22): the guide row, the layout
+    /// picker, and the test field.
+    func testSettingsKeyboardSectionAudit() throws {
+        let app = launchApp()
+        app.tabButton("tab.settings").tap()
+        app.buttons["settings.keyboard.guide"].waitAndAssertExists()
+        try performAccessibilityAudit(app)
+    }
+
+    /// `KeyboardGuideView`, opened from Settings (same view the onboarding
+    /// step embeds).
+    func testKeyboardGuideAudit() throws {
+        let app = launchApp()
+        app.tabButton("tab.settings").tap()
+        app.buttons["settings.keyboard.guide"].waitAndAssertExists().tap()
+        app.scrollViews["keyboard.guide"].waitAndAssertExists()
+        try performAccessibilityAudit(app)
+    }
+
     // MARK: - Onboarding
 
     func testOnboardingWelcomeStepAudit() throws {

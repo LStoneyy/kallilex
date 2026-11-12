@@ -26,6 +26,7 @@ public struct OnboardingFlow: Equatable, Sendable {
         case testConnection
         case consent(host: String)
         case shareSheetGuide
+        case keyboardGuide
         case done
     }
 
@@ -39,10 +40,14 @@ public struct OnboardingFlow: Equatable, Sendable {
 
     /// The fixed skeleton every onboarding run starts from: welcome, choose
     /// a preset, fill in and save its details, test the connection, learn
-    /// the share-sheet guide, and finish. `.consent` is absent until
-    /// `applyConsentRequirement(_:)` inserts it.
+    /// the share-sheet guide, learn the keyboard guide (ios-22), and
+    /// finish. `.consent` is absent until `applyConsentRequirement(_:)`
+    /// inserts it.
     public static func initial() -> OnboardingFlow {
-        OnboardingFlow(steps: [.welcome, .chooseProvider, .providerDetails, .testConnection, .shareSheetGuide, .done])
+        OnboardingFlow(steps: [
+            .welcome, .chooseProvider, .providerDetails, .testConnection,
+            .shareSheetGuide, .keyboardGuide, .done,
+        ])
     }
 
     /// The step currently shown. `steps` is never empty (`initial()` always

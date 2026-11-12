@@ -38,6 +38,9 @@ final class OnboardingUITests: KallilexUITestCase {
         attachScreenshot(app.screenshot(), name: "onboarding-shareSheetGuide")
         app.buttons["onboarding.shareSheetGuide.continue"].tap()
 
+        app.scrollViews["keyboard.guide"].waitAndAssertExists("The keyboard guide step (ios-22) should follow the share-sheet guide")
+        app.buttons["onboarding.keyboardGuide.continue"].tap()
+
         app.staticTexts["onboarding.done.title"].waitAndAssertExists()
         app.buttons["onboarding.done.start"].tap()
 
@@ -73,6 +76,10 @@ final class OnboardingUITests: KallilexUITestCase {
 
         app.staticTexts["shareSheetGuide.step1"].waitAndAssertExists()
         app.buttons["onboarding.shareSheetGuide.continue"].tap()
+
+        app.scrollViews["keyboard.guide"].waitAndAssertExists("The keyboard guide step (ios-22) should follow the share-sheet guide")
+        app.buttons["onboarding.keyboardGuide.continue"].tap()
+
         app.staticTexts["onboarding.done.title"].waitAndAssertExists()
         app.buttons["onboarding.done.start"].tap()
 
@@ -80,6 +87,35 @@ final class OnboardingUITests: KallilexUITestCase {
 
         app.tabButton("tab.settings").tap()
         app.staticTexts["api.example.com"].waitAndAssertExists("The granted consent should be listed in Settings")
+    }
+
+    /// The keyboard guide step (ios-22) appears right after the share-sheet
+    /// guide, and "Later" finishes the step (landing on `.done`, not
+    /// skipping onboarding outright) same as every other step's own skip.
+    func testKeyboardGuideStepAppearsAfterShareSheetGuideAndLaterReachesDone() {
+        let app = launchApp(skipOnboarding: false, extraArguments: ["-uiTestStubProvider"])
+
+        app.staticTexts["onboarding.welcome.title"].waitAndAssertExists()
+        app.buttons["onboarding.welcome.continue"].tap()
+
+        app.buttons["onboarding.provider.preset.ollama"].waitAndAssertExists().tap()
+        fillProviderEditor(app, baseUrl: "http://192.168.1.10:11434/v1", model: "llama-3", apiKey: nil)
+
+        app.staticTexts["onboarding.testConnection.title"].waitAndAssertExists()
+        app.staticTexts["onboarding.testConnection.result"].waitAndAssertExists(timeout: 10)
+        app.buttons["onboarding.testConnection.continue"].tap()
+
+        app.staticTexts["shareSheetGuide.step1"].waitAndAssertExists()
+        app.buttons["onboarding.shareSheetGuide.continue"].tap()
+
+        app.scrollViews["keyboard.guide"].waitAndAssertExists("The keyboard guide step should appear right after the share-sheet guide")
+        attachScreenshot(app.screenshot(), name: "onboarding-keyboardGuide")
+        app.buttons["onboarding.keyboardGuide.later"].tap()
+
+        app.staticTexts["onboarding.done.title"].waitAndAssertExists("\"Later\" should land on Done, not skip onboarding outright")
+        app.buttons["onboarding.done.start"].tap()
+
+        app.tabButton("tab.scratchpad").waitAndAssertExists()
     }
 
     /// "Set up later" on the Welcome step dismisses onboarding without a
@@ -118,6 +154,10 @@ final class OnboardingUITests: KallilexUITestCase {
 
         app.staticTexts["shareSheetGuide.step1"].waitAndAssertExists("Keeping the current provider should skip straight to the share sheet guide")
         app.buttons["onboarding.shareSheetGuide.continue"].tap()
+
+        app.scrollViews["keyboard.guide"].waitAndAssertExists("The keyboard guide step (ios-22) should follow the share-sheet guide")
+        app.buttons["onboarding.keyboardGuide.continue"].tap()
+
         app.staticTexts["onboarding.done.title"].waitAndAssertExists()
         app.buttons["onboarding.done.start"].tap()
 

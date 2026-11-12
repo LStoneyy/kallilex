@@ -14,7 +14,58 @@ struct OnboardingFlowTests {
     @Test func initialStartsAtWelcomeWithTheFixedSkeletonAndNoConsent() {
         let flow = OnboardingFlow.initial()
         #expect(flow.currentStep == .welcome)
-        #expect(flow.steps == [.welcome, .chooseProvider, .providerDetails, .testConnection, .shareSheetGuide, .done])
+        #expect(flow.steps == [
+            .welcome, .chooseProvider, .providerDetails, .testConnection,
+            .shareSheetGuide, .keyboardGuide, .done,
+        ])
+    }
+
+    // ---- ios-22: keyboardGuide step --------------------------------------
+
+    @Test func keyboardGuideComesRightAfterShareSheetGuideAndRightBeforeDone() {
+        let flow = OnboardingFlow.initial()
+        let shareSheetIndex = flow.steps.firstIndex(of: .shareSheetGuide)
+        let keyboardGuideIndex = flow.steps.firstIndex(of: .keyboardGuide)
+        let doneIndex = flow.steps.firstIndex(of: .done)
+        #expect(keyboardGuideIndex == shareSheetIndex.map { $0 + 1 })
+        #expect(doneIndex == keyboardGuideIndex.map { $0 + 1 })
+    }
+
+    /// "Later" on the keyboard guide step advances to `.done` (mirrors
+    /// `OnboardingView`'s `onLater: { flow.advance() }`) — the same target
+    /// `skipToEnd()` would land on, since `.done` is already the next step.
+    @Test func advancingPastKeyboardGuideLandsOnDone() {
+        var flow = OnboardingFlow.initial()
+        flow.advance() // chooseProvider
+        flow.keepCurrentProvider() // -> shareSheetGuide
+        flow.advance() // -> keyboardGuide
+        #expect(flow.currentStep == .keyboardGuide)
+        flow.advance() // "Later" -> done
+        #expect(flow.currentStep == .done)
+    }
+
+    /// "Set up later" from the keyboard guide step (same affordance every
+    /// other step offers) also reaches `.done`, via `skipToEnd()`.
+    @Test func skipToEndFromKeyboardGuideLandsOnDone() {
+        var flow = OnboardingFlow.initial()
+        flow.advance() // chooseProvider
+        flow.keepCurrentProvider() // -> shareSheetGuide
+        flow.advance() // -> keyboardGuide
+        flow.skipToEnd()
+        #expect(flow.currentStep == .done)
+    }
+
+    /// Back navigation (`returnToChooseProvider`) from a step after
+    /// `keyboardGuide` is unaffected by the new step's position — mirrors
+    /// `returnToChooseProviderGoesBackFromLaterSteps` below, one step
+    /// further along.
+    @Test func returnToChooseProviderStillWorksWithKeyboardGuideInTheStepList() {
+        var flow = OnboardingFlow.initial()
+        flow.advance() // chooseProvider
+        flow.keepCurrentProvider() // -> shareSheetGuide
+        flow.advance() // -> keyboardGuide
+        flow.returnToChooseProvider()
+        #expect(flow.currentStep == .chooseProvider)
     }
 
     @Test func advanceMovesForwardAndStopsAtDone() {

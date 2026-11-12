@@ -9,6 +9,7 @@ struct SettingsView: View {
 
     @State private var consentPendingRevoke: AIConsent?
     @State private var showShareSheetGuide = false
+    @State private var showKeyboardGuide = false
 
     private static let dateStyle: Date.FormatStyle = .init(date: .abbreviated, time: .omitted)
 
@@ -95,6 +96,8 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.shareSheetGuide")
             }
 
+            KeyboardSettingsSection(showGuide: $showKeyboardGuide)
+
             Section(String(localized: "settings.about.heading", defaultValue: "About")) {
                 Text(versionString)
                     .accessibilityIdentifier("settings.about.version")
@@ -131,6 +134,28 @@ struct SettingsView: View {
                                 showShareSheetGuide = false
                             }
                             .accessibilityIdentifier("settings.shareSheetGuide.close")
+                        }
+                    }
+            }
+        }
+        // Attached to this `Form`, not to `KeyboardSettingsSection`'s own
+        // `Section` — a presentation modifier attached directly to a
+        // `Section` inside a `Form` never actually presents (verified
+        // empirically, ios-22), same reasoning as `showShareSheetGuide`'s
+        // sheet right above, which has always lived here.
+        .sheet(isPresented: $showKeyboardGuide) {
+            NavigationStack {
+                KallilexUI.KeyboardGuideView()
+                    .navigationTitle(String(
+                        localized: "settings.keyboard.guide.title",
+                        defaultValue: "Add the Kallilex Keyboard"
+                    ))
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(String(localized: "action.close", defaultValue: "Close")) {
+                                showKeyboardGuide = false
+                            }
+                            .accessibilityIdentifier("settings.keyboard.guide.close")
                         }
                     }
             }

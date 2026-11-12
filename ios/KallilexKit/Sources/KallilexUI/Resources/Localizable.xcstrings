@@ -1360,6 +1360,210 @@
           }
         }
       }
+    },
+    "keyboard.guide.step1": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne Einstellungen → Allgemein → Tastatur."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings → General → Keyboard."
+          }
+        }
+      }
+    },
+    "keyboard.guide.step2": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf Tastaturen → Neue Tastatur hinzufügen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap Keyboards → Add New Keyboard."
+          }
+        }
+      }
+    },
+    "keyboard.guide.step3": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf Kallilex, um sie hinzuzufügen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap Kallilex to add it."
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollzugriff erlauben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Full Access"
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.why.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why"
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.why": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Vollzugriff kann die Tastatur den Scratchpad-Text an deinen KI-Anbieter senden und Ergebnisse kopieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Access lets the keyboard send the Scratchpad text to your AI provider and copy results."
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.never.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never"
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.never": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex zeichnet nie auf, was du tippst, und sendet es auch nie. Nur der Scratchpad-Text geht an deinen Anbieter, wenn du auf einen Prompt tippst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kallilex never records or sends what you type. Only the Scratchpad text goes to your provider, when you tap a prompt."
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.withoutIt.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Vollzugriff"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without it"
+          }
+        }
+      }
+    },
+    "keyboard.guide.fullAccess.withoutIt": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippen und Einfügen funktionieren auch ohne Vollzugriff."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typing and Insert work without Full Access."
+          }
+        }
+      }
+    },
+    "keyboard.guide.openSettings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        }
+      }
+    },
+    "keyboard.guide.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS warnt dich, dass die Tastatur übertragen kann, was du tippst. Das ist die Standardwarnung für jede Tastatur mit Vollzugriff."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS will warn that the keyboard can transmit what you type. This is the standard warning for every keyboard with Full Access."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
